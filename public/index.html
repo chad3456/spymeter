@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OSINT GLOBE TRACKER</title>
+  <title>SPYMETER — OSINT GLOBE TRACKER</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -20,19 +20,22 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
+  <!-- Globe.gl – 3D WebGL spinning globe -->
+  <script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
+
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
   <!-- Classification banner -->
-  <div id="cls-banner">OSINT // OPEN SOURCE // UNCLASSIFIED // PUBLIC DATA ONLY</div>
+  <div id="cls-banner">SPYMETER // OSINT // OPEN SOURCE INTELLIGENCE // UNCLASSIFIED // PUBLIC DATA ONLY</div>
 
   <!-- ── Top nav ─────────────────────────────────────────── -->
   <header id="topbar">
     <div class="tb-left">
       <div class="logo-block">
         <span class="logo-icon">◈</span>
-        <span class="logo-text">OSINT<span class="logo-accent">GLOBE</span></span>
+        <span class="logo-text">SPY<span class="logo-accent">METER</span></span>
       </div>
       <div class="sys-info">
         <span id="sys-status" class="pulse-dot live"></span>
@@ -42,19 +45,20 @@
 
     <div class="tb-center">
       <div id="layer-bar">
-        <button class="lbtn active" data-layer="aircraft"    title="OpenSky ADS-B">✈ AIRCRAFT</button>
-        <button class="lbtn active" data-layer="satellites"  title="CelesTrak TLE">◉ SATELLITES</button>
-        <button class="lbtn active" data-layer="military"    title="Military Bases">⬡ MIL BASES</button>
-        <button class="lbtn"        data-layer="nuclear"     title="Nuclear Sites">☢ NUCLEAR</button>
-        <button class="lbtn"        data-layer="gpsjam"      title="GPS Jamming">⊗ GPS JAM</button>
-        <button class="lbtn"        data-layer="fires"       title="FIRMS Active Fires">⬥ FIRES</button>
-        <button class="lbtn"        data-layer="swarm"       title="Swarm Viz">⋯ SWARM</button>
+        <button class="lbtn active" data-layer="aircraft"   title="Live ADS-B via OpenSky">✈ AIRCRAFT</button>
+        <button class="lbtn active" data-layer="satellites" title="CelesTrak TLE Orbits">◉ SATELLITES</button>
+        <button class="lbtn active" data-layer="military"   title="Military Bases">⬡ MIL BASES</button>
+        <button class="lbtn"        data-layer="nuclear"    title="Nuclear Sites">☢ NUCLEAR</button>
+        <button class="lbtn"        data-layer="gpsjam"     title="GPS Jamming Zones">⊗ GPS JAM</button>
+        <button class="lbtn"        data-layer="fires"      title="NASA FIRMS Active Fires">🔥 FIRES</button>
+        <button class="lbtn"        data-layer="swarm"      title="Swarm Particle Viz">⋯ SWARM</button>
+        <button class="lbtn"        data-layer="airspace"   title="Live Airspace Regions">▦ AIRSPACE</button>
       </div>
     </div>
 
     <div class="tb-right">
       <div id="utc-clock">--:--:-- UTC</div>
-      <button id="nv-btn"    class="ctrl-btn" title="Night Vision">NV</button>
+      <button id="nv-btn"    class="ctrl-btn" title="Night Vision">👁 NV</button>
       <button id="theme-btn" class="ctrl-btn" title="Toggle Theme">◑</button>
       <button id="reset-btn" class="ctrl-btn" title="Reset View">⌖</button>
     </div>
@@ -68,17 +72,21 @@
 
       <!-- Stats strip -->
       <div id="stats-strip">
-        <div class="stat-cell" id="s-aircraft">
+        <div class="stat-cell">
           <div class="stat-val" id="sv-aircraft">—</div>
           <div class="stat-lbl">AIRCRAFT</div>
         </div>
-        <div class="stat-cell" id="s-sats">
+        <div class="stat-cell">
           <div class="stat-val" id="sv-sats">—</div>
           <div class="stat-lbl">SATELLITES</div>
         </div>
-        <div class="stat-cell" id="s-bases">
+        <div class="stat-cell">
           <div class="stat-val" id="sv-bases">—</div>
           <div class="stat-lbl">MIL BASES</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-val" id="sv-fires">—</div>
+          <div class="stat-lbl">FIRES</div>
         </div>
       </div>
 
@@ -89,6 +97,7 @@
           <div class="tab-group">
             <button class="tab active" data-sat="active">ALL</button>
             <button class="tab" data-sat="military">MIL</button>
+            <button class="tab" data-sat="starlink">LINK</button>
             <button class="tab" data-sat="visual">VIS</button>
           </div>
         </div>
@@ -97,14 +106,17 @@
 
       <!-- Aircraft section -->
       <div class="panel-card">
-        <div class="card-hdr">✈ LIVE AIRCRAFT</div>
+        <div class="card-hdr">
+          <span>✈ LIVE AIRSPACE</span>
+          <span id="mil-count" class="badge-mil">0 MIL</span>
+        </div>
         <div id="ac-country-bars"></div>
         <div id="ac-list" class="scroll-list"></div>
       </div>
 
       <!-- Country filter -->
       <div class="panel-card">
-        <div class="card-hdr">⬡ COUNTRY FILTER</div>
+        <div class="card-hdr">⬡ COUNTRY FILTER / FLY-TO</div>
         <div id="country-filter" class="scroll-list"></div>
       </div>
 
@@ -113,6 +125,12 @@
     <!-- MAP CONTAINER ─────────────────── -->
     <div id="map-wrap">
       <div id="map"></div>
+
+      <!-- 3D Globe container (Globe.gl) -->
+      <div id="globe-container"></div>
+
+      <!-- Network SVG overlay -->
+      <svg id="net-svg"></svg>
 
       <!-- Scanline + NV overlays -->
       <div id="scanlines"></div>
@@ -131,7 +149,7 @@
 
       <div id="view-sw">
         <button class="vsw active" data-view="map">MAP</button>
-        <button class="vsw" data-view="globe">GLOBE</button>
+        <button class="vsw" data-view="globe">3D GLOBE</button>
         <button class="vsw" data-view="network">NETWORK</button>
       </div>
 
@@ -139,14 +157,24 @@
         <span id="feed-status" class="live-tag">● LIVE FEED</span>
         <span id="last-upd">—</span>
         <span id="ws-status">WS: CONNECTING</span>
+        <span id="ac-speed-stat"></span>
       </div>
     </div>
 
     <!-- RIGHT PANEL ─────────────────── -->
     <aside id="right-panel">
 
+      <!-- Live geopolitical news -->
+      <div class="panel-card" id="news-card">
+        <div class="card-hdr">
+          <span>📡 LIVE INTEL NEWS</span>
+          <button id="refresh-news-btn" class="mini-btn" title="Refresh news">↻</button>
+        </div>
+        <div id="news-feed" class="scroll-list"></div>
+      </div>
+
       <!-- Activity feed -->
-      <div class="panel-card flex-grow">
+      <div class="panel-card" id="activity-card">
         <div class="card-hdr">
           <span>⚡ ACTIVITY FEED</span>
           <button id="clr-feed" class="mini-btn">CLR</button>
@@ -166,25 +194,20 @@
         <div id="gpsjam-list"></div>
       </div>
 
-      <!-- Intel signals -->
+      <!-- Region Intel signals -->
       <div class="panel-card">
-        <div class="card-hdr">◈ INTEL SIGNALS</div>
+        <div class="card-hdr">◈ REGION INTEL SIGNALS</div>
         <div id="intel-list"></div>
       </div>
 
     </aside>
   </div>
 
-  <!-- Globe overlay (three.js canvas hidden by default) -->
-  <canvas id="globe-canvas" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;z-index:50;"></canvas>
-
-  <!-- Network SVG overlay -->
-  <svg id="net-svg" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;z-index:50;background:#050508;"></svg>
-
   <!-- ── App scripts ───────────────────────────────────────── -->
   <script src="js/utils.js"></script>
   <script src="js/effects.js"></script>
   <script src="js/military.js"></script>
+  <script src="js/fires.js"></script>
   <script src="js/aircraft.js"></script>
   <script src="js/satellites.js"></script>
   <script src="js/swarm.js"></script>

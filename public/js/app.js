@@ -1,33 +1,46 @@
 /* ── Main application orchestrator ───────────────────────
-   Boots all modules, wires controls, manages WebSocket.   */
+   Boots all modules, wires controls, manages WebSocket.
+   Globe powered by Globe.gl (WebGL).                      */
 const APP = (() => {
-  let map = null;
-  let ws  = null;
+  let map    = null;
+  let ws     = null;
+  let globe  = null;          // Globe.gl instance
+  let globeRefreshTimer = null;
 
   /* ── Map initialization ─────────────────────────────── */
   function initMap() {
     map = L.map('map', {
-      center:         [20, 0],
-      zoom:           3,
-      zoomControl:    false,
+      center:           [20, 0],
+      zoom:             3,
+      zoomControl:      false,
       attributionControl: true,
-      preferCanvas:   true,
-      worldCopyJump:  true,
+      preferCanvas:     true,
+      worldCopyJump:    true,
     });
 
-    // Dark base tiles – CartoDB Dark Matter (free, no API key)
-    L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    // Dark base tile layer with labels visible
+    const darkTiles = L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
       {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors © <a href="https://carto.com/">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 19,
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
+        subdomains:  'abcd',
+        maxZoom:     19,
+        opacity:     1,
       }
     ).addTo(map);
 
-    // Zoom control (bottom-right)
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    // Labels on top (so they appear above all other overlays)
+    L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+      {
+        subdomains: 'abcd',
+        maxZoom:    19,
+        pane:       'shadowPane', // render above markers
+        opacity:    1,
+      }
+    ).addTo(map);
 
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
     return map;
   }
 
@@ -41,13 +54,16 @@ const APP = (() => {
 
       ws.onopen = () => {
         EFFECTS.setWsStatus('connected');
-        SIDEBAR.addFeedItem('satellite', 'WebSocket connected – live feed active');
+        SIDEBAR.addFeedItem('satellite', 'WebSocket connected – live ADS-B feed active');
       };
 
       ws.onmessage = ({ data }) => {
         try {
           const msg = JSON.parse(data);
-          if (msg.type === 'aircraft') AIRCRAFT.handleWSUpdate(msg.data);
+          if (msg.type === 'aircraft') {
+            AIRCRAFT.handleWSUpdate(msg.data);
+            if (globe) updateGlobePoints();
+          }
         } catch (_) {}
       };
 
@@ -55,7 +71,6 @@ const APP = (() => {
         EFFECTS.setWsStatus('reconnecting');
         setTimeout(connect, 4000);
       };
-
       ws.onerror = () => ws.close();
     }
 
@@ -72,23 +87,34 @@ const APP = (() => {
         switch (layer) {
           case 'aircraft':
             AIRCRAFT.setEnabled(on);
+            SIDEBAR.addFeedItem('aircraft', on ? 'Aircraft layer ON' : 'Aircraft layer OFF');
             break;
           case 'satellites':
             SATELLITES.setEnabled(on);
+            SIDEBAR.addFeedItem('satellite', on ? 'Satellite layer ON' : 'Satellite layer OFF');
             break;
           case 'military':
             MILITARY.setEnabled('military', on);
+            SIDEBAR.addFeedItem('military', on ? 'Military bases overlay ON' : 'Military bases overlay OFF');
             break;
           case 'nuclear':
             MILITARY.setEnabled('nuclear', on);
-            SIDEBAR.addFeedItem('military', on ? 'Nuclear sites overlay ON' : 'Nuclear sites overlay OFF');
+            SIDEBAR.addFeedItem('military', on ? '☢ Nuclear sites overlay ON' : 'Nuclear sites overlay OFF');
             break;
           case 'gpsjam':
             MILITARY.setEnabled('gpsjam', on);
+            SIDEBAR.addFeedItem('military', on ? '⊗ GPS jamming zones ON' : 'GPS jamming zones OFF');
+            break;
+          case 'fires':
+            FIRES.setEnabled(on);
             break;
           case 'swarm':
             SWARM.setEnabled(on);
             SIDEBAR.addFeedItem('satellite', on ? 'Swarm visualization ON' : 'Swarm visualization OFF');
+            break;
+          case 'airspace':
+            SIDEBAR.addFeedItem('aircraft', on ? '▦ Airspace overlay ON (showing GPS jam zones)' : 'Airspace overlay OFF');
+            MILITARY.setEnabled('gpsjam', on);
             break;
         }
       });
@@ -104,127 +130,139 @@ const APP = (() => {
         btn.classList.add('active');
 
         const mapEl    = document.getElementById('map');
-        const globeEl  = document.getElementById('globe-canvas');
+        const globeEl  = document.getElementById('globe-container');
         const netEl    = document.getElementById('net-svg');
 
+        mapEl.style.display   = 'none';
+        globeEl.style.display = 'none';
+        netEl.style.display   = 'none';
+
         if (view === 'map') {
-          mapEl.style.display   = 'block';
-          globeEl.style.display = 'none';
-          netEl.style.display   = 'none';
+          mapEl.style.display = 'block';
+          map.invalidateSize();
         } else if (view === 'globe') {
-          mapEl.style.display   = 'none';
           globeEl.style.display = 'block';
-          netEl.style.display   = 'none';
-          drawGlobe();
+          initGlobe();
         } else if (view === 'network') {
-          mapEl.style.display   = 'none';
-          globeEl.style.display = 'none';
-          netEl.style.display   = 'block';
+          netEl.style.display = 'block';
           drawNetwork();
         }
       });
     });
   }
 
-  /* ── Globe view (canvas projection) ─────────────────── */
-  function drawGlobe() {
-    const canvas = document.getElementById('globe-canvas');
-    const ctx    = canvas.getContext('2d');
-    const W      = canvas.offsetWidth;
-    const H      = canvas.offsetHeight;
-    canvas.width  = W;
-    canvas.height = H;
+  /* ── 3D Globe – Globe.gl ────────────────────────────── */
+  function initGlobe() {
+    const container = document.getElementById('globe-container');
+    if (!container) return;
 
-    const R = Math.min(W, H) * 0.38;
-    const cx = W/2, cy = H/2;
-    let rot = 0;
-
-    function frame() {
-      if (document.getElementById('globe-canvas').style.display === 'none') return;
-      requestAnimationFrame(frame);
-      ctx.fillStyle = '#040608';
-      ctx.fillRect(0, 0, W, H);
-      rot += 0.003;
-
-      // Globe circle
-      const grd = ctx.createRadialGradient(cx-R*0.3, cy-R*0.3, R*0.1, cx, cy, R);
-      grd.addColorStop(0, '#0d2040');
-      grd.addColorStop(1, '#020810');
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI*2);
-      ctx.fillStyle = grd;
-      ctx.fill();
-      ctx.strokeStyle = '#1e3a5f';
-      ctx.lineWidth   = 1;
-      ctx.stroke();
-
-      // Grid lines
-      ctx.strokeStyle = 'rgba(0,212,255,0.08)';
-      ctx.lineWidth   = 0.5;
-      for (let lat = -80; lat <= 80; lat += 20) {
-        const y = cy + R * Math.sin(lat * Math.PI/180);
-        const r2 = R * Math.cos(lat * Math.PI/180);
-        ctx.beginPath();
-        ctx.ellipse(cx, y, r2, r2*0.15, 0, 0, Math.PI*2);
-        ctx.stroke();
-      }
-      for (let lng = 0; lng < 360; lng += 30) {
-        const a = (lng + rot * 180/Math.PI) * Math.PI/180;
-        ctx.beginPath();
-        ctx.moveTo(cx + R*Math.cos(a), cy - R);
-        ctx.bezierCurveTo(
-          cx + R*Math.cos(a)*1.05, cy,
-          cx + R*Math.cos(a+Math.PI)*1.05, cy,
-          cx + R*Math.cos(a+Math.PI), cy + R
-        );
-        ctx.stroke();
+    if (!globe) {
+      // Globe.gl is exposed as the `Globe` global from the CDN build
+      const GlobeFn = window.Globe || (typeof Globe !== 'undefined' ? Globe : null);
+      if (!GlobeFn) {
+        container.innerHTML = '<div style="color:#00d4ff;font-family:monospace;padding:40px;text-align:center">Globe.gl loading…</div>';
+        return;
       }
 
-      // Plot aircraft on globe
-      const states = AIRCRAFT.getData();
-      states.slice(0, 400).forEach(s => {
-        if (!s[6] || !s[5]) return;
-        const lat = s[6] * Math.PI/180;
-        const lng = s[5] * Math.PI/180 + rot;
+      globe = GlobeFn()
+        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-night.jpg')
+        .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
+        .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
+        .showAtmosphere(true)
+        .atmosphereColor('rgba(30,100,200,0.7)')
+        .atmosphereAltitude(0.18)
+        (container);
 
-        const x3 = Math.cos(lat) * Math.sin(lng);
-        const y3 = Math.sin(lat);
-        const z3 = Math.cos(lat) * Math.cos(lng);
+      // Auto-rotate
+      globe.controls().autoRotate      = true;
+      globe.controls().autoRotateSpeed = 0.4;
+      globe.controls().enableDamping   = true;
 
-        if (z3 < 0) return; // behind globe
+      // Ring click to stop auto-rotate
+      container.addEventListener('mousedown', () => {
+        globe.controls().autoRotate = false;
+      });
+    }
 
-        const px = cx + x3 * R;
-        const py = cy - y3 * R;
-        const country = s[2] || '';
-        const color   = UTILS.countryColor(country);
+    // Fit to container
+    const w = container.offsetWidth;
+    const h = container.offsetHeight;
+    globe.width(w).height(h);
 
-        ctx.beginPath();
-        ctx.arc(px, py, 2, 0, Math.PI*2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(px, py, 5, 0, Math.PI*2);
-        ctx.fillStyle = color + '30';
-        ctx.fill();
+    updateGlobePoints();
+
+    // Refresh globe data every 15 s while visible
+    clearInterval(globeRefreshTimer);
+    globeRefreshTimer = setInterval(() => {
+      if (document.getElementById('globe-container').style.display !== 'none') {
+        updateGlobePoints();
+      }
+    }, 15_000);
+  }
+
+  function updateGlobePoints() {
+    if (!globe) return;
+
+    // Aircraft points
+    const states = AIRCRAFT.getData();
+    const acPoints = states
+      .filter(s => s[6] && s[5])
+      .map(s => {
+        const cs    = (s[1] || '').trim();
+        const type  = AIRCRAFT.detectType(cs, s[8]);
+        const isMil = AIRCRAFT.isMilitary(cs);
+        return {
+          lat:   s[6],
+          lng:   s[5],
+          alt:   Math.min((s[7] || 0) / 1_000_000, 0.08), // altitude as globe height
+          color: isMil ? '#ff9900'
+               : type === 'drone' ? '#ff2200'
+               : UTILS.countryColor(s[2] || ''),
+          label: `${cs || s[0]} [${s[2] || '?'}] ${s[7] ? Math.round(s[7] * 3.281).toLocaleString() : '?'} ft`,
+          size:  isMil ? 0.35 : 0.22,
+        };
       });
 
-      // Plot satellites
-      // (simplified – just dots)
-      ctx.fillStyle = '#00ff88';
-      ctx.font = '8px monospace';
-    }
-    frame();
+    // Satellite points
+    const satPoints = [];
+    document.querySelectorAll('#sat-list .list-item').forEach(() => {}); // just re-get from module
+
+    globe
+      .pointsData(acPoints)
+      .pointLat(d => d.lat)
+      .pointLng(d => d.lng)
+      .pointAltitude(d => d.alt)
+      .pointColor(d => d.color)
+      .pointRadius(d => d.size)
+      .pointLabel(d => d.label)
+      .pointsMerge(false);
+
+    // Military bases as labels
+    const bases = MILITARY.getBases().map(b => ({
+      lat:   b.lat, lng: b.lng,
+      color: '#ff9900',
+      text:  b.name,
+    }));
+
+    globe
+      .labelsData(bases)
+      .labelLat(d => d.lat)
+      .labelLng(d => d.lng)
+      .labelText(d => d.text)
+      .labelSize(0.35)
+      .labelColor(() => 'rgba(255,153,0,0.7)')
+      .labelResolution(2)
+      .labelAltitude(0.005);
   }
 
   /* ── Network graph (D3 force-directed) ───────────────── */
   function drawNetwork() {
-    const svg  = d3.select('#net-svg');
+    const svg = d3.select('#net-svg');
     svg.selectAll('*').remove();
-    const W = parseInt(svg.style('width'));
-    const H = parseInt(svg.style('height'));
+    const W = parseInt(svg.style('width')) || 800;
+    const H = parseInt(svg.style('height')) || 600;
 
-    // Build nodes from military bases by country
-    const bases  = MILITARY.getBases();
+    const bases     = MILITARY.getBases();
     const byCountry = {};
     bases.forEach(b => {
       if (!byCountry[b.country]) byCountry[b.country] = 0;
@@ -237,7 +275,6 @@ const APP = (() => {
       flag:  UTILS.countryFlag(id)
     }));
 
-    // Edges – alliances
     const ALLIANCES = [
       ['USA','United Kingdom'],['USA','France'],['USA','Germany'],
       ['USA','Japan'],['USA','South Korea'],['USA','Australia'],
@@ -249,56 +286,43 @@ const APP = (() => {
     ];
 
     const links = ALLIANCES
-      .filter(([s,t]) => byCountry[s] && byCountry[t])
+      .filter(([s, t]) => byCountry[s] && byCountry[t])
       .map(([source, target]) => ({ source, target }));
 
     const sim = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id(d => d.id).distance(120))
-      .force('charge', d3.forceManyBody().strength(-300))
-      .force('center', d3.forceCenter(W/2, H/2))
-      .force('collision', d3.forceCollide(30));
+      .force('link',      d3.forceLink(links).id(d => d.id).distance(130))
+      .force('charge',    d3.forceManyBody().strength(-320))
+      .force('center',    d3.forceCenter(W / 2, H / 2))
+      .force('collision', d3.forceCollide(32));
 
     const g = svg.append('g');
+    svg.call(d3.zoom().on('zoom', ({ transform }) => g.attr('transform', transform)));
 
-    // Zoom
-    svg.call(d3.zoom().on('zoom', ({transform}) => g.attr('transform', transform)));
+    const link = g.append('g').selectAll('line').data(links).join('line')
+      .style('stroke', 'rgba(0,212,255,0.25)').style('stroke-width', 1);
 
-    // Links
-    const link = g.append('g').selectAll('line')
-      .data(links).join('line')
-      .attr('class','link')
-      .style('stroke', 'rgba(0,212,255,0.25)')
-      .style('stroke-width', 1);
-
-    // Nodes
-    const node = g.append('g').selectAll('g')
-      .data(nodes).join('g')
+    const node = g.append('g').selectAll('g').data(nodes).join('g')
       .call(d3.drag()
-        .on('start', (e,d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
-        .on('drag',  (e,d) => { d.fx=e.x; d.fy=e.y; })
-        .on('end',   (e,d) => { if (!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+        .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag',  (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on('end',   (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
 
     node.append('circle')
       .attr('r', d => 8 + Math.sqrt(d.count) * 3)
-      .attr('fill', d => d.color + '33')
+      .attr('fill',   d => d.color + '22')
       .attr('stroke', d => d.color)
       .attr('stroke-width', 1.5)
-      .attr('class','node-circle')
       .style('filter', d => `drop-shadow(0 0 6px ${d.color})`);
 
     node.append('text')
-      .attr('class','node-label')
-      .attr('dy', d => -(10 + Math.sqrt(d.count)*3))
+      .attr('dy', d => -(12 + Math.sqrt(d.count) * 3))
       .attr('text-anchor', 'middle')
-      .style('font-size', '9px')
-      .style('fill', '#c8dff0')
+      .style('font-size', '9px').style('fill', '#c8dff0')
       .text(d => `${d.flag} ${d.id}`);
 
     node.append('text')
-      .attr('dy', 4)
-      .attr('text-anchor','middle')
-      .style('font-size','10px')
-      .style('fill','#c8dff0')
+      .attr('dy', 4).attr('text-anchor', 'middle')
+      .style('font-size', '10px').style('fill', '#c8dff0')
       .text(d => d.count);
 
     sim.on('tick', () => {
@@ -308,25 +332,23 @@ const APP = (() => {
       node.attr('transform', d => `translate(${d.x},${d.y})`);
     });
 
-    svg.append('text')
-      .attr('x', 10).attr('y', 20)
-      .style('fill','rgba(0,212,255,0.4)')
-      .style('font-family','monospace').style('font-size','10px')
-      .text('MILITARY ALLIANCE NETWORK — drag nodes to interact');
+    svg.append('text').attr('x', 10).attr('y', 22)
+      .style('fill', 'rgba(0,212,255,0.4)').style('font-family', 'monospace').style('font-size', '10px')
+      .text('MILITARY ALLIANCE NETWORK — drag to interact');
   }
 
-  /* ── Fly-to helper (called from sidebar item clicks) ─ */
-  function flyTo(lat, lng) {
+  /* ── Fly-to helper ───────────────────────────────────── */
+  function flyTo(lat, lng, zoom = 7) {
     if (!map) return;
-    map.flyTo([lat, lng], 6, { duration: 1.5 });
+    map.flyTo([lat, lng], zoom, { duration: 1.5, easeLinearity: 0.4 });
   }
 
-  /* ── Reset view ─────────────────────────────────────── */
+  /* ── Reset view ──────────────────────────────────────── */
   function resetView() {
     map?.flyTo([20, 0], 3, { duration: 1.5 });
   }
 
-  /* ── Boot ───────────────────────────────────────────── */
+  /* ── Boot ────────────────────────────────────────────── */
   function boot() {
     map = initMap();
 
@@ -334,34 +356,30 @@ const APP = (() => {
     EFFECTS.initCoordHud(map);
     SIDEBAR.init();
 
-    // Init feature modules
     MILITARY.init(map);
+    FIRES.init(map);
     AIRCRAFT.init(map);
     SATELLITES.init(map);
     SWARM.init(map);
 
-    // Wire controls
     initLayerControls();
     initViewModes();
 
     document.getElementById('nv-btn')?.addEventListener('click', EFFECTS.toggleNightVision);
     document.getElementById('reset-btn')?.addEventListener('click', resetView);
-
-    // Theme toggle (light/dark)
     document.getElementById('theme-btn')?.addEventListener('click', () => {
       document.body.classList.toggle('light-mode');
     });
 
-    // WebSocket
     initWebSocket();
 
-    // Boot message
-    SIDEBAR.addFeedItem('satellite', 'OSINT Globe Tracker initialized — all systems nominal');
-    SIDEBAR.addFeedItem('aircraft',  'Fetching live ADS-B data from OpenSky Network…');
+    // Boot messages
+    SIDEBAR.addFeedItem('satellite', '🌍 SPYMETER initialized — all systems nominal');
+    SIDEBAR.addFeedItem('aircraft',  'Fetching live ADS-B from OpenSky Network…');
     SIDEBAR.addFeedItem('satellite', 'Loading CelesTrak TLE orbital data…');
+    SIDEBAR.addFeedItem('military',  `Military base database loaded (${MILITARY.getBases().length} sites)`);
 
-    console.log('%c OSINT GLOBE TRACKER ', 'background:#00d4ff;color:#000;font-size:14px;font-weight:bold;');
-    console.log('%c Live aircraft • Satellites • Military • Nuclear ', 'color:#00ff88;');
+    console.log('%c SPYMETER ', 'background:#00d4ff;color:#000;font-size:14px;font-weight:bold;');
   }
 
   document.addEventListener('DOMContentLoaded', boot);

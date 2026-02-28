@@ -1,8 +1,33 @@
-/* ── Sidebar: panels, feeds, stats ─────────────────────── */
+/* ── Sidebar: panels, feeds, stats, news ─────────────────── */
 const SIDEBAR = (() => {
-  const MAX_FEED = 60;
+  const MAX_FEED = 80;
 
-  /* ── Activity feed ──────────────────────────────────── */
+  // ── Country → map center coordinates ─────────────────
+  const COUNTRY_COORDS = {
+    'United States': [39.5, -98.35],
+    'Russia':        [61.5, 105.3],
+    'China':         [35.8, 104.2],
+    'United Kingdom':[54.0, -2.0],
+    'France':        [46.2, 2.2],
+    'Germany':       [51.2, 10.4],
+    'India':         [20.6, 78.9],
+    'Japan':         [36.2, 138.3],
+    'Israel':        [31.0, 35.0],
+    'Turkey':        [38.9, 35.2],
+    'Iran':          [32.4, 53.7],
+    'Pakistan':      [30.4, 69.3],
+    'North Korea':   [40.3, 127.5],
+    'Ukraine':       [48.4, 31.2],
+    'South Korea':   [36.5, 127.8],
+    'Brazil':        [-14.2, -51.9],
+    'Australia':     [-25.3, 133.8],
+    'NATO':          [50.4, 3.9],
+    'Canada':        [56.1, -106.3],
+    'Saudi Arabia':  [23.9, 45.1],
+    'UAE':           [23.4, 53.8],
+  };
+
+  // ── Activity feed ──────────────────────────────────── */
   function addFeedItem(type, msg) {
     const feed = document.getElementById('activity-feed');
     if (!feed) return;
@@ -20,22 +45,86 @@ const SIDEBAR = (() => {
     if (feed) feed.innerHTML = '';
   });
 
-  /* ── Aircraft stats ─────────────────────────────────── */
+  // ── Live news feed (GDELT via server) ─────────────────
+  async function loadNews() {
+    const feed = document.getElementById('news-feed');
+    if (!feed) return;
+
+    feed.innerHTML = '<div class="news-loading">⟳ Fetching live intel…</div>';
+    try {
+      const resp = await window.fetch('/api/news');
+      if (!resp.ok) throw new Error(resp.status);
+      const data = await resp.json();
+      renderNews(data.articles || []);
+    } catch (e) {
+      feed.innerHTML = '<div class="news-loading">⚠ News feed unavailable</div>';
+    }
+  }
+
+  function toneClass(tone) {
+    const t = parseFloat(tone);
+    if (t < -3) return 'tone-neg';
+    if (t > 3)  return 'tone-pos';
+    return 'tone-neu';
+  }
+
+  function fmtNewsDate(dateStr) {
+    // GDELT format: 20240101T120000Z
+    if (!dateStr || dateStr.length < 8) return '';
+    try {
+      const y = dateStr.slice(0,4);
+      const mo = dateStr.slice(4,6);
+      const d  = dateStr.slice(6,8);
+      const h  = dateStr.slice(9,11) || '00';
+      const m  = dateStr.slice(11,13) || '00';
+      return `${d}/${mo} ${h}:${m}Z`;
+    } catch (_) { return ''; }
+  }
+
+  function renderNews(articles) {
+    const feed = document.getElementById('news-feed');
+    if (!feed) return;
+    if (!articles.length) {
+      feed.innerHTML = '<div class="news-loading">No articles at this time</div>';
+      return;
+    }
+    feed.innerHTML = articles.map(a => {
+      const tc   = toneClass(a.tone);
+      const date = fmtNewsDate(a.date);
+      const src  = a.source ? `<span class="news-src">${a.source}</span>` : '';
+      const flag = a.country ? `<span class="news-country">${a.country}</span>` : '';
+      return `
+        <a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
+          <div class="news-title">${a.title || 'Untitled'}</div>
+          <div class="news-meta">
+            ${src}${flag}
+            <span class="news-date">${date}</span>
+            <span class="news-tone ${tc}">${parseFloat(a.tone||0) > 0 ? '+' : ''}${parseFloat(a.tone||0).toFixed(1)}</span>
+          </div>
+        </a>`;
+    }).join('');
+  }
+
+  // Auto-refresh news every 5 min
+  setInterval(loadNews, 300_000);
+
+  document.getElementById('refresh-news-btn')?.addEventListener('click', loadNews);
+
+  // ── Aircraft stats ─────────────────────────────────── */
   let acCountryData = {};
-  function updateAircraftStats({ total, milCount, comCount, countryCounts }) {
+  function updateAircraftStats({ total, milCount, droneCount, countryCounts }) {
     acCountryData = countryCounts;
 
-    // Top-5 countries bar chart
     const barsEl = document.getElementById('ac-country-bars');
     if (barsEl) {
       const sorted = Object.entries(countryCounts)
-        .sort((a,b) => b[1]-a[1])
+        .sort((a, b) => b[1] - a[1])
         .slice(0, 5);
       const maxVal = sorted[0]?.[1] || 1;
       barsEl.innerHTML = sorted.map(([name, count]) => {
         const pct   = Math.round(count / maxVal * 100);
         const color = UTILS.countryColor(name);
-        const short = name.length > 12 ? name.slice(0,12)+'…' : name;
+        const short = name.length > 12 ? name.slice(0, 12) + '…' : name;
         return `
           <div class="country-bar-row">
             <span class="cb-name" title="${name}">${short}</span>
@@ -45,41 +134,46 @@ const SIDEBAR = (() => {
       }).join('');
     }
 
-    // Live aircraft list (top 30 by altitude)
-    const list = document.getElementById('ac-list');
+    const list   = document.getElementById('ac-list');
     if (!list) return;
     const states = AIRCRAFT.getData();
-    const top30  = [...states]
+    const top40  = [...states]
       .filter(s => s[6] && s[5])
-      .sort((a,b) => (b[7]||0)-(a[7]||0))
-      .slice(0, 30);
+      .sort((a, b) => (b[7] || 0) - (a[7] || 0))
+      .slice(0, 40);
 
-    list.innerHTML = top30.map(s => {
-      const cs    = (s[1]||'').trim() || s[0];
+    list.innerHTML = top40.map(s => {
+      const cs    = (s[1] || '').trim() || s[0];
       const alt   = s[7] ? Math.round(s[7] * 3.281 / 100) / 10 + 'k ft' : '—';
+      const spd   = s[9] ? Math.round(s[9] * 1.944) + 'kt' : '';
       const c     = s[2] || '?';
-      const color = UTILS.countryColor(c);
-      const mil   = AIRCRAFT.isMilitary(cs);
+      const type  = AIRCRAFT.detectType(cs, s[8]);
+      const color = AIRCRAFT.isMilitary(cs) ? '#ff9900' : UTILS.countryColor(c);
+      const typeEmoji = { drone:'⊕', helicopter:'🚁', fighter:'⚔', bomber:'✈', cargo:'📦', vip:'⭐' }[type] || '✈';
       return `
         <div class="list-item" onclick="APP.flyTo(${s[6]},${s[5]})">
-          <div class="li-dot" style="background:${mil?'#ff9900':color}"></div>
+          <div class="li-dot" style="background:${color}"></div>
+          <div class="li-type">${typeEmoji}</div>
           <div class="li-name">${cs}</div>
-          <div class="li-info">${alt}</div>
+          <div class="li-info">${alt}${spd ? ' ' + spd : ''}</div>
         </div>`;
     }).join('');
   }
 
-  /* ── Satellite list ─────────────────────────────────── */
+  // ── Satellite list ─────────────────────────────────── */
   function populateSatList(satData) {
     const list = document.getElementById('sat-list');
     if (!list) return;
-    const sorted = [...satData].sort((a,b) => a.name.localeCompare(b.name));
-    list.innerHTML = sorted.slice(0, 80).map(s => {
-      const cls   = s.name.match(/ISS|CSS|TIANGONG/i) ? 'station' : s.name.match(/GPS|GLONASS|GALILEO/i) ? 'nav' : 'default';
-      const color = cls === 'station' ? '#00d4ff' : cls === 'nav' ? '#aa44ff' : '#00ff88';
+    const sorted = [...satData].sort((a, b) => a.name.localeCompare(b.name));
+    list.innerHTML = sorted.slice(0, 100).map(s => {
+      const cls   = s.name.match(/ISS|CSS|TIANGONG/i) ? 'station'
+                  : s.name.match(/GPS|GLONASS|GALILEO/i) ? 'nav'
+                  : s.name.match(/STARLINK/i) ? 'link'
+                  : 'default';
+      const color = { station:'#00d4ff', nav:'#aa44ff', link:'#ff9900', default:'#00ff88' }[cls];
       const alt   = s.pos ? Math.round(s.pos.alt) + ' km' : '—';
       return `
-        <div class="list-item" onclick="APP.flyTo(${s.pos?.lat||0},${s.pos?.lng||0})">
+        <div class="list-item" onclick="APP.flyTo(${s.pos?.lat || 0},${s.pos?.lng || 0})">
           <div class="li-dot" style="background:${color}"></div>
           <div class="li-name">◉ ${s.name}</div>
           <div class="li-info">${alt}</div>
@@ -88,13 +182,12 @@ const SIDEBAR = (() => {
   }
 
   function highlightSat(name) {
-    const items = document.querySelectorAll('#sat-list .list-item');
-    items.forEach(el => {
+    document.querySelectorAll('#sat-list .list-item').forEach(el => {
       el.classList.toggle('selected', el.querySelector('.li-name')?.textContent.includes(name));
     });
   }
 
-  /* ── Warhead inventory (public SIPRI/FAS estimates) ── */
+  // ── Warhead inventory ────────────────────────────────
   const WARHEADS = [
     { country:'United States', flag:'🇺🇸', total:5428, deployed:1744, color:'#3399ff' },
     { country:'Russia',        flag:'🇷🇺', total:6257, deployed:1588, color:'#ff3333' },
@@ -123,7 +216,7 @@ const SIDEBAR = (() => {
     }).join('');
   }
 
-  /* ── GPS Jam list ───────────────────────────────────── */
+  // ── GPS Jam list ─────────────────────────────────────
   function populateGPSJam(zones) {
     const el = document.getElementById('gpsjam-list');
     if (!el) return;
@@ -138,14 +231,16 @@ const SIDEBAR = (() => {
     }).join('');
   }
 
-  /* ── Intel signals (static OSINT-style feed) ─────── */
+  // ── Region Intel signals ─────────────────────────────
   const INTEL_ITEMS = [
-    { title:'NOTAM: GPS unreliable Eastern Med', prob:'CONFIRMED', time:'Live',  color:'#ff3333' },
-    { title:'Tu-95 Bear intercepted ADIZ Alaska', prob:'CONFIRMED', time:'4h ago', color:'#ff9900' },
-    { title:'PLAN carrier group, South China Sea', prob:'HIGH',    time:'12h ago',color:'#ffaa00' },
-    { title:'NK ballistic missile launch prep',   prob:'ELEVATED', time:'2d ago', color:'#ff6666' },
-    { title:'Increased RU Su-34 sorties Syria',   prob:'CONFIRMED',time:'Live',   color:'#ff3333' },
-    { title:'Israeli F-35I overflights Lebanon',  prob:'HIGH',     time:'6h ago', color:'#ffaa00' },
+    { region:'Eastern Med',    title:'GPS spoofing confirmed – EUROCONTROL NOTAM active',   prob:'CONFIRMED', time:'Live',   color:'#ff3333' },
+    { region:'Baltic',         title:'RU Su-35 DACT activity near Finnish border',           prob:'HIGH',      time:'3h ago', color:'#ffaa00' },
+    { region:'South China Sea',title:'PLAN carrier group exercise, DF-21D on alert',         prob:'HIGH',      time:'8h ago', color:'#ffaa00' },
+    { region:'Korea',          title:'NK ICBM mobile launcher movement detected via SAR',    prob:'ELEVATED',  time:'1d ago', color:'#ff6666' },
+    { region:'Syria',          title:'Increased Ru Tu-22M3 sorties from Hmeimim',           prob:'CONFIRMED', time:'Live',   color:'#ff3333' },
+    { region:'Gaza',           title:'IDF F-35I airstrikes, Iron Dome intercepts',          prob:'CONFIRMED', time:'Live',   color:'#ff3333' },
+    { region:'Ukraine',        title:'Kinzhal hypersonic usage against energy grid',         prob:'CONFIRMED', time:'12h ago',color:'#ff6600' },
+    { region:'Taiwan Strait',  title:'PLA J-20 median line crossing – 4 aircraft',          prob:'HIGH',      time:'6h ago', color:'#ffaa00' },
   ];
 
   function populateIntel() {
@@ -153,19 +248,21 @@ const SIDEBAR = (() => {
     if (!el) return;
     el.innerHTML = INTEL_ITEMS.map(it => `
       <div class="intel-item">
+        <div class="intel-region">${it.region}</div>
         <div class="intel-title">${it.title}</div>
         <div class="intel-meta">
           <span class="intel-prob" style="color:${it.color}">${it.prob}</span>
-          <span>${it.time}</span>
+          <span class="intel-time">${it.time}</span>
         </div>
       </div>`).join('');
   }
 
-  /* ── Country filter chips ───────────────────────────── */
+  // ── Country filter chips ─────────────────────────────
   const COUNTRIES = [
     'United States','Russia','China','United Kingdom','France',
     'Germany','India','Japan','Israel','Turkey','Iran','Pakistan',
-    'North Korea','Ukraine','South Korea','Brazil','Australia','NATO',
+    'North Korea','Ukraine','South Korea','Brazil','Australia',
+    'Canada','Saudi Arabia','UAE','NATO',
   ];
 
   let activeCountries = new Set();
@@ -178,7 +275,7 @@ const SIDEBAR = (() => {
       const flag  = UTILS.countryFlag(c);
       return `
         <div class="country-chip" data-country="${c}"
-             style="border-color:${color}22"
+             style="border-color:${color}33"
              onclick="SIDEBAR.toggleCountry('${c}')">
           ${flag} ${c.split(' ').slice(-1)[0]}
         </div>`;
@@ -186,19 +283,26 @@ const SIDEBAR = (() => {
   }
 
   function toggleCountry(c) {
-    if (activeCountries.has(c)) activeCountries.delete(c);
-    else activeCountries.add(c);
+    if (activeCountries.has(c)) {
+      activeCountries.delete(c);
+    } else {
+      activeCountries.add(c);
+      // Fly to country on map
+      if (COUNTRY_COORDS[c]) {
+        APP.flyTo(COUNTRY_COORDS[c][0], COUNTRY_COORDS[c][1], 5);
+      }
+    }
 
     const chip = document.querySelector(`.country-chip[data-country="${c}"]`);
     chip?.classList.toggle('active', activeCountries.has(c));
 
     AIRCRAFT.setCountryFilter([...activeCountries]);
     addFeedItem('military', activeCountries.size
-      ? `Filter: ${[...activeCountries].join(', ')}`
+      ? `Filter + fly-to: ${[...activeCountries].join(', ')}`
       : 'Country filter cleared');
   }
 
-  /* ── Sat tab switching ──────────────────────────────── */
+  // ── Sat tab switching ────────────────────────────────
   function initSatTabs() {
     document.querySelectorAll('.tab[data-sat]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -212,11 +316,15 @@ const SIDEBAR = (() => {
   function init() {
     buildCountryFilter();
     populateIntel();
+    populateWarheads();
     initSatTabs();
+    // Load news on boot
+    setTimeout(loadNews, 2000);
   }
 
   return {
     addFeedItem, updateAircraftStats, populateSatList, highlightSat,
-    populateWarheads, populateGPSJam, buildCountryFilter, toggleCountry, init
+    populateWarheads, populateGPSJam, buildCountryFilter, toggleCountry,
+    loadNews, init
   };
 })();

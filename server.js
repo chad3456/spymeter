@@ -18,11 +18,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── In-memory cache ────────────────────────────────────────────────────────
 const cache = {
-  aircraft: { data: null, ts: 0 },
-  satellites: {}
+  aircraft:   { data: null, ts: 0 },
+  satellites: {},
+  news:       { data: null, ts: 0 },
 };
-const AC_TTL  = 15_000;   // 15 s  – OpenSky free tier: 10 req/10 s
-const SAT_TTL = 300_000;  // 5 min – TLE data changes slowly
+const AC_TTL   = 15_000;    // 15 s
+const SAT_TTL  = 300_000;   // 5 min
+const NEWS_TTL = 300_000;   // 5 min
 
 // ─── Aircraft – OpenSky Network ─────────────────────────────────────────────
 app.get('/api/aircraft', async (req, res) => {
@@ -104,6 +106,77 @@ app.get('/api/fires', async (req, res) => {
     res.send(resp.data);
   } catch (err) {
     res.status(503).json({ error: 'Fire data unavailable' });
+  }
+});
+
+// ─── News feed – GDELT API proxy ─────────────────────────────────────────────
+app.get('/api/news', async (req, res) => {
+  const now = Date.now();
+  if (cache.news.data && now - cache.news.ts < NEWS_TTL) {
+    return res.json(cache.news.data);
+  }
+
+  const queries = [
+    'war military conflict strike',
+    'geopolitical crisis sanctions',
+    'earthquake disaster flood tsunami'
+  ];
+
+  const allArticles = [];
+
+  try {
+    for (const q of queries) {
+      try {
+        const resp = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+          params: {
+            query:      q,
+            mode:       'artlist',
+            maxrecords: 10,
+            format:     'json',
+            sort:       'datedesc',
+            timespan:   '24h'
+          },
+          timeout: 8_000
+        });
+        if (resp.data && Array.isArray(resp.data.articles)) {
+          allArticles.push(...resp.data.articles.map(a => ({
+            title:  a.title || '',
+            url:    a.url || '',
+            source: a.domain || '',
+            date:   a.seendate || '',
+            lang:   a.language || 'English',
+            country: a.sourcecountry || '',
+            tone:   a.tone ? parseFloat(a.tone).toFixed(1) : '0'
+          })));
+        }
+      } catch (_) { /* skip failed query */ }
+    }
+
+    // Deduplicate by URL
+    const seen = new Set();
+    const unique = allArticles.filter(a => {
+      if (!a.title || seen.has(a.url)) return false;
+      seen.add(a.url);
+      return true;
+    });
+
+    // Sort newest first (GDELT date format: 20240101T120000Z)
+    unique.sort((a, b) => b.date.localeCompare(a.date));
+
+    const result = { articles: unique.slice(0, 25), ts: now };
+    cache.news = { data: result, ts: now };
+    res.json(result);
+
+  } catch (err) {
+    if (cache.news.data) return res.json(cache.news.data);
+    // Fallback: curated static headlines if GDELT unreachable
+    res.json({
+      articles: [
+        { title: 'Live news feed loading…', url: '#', source: 'OSINT', date: '', tone: '0' }
+      ],
+      ts: now,
+      error: 'GDELT unavailable'
+    });
   }
 });
 
