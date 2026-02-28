@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OSINT GLOBE TRACKER</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- satellite.js – TLE propagation -->
+  <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
+
+  <!-- D3 – network graph + swarm -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <!-- Leaflet marker cluster -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- Classification banner -->
+  <div id="cls-banner">OSINT // OPEN SOURCE // UNCLASSIFIED // PUBLIC DATA ONLY</div>
+
+  <!-- ── Top nav ─────────────────────────────────────────── -->
+  <header id="topbar">
+    <div class="tb-left">
+      <div class="logo-block">
+        <span class="logo-icon">◈</span>
+        <span class="logo-text">OSINT<span class="logo-accent">GLOBE</span></span>
+      </div>
+      <div class="sys-info">
+        <span id="sys-status" class="pulse-dot live"></span>
+        <span id="sys-label">LIVE</span>
+      </div>
+    </div>
+
+    <div class="tb-center">
+      <div id="layer-bar">
+        <button class="lbtn active" data-layer="aircraft"    title="OpenSky ADS-B">✈ AIRCRAFT</button>
+        <button class="lbtn active" data-layer="satellites"  title="CelesTrak TLE">◉ SATELLITES</button>
+        <button class="lbtn active" data-layer="military"    title="Military Bases">⬡ MIL BASES</button>
+        <button class="lbtn"        data-layer="nuclear"     title="Nuclear Sites">☢ NUCLEAR</button>
+        <button class="lbtn"        data-layer="gpsjam"      title="GPS Jamming">⊗ GPS JAM</button>
+        <button class="lbtn"        data-layer="fires"       title="FIRMS Active Fires">⬥ FIRES</button>
+        <button class="lbtn"        data-layer="swarm"       title="Swarm Viz">⋯ SWARM</button>
+      </div>
+    </div>
+
+    <div class="tb-right">
+      <div id="utc-clock">--:--:-- UTC</div>
+      <button id="nv-btn"    class="ctrl-btn" title="Night Vision">NV</button>
+      <button id="theme-btn" class="ctrl-btn" title="Toggle Theme">◑</button>
+      <button id="reset-btn" class="ctrl-btn" title="Reset View">⌖</button>
+    </div>
+  </header>
+
+  <!-- ── Main layout ─────────────────────────────────────── -->
+  <div id="layout">
+
+    <!-- LEFT PANEL ─────────────────── -->
+    <aside id="left-panel">
+
+      <!-- Stats strip -->
+      <div id="stats-strip">
+        <div class="stat-cell" id="s-aircraft">
+          <div class="stat-val" id="sv-aircraft">—</div>
+          <div class="stat-lbl">AIRCRAFT</div>
+        </div>
+        <div class="stat-cell" id="s-sats">
+          <div class="stat-val" id="sv-sats">—</div>
+          <div class="stat-lbl">SATELLITES</div>
+        </div>
+        <div class="stat-cell" id="s-bases">
+          <div class="stat-val" id="sv-bases">—</div>
+          <div class="stat-lbl">MIL BASES</div>
+        </div>
+      </div>
+
+      <!-- Satellite section -->
+      <div class="panel-card" id="sat-card">
+        <div class="card-hdr">
+          <span>◉ SATELLITE TRACK</span>
+          <div class="tab-group">
+            <button class="tab active" data-sat="active">ALL</button>
+            <button class="tab" data-sat="military">MIL</button>
+            <button class="tab" data-sat="visual">VIS</button>
+          </div>
+        </div>
+        <div id="sat-list" class="scroll-list"></div>
+      </div>
+
+      <!-- Aircraft section -->
+      <div class="panel-card">
+        <div class="card-hdr">✈ LIVE AIRCRAFT</div>
+        <div id="ac-country-bars"></div>
+        <div id="ac-list" class="scroll-list"></div>
+      </div>
+
+      <!-- Country filter -->
+      <div class="panel-card">
+        <div class="card-hdr">⬡ COUNTRY FILTER</div>
+        <div id="country-filter" class="scroll-list"></div>
+      </div>
+
+    </aside>
+
+    <!-- MAP CONTAINER ─────────────────── -->
+    <div id="map-wrap">
+      <div id="map"></div>
+
+      <!-- Scanline + NV overlays -->
+      <div id="scanlines"></div>
+      <div id="nv-vignette"></div>
+
+      <!-- Canvas for swarm particles -->
+      <canvas id="swarm-canvas"></canvas>
+
+      <!-- HUD overlays -->
+      <div id="crosshair"></div>
+      <div id="coord-hud">
+        <span id="hud-lat">LAT  --°</span>
+        <span id="hud-lng">LNG  --°</span>
+        <span id="hud-zoom">Z --</span>
+      </div>
+
+      <div id="view-sw">
+        <button class="vsw active" data-view="map">MAP</button>
+        <button class="vsw" data-view="globe">GLOBE</button>
+        <button class="vsw" data-view="network">NETWORK</button>
+      </div>
+
+      <div id="bottom-bar">
+        <span id="feed-status" class="live-tag">● LIVE FEED</span>
+        <span id="last-upd">—</span>
+        <span id="ws-status">WS: CONNECTING</span>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL ─────────────────── -->
+    <aside id="right-panel">
+
+      <!-- Activity feed -->
+      <div class="panel-card flex-grow">
+        <div class="card-hdr">
+          <span>⚡ ACTIVITY FEED</span>
+          <button id="clr-feed" class="mini-btn">CLR</button>
+        </div>
+        <div id="activity-feed" class="scroll-list"></div>
+      </div>
+
+      <!-- Warhead inventory -->
+      <div class="panel-card">
+        <div class="card-hdr">☢ WARHEAD INVENTORY</div>
+        <div id="warhead-list"></div>
+      </div>
+
+      <!-- GPS Jamming status -->
+      <div class="panel-card">
+        <div class="card-hdr">⊗ GPS JAMMING ZONES</div>
+        <div id="gpsjam-list"></div>
+      </div>
+
+      <!-- Intel signals -->
+      <div class="panel-card">
+        <div class="card-hdr">◈ INTEL SIGNALS</div>
+        <div id="intel-list"></div>
+      </div>
+
+    </aside>
+  </div>
+
+  <!-- Globe overlay (three.js canvas hidden by default) -->
+  <canvas id="globe-canvas" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;z-index:50;"></canvas>
+
+  <!-- Network SVG overlay -->
+  <svg id="net-svg" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;z-index:50;background:#050508;"></svg>
+
+  <!-- ── App scripts ───────────────────────────────────────── -->
+  <script src="js/utils.js"></script>
+  <script src="js/effects.js"></script>
+  <script src="js/military.js"></script>
+  <script src="js/aircraft.js"></script>
+  <script src="js/satellites.js"></script>
+  <script src="js/swarm.js"></script>
+  <script src="js/sidebar.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
