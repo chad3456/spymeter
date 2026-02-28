@@ -155,7 +155,17 @@ aside {
   overflow: hidden;
   flex-shrink: 0;
 }
-#right-panel { border-right: none; border-left: 1px solid var(--border); }
+/* Right panel: full-height scrollable column */
+#right-panel {
+  border-right: none;
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-hi) transparent;
+}
+#right-panel::-webkit-scrollbar { width: 3px; }
+#right-panel::-webkit-scrollbar-thumb { background: var(--border-hi); }
 
 /* Stats strip */
 #stats-strip {
@@ -256,7 +266,9 @@ aside {
 .feed-body.type-alert     { color: var(--danger); }
 
 /* ── Live News Feed ─────────────────────────────────────── */
-#news-card { min-height: 180px; max-height: 42%; }
+#news-card { flex-shrink: 0; }
+#news-card .scroll-list { max-height: 300px; overflow-y: auto; }
+#activity-card .scroll-list { max-height: 200px; overflow-y: auto; }
 
 .news-loading {
   padding: 12px 10px;
@@ -316,9 +328,9 @@ aside {
 }
 #map { width: 100%; height: 100%; background: var(--bg); }
 
-/* Base dark tiles – bright enough to see country names */
+/* Base dark tiles – visible terrain + labels */
 .leaflet-tile {
-  filter: brightness(0.85) contrast(1.1) saturate(0.8);
+  filter: brightness(1.0) contrast(1.05) saturate(0.85);
 }
 
 /* 3D Globe container */
@@ -410,17 +422,25 @@ body.nv-mode .ctrl-btn.active { background: rgba(0,255,65,0.1); border-color: #0
 
 #bottom-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
-  height: 22px;
-  background: rgba(4,6,8,0.88);
+  height: 24px;
+  background: rgba(3,5,8,0.92);
   border-top: 1px solid var(--border);
   display: flex; align-items: center;
-  padding: 0 10px; gap: 14px;
+  padding: 0 10px; gap: 10px;
   font-size: 9px; z-index: 450;
+  overflow: hidden;
+  white-space: nowrap;
 }
-.live-tag { color: var(--green); animation: blink 2s step-end infinite; }
+#bottom-bar > * { flex-shrink: 0; }
+.live-tag {
+  color: var(--green); animation: blink 2s step-end infinite;
+  font-weight: bold; letter-spacing: 0.5px;
+}
 @keyframes blink { 50% { opacity: 0; } }
-#last-upd, #ws-status, #ac-speed-stat { color: var(--text-dim); }
+#last-upd   { color: var(--text-dim); }
+#ws-status  { color: var(--text-dim); margin-left: auto; }
 #ws-status.connected { color: var(--accent2); }
+#ac-speed-stat { display: none; }
 
 /* View switch */
 #view-sw {
@@ -465,27 +485,26 @@ body.nv-mode .ctrl-btn.active { background: rgba(0,255,65,0.1); border-color: #0
 }
 @keyframes dash-flow { to { stroke-dashoffset: -10; } }
 
-/* ── Military markers ───────────────────────────────────── */
-.mil-marker {
-  width: 12px; height: 12px;
-  border: 1.5px solid;
-  transform: rotate(45deg);
+/* ── Military SVG icon wrappers ─────────────────────────── */
+.mil-icon-wrap {
+  width: 22px; height: 22px;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s ease;
 }
-.mil-base    { border-color: #ff9900; background: rgba(255,153,0,0.15); }
-.mil-nuclear {
-  border-color: #ff3355; background: rgba(255,51,85,0.2);
+.mil-icon-wrap:hover { transform: scale(1.35); }
+.mil-nuclear-wrap {
   animation: nuke-pulse 2s ease infinite;
-  transform: rotate(0deg);
-  font-size: 10px; color: #ff3355;
 }
-.mil-naval   { border-color: #00aaff; background: rgba(0,170,255,0.15); }
-
 @keyframes nuke-pulse {
-  0%, 100% { box-shadow: 0 0 5px #ff3355; }
-  50%       { box-shadow: 0 0 18px #ff3355, 0 0 35px rgba(255,51,85,0.4); }
+  0%, 100% { filter: drop-shadow(0 0 3px #ff2244); }
+  50%       { filter: drop-shadow(0 0 10px #ff2244) drop-shadow(0 0 20px rgba(255,34,68,0.5)); }
 }
+
+/* Legacy classes kept for backward compat (not rendered anymore) */
+.mil-marker  { display: none; }
+.mil-base    { display: none; }
+.mil-naval   { display: none; }
 
 /* ── Fire dot ───────────────────────────────────────────── */
 .fire-dot {

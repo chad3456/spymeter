@@ -119,8 +119,52 @@ const MILITARY = (() => {
     { name:'Kaliningrad region',     lat:54.7,  lng:20.5,  radius:200, severity:'HIGH',  source:'EUROCONTROL' },
   ];
 
+  // SVG icon HTML per base type
+  function typeSVG(type, color) {
+    const c = color;
+    const g = `filter:drop-shadow(0 0 3px ${c})`;
+    const svgs = {
+      air: `<svg viewBox="0 0 22 22" width="22" height="22" style="${g}">
+              <path fill="${c}" d="M11 2l1.5 5.5H18l-4.5 3.3 1.7 5.2L11 13l-4.2 3 1.7-5.2L4 7.5h5.5z"/>
+              <rect fill="${c}" opacity=".5" x="10" y="14" width="2" height="5" rx="1"/>
+            </svg>`,
+      naval: `<svg viewBox="0 0 22 22" width="22" height="22" style="${g}">
+               <circle cx="11" cy="7" r="2.5" fill="none" stroke="${c}" stroke-width="1.8"/>
+               <line x1="11" y1="2" x2="11" y2="20" stroke="${c}" stroke-width="1.8"/>
+               <path fill="none" stroke="${c}" stroke-width="1.8" d="M4 16 Q11 20 18 16"/>
+               <path fill="none" stroke="${c}" stroke-width="1.5" d="M8 11 Q11 9 14 11"/>
+             </svg>`,
+      ground: `<svg viewBox="0 0 22 22" width="22" height="22" style="${g}">
+                <polygon points="11,3 20,18 2,18" fill="none" stroke="${c}" stroke-width="1.8"/>
+                <circle cx="11" cy="12" r="2" fill="${c}"/>
+              </svg>`,
+      test: `<svg viewBox="0 0 22 22" width="22" height="22" style="${g}">
+              <circle cx="11" cy="11" r="8" fill="none" stroke="${c}" stroke-width="1.5"/>
+              <circle cx="11" cy="11" r="4" fill="none" stroke="${c}" stroke-width="1.5"/>
+              <circle cx="11" cy="11" r="1.5" fill="${c}"/>
+              <line x1="3" y1="11" x2="19" y2="11" stroke="${c}" stroke-width="1" opacity=".4"/>
+              <line x1="11" y1="3" x2="11" y2="19" stroke="${c}" stroke-width="1" opacity=".4"/>
+            </svg>`,
+      research: `<svg viewBox="0 0 22 22" width="22" height="22" style="${g}">
+                  <path fill="none" stroke="${c}" stroke-width="1.8" d="M8 3h6l1 8H7z"/>
+                  <path fill="${c}" opacity=".5" d="M6 11 Q5 18 11 19 Q17 18 16 11z"/>
+                  <circle cx="11" cy="5.5" r="1" fill="${c}"/>
+                </svg>`,
+      assembly: `<svg viewBox="0 0 22 22" width="22" height="22" style="${g}">
+                  <rect x="4" y="4" width="14" height="14" fill="none" stroke="${c}" stroke-width="1.8" rx="2"/>
+                  <path fill="${c}" d="M11 7l2 4h-4z"/>
+                  <rect x="9" y="12" width="4" height="4" fill="${c}" opacity=".7" rx="1"/>
+                </svg>`,
+      production: `<svg viewBox="0 0 22 22" width="22" height="22" style="${g}">
+                    <polygon points="11,2 20.5,17 1.5,17" fill="none" stroke="${c}" stroke-width="1.8"/>
+                    <text x="11" y="16" text-anchor="middle" font-size="9" fill="${c}">☢</text>
+                  </svg>`,
+    };
+    return svgs[type] || svgs.ground;
+  }
+
   function typeIcon(type, country) {
-    const icons = { air:'◇', naval:'△', ground:'□', test:'⊕', research:'⊗', assembly:'⊞', production:'☢' };
+    const icons = { air:'✈', naval:'⚓', ground:'★', test:'◎', research:'⊗', assembly:'⊞', production:'☢' };
     return icons[type] || '◈';
   }
 
@@ -158,29 +202,32 @@ const MILITARY = (() => {
 
   function addBase(b) {
     const color = baseColor(b.country);
-    const cls   = b.type === 'naval' ? 'mil-naval' : 'mil-base';
+    const svg   = typeSVG(b.type, color);
     const icon  = L.divIcon({
-      html: `<div class="mil-marker ${cls}" style="border-color:${color};background:${color}22" title="${b.name}"></div>`,
+      html: `<div class="mil-icon-wrap" title="${b.name}: ${b.type.toUpperCase()} | ${b.country}">${svg}</div>`,
       className: '',
-      iconSize: [12,12],
-      iconAnchor: [6,6]
+      iconSize:   [22, 22],
+      iconAnchor: [11, 11],
     });
-    const m = L.marker([b.lat, b.lng], { icon });
-    m.bindPopup(makeBasePopup(b), { maxWidth: 280 });
-    m.on('click', () => SIDEBAR.addFeedItem('military', `${b.name} | ${b.country} | ${b.type.toUpperCase()}`));
+    const m = L.marker([b.lat, b.lng], { icon, zIndexOffset: 50 });
+    m.bindPopup(makeBasePopup(b), { maxWidth: 300 });
+    m.on('click', () => SIDEBAR.addFeedItem('military',
+      `${typeIcon(b.type)} ${b.name} | ${b.country} | ${b.type.toUpperCase()}`));
     if (baseLayer) m.addTo(baseLayer);
   }
 
   function addNuclear(n) {
-    const icon = L.divIcon({
-      html: `<div class="mil-marker mil-nuclear" title="${n.name}">☢</div>`,
+    const color = '#ff2244';
+    const svg   = typeSVG(n.type || 'production', color);
+    const icon  = L.divIcon({
+      html: `<div class="mil-icon-wrap mil-nuclear-wrap" title="☢ ${n.name}">${svg}</div>`,
       className: '',
-      iconSize: [14,14],
-      iconAnchor: [7,7]
+      iconSize:   [22, 22],
+      iconAnchor: [11, 11],
     });
-    const m = L.marker([n.lat, n.lng], { icon });
-    m.bindPopup(makeNuclearPopup(n), { maxWidth: 280 });
-    m.on('click', () => SIDEBAR.addFeedItem('military', `NUCLEAR SITE: ${n.name} | ${n.country}`));
+    const m = L.marker([n.lat, n.lng], { icon, zIndexOffset: 80 });
+    m.bindPopup(makeNuclearPopup(n), { maxWidth: 300 });
+    m.on('click', () => SIDEBAR.addFeedItem('military', `☢ NUCLEAR: ${n.name} | ${n.country}`));
     if (nuclearLayer) m.addTo(nuclearLayer);
   }
 
