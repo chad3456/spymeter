@@ -5,23 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SPYMETER — OSINT GLOBE TRACKER</title>
 
-  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- satellite.js – TLE propagation -->
   <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
-
-  <!-- D3 – network graph + swarm -->
   <script src="https://d3js.org/d3.v7.min.js"></script>
-
-  <!-- Leaflet marker cluster -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-
-  <!-- Globe.gl – 3D WebGL spinning globe -->
   <script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
+  <!-- Twitter/X embed widget -->
+  <script async src="https://platform.twitter.com/widgets.js"></script>
 
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -30,7 +23,7 @@
   <!-- Classification banner -->
   <div id="cls-banner">SPYMETER // OSINT // OPEN SOURCE INTELLIGENCE // UNCLASSIFIED // PUBLIC DATA ONLY</div>
 
-  <!-- ── Top nav ─────────────────────────────────────────── -->
+  <!-- ── Top nav ────────────────────────────────────────────────── -->
   <header id="topbar">
     <div class="tb-left">
       <div class="logo-block">
@@ -45,55 +38,55 @@
 
     <div class="tb-center">
       <div id="layer-bar">
-        <button class="lbtn active" data-layer="aircraft"   title="Live ADS-B via OpenSky">✈ AIRCRAFT</button>
-        <button class="lbtn active" data-layer="satellites" title="CelesTrak TLE Orbits">◉ SATELLITES</button>
-        <button class="lbtn active" data-layer="military"   title="Military Bases">⬡ MIL BASES</button>
-        <button class="lbtn"        data-layer="nuclear"    title="Nuclear Sites">☢ NUCLEAR</button>
-        <button class="lbtn"        data-layer="gpsjam"     title="GPS Jamming Zones">⊗ GPS JAM</button>
-        <button class="lbtn"        data-layer="fires"      title="NASA FIRMS Active Fires">🔥 FIRES</button>
-        <button class="lbtn"        data-layer="swarm"      title="Swarm Particle Viz">⋯ SWARM</button>
-        <button class="lbtn"        data-layer="airspace"   title="Live Airspace Regions">▦ AIRSPACE</button>
+        <button class="lbtn active" data-layer="aircraft"   title="OpenSky ADS-B — REAL-TIME">✈ AIRCRAFT</button>
+        <button class="lbtn active" data-layer="satellites" title="CelesTrak TLE — REAL-TIME">◉ SATELLITES</button>
+        <button class="lbtn active" data-layer="military"   title="MIL Bases — CURATED">⬡ MIL BASES</button>
+        <button class="lbtn"        data-layer="nuclear"    title="Nuclear Sites — CURATED">☢ NUCLEAR</button>
+        <button class="lbtn"        data-layer="gpsjam"     title="GPS Jam — KNOWN ZONES">⊗ GPS JAM</button>
+        <button class="lbtn"        data-layer="fires"      title="NASA FIRMS 24h — REAL">🔥 FIRES</button>
+        <button class="lbtn"        data-layer="swarm"      title="Particle Viz">⋯ SWARM</button>
+        <button class="lbtn conflict-btn" data-layer="conflict" title="Global Unrest Tracker — Live Tweets, Video, News">🌍 UNREST</button>
+        <button class="lbtn"        data-layer="arcs"       title="Missile/Strike Arc Trails on Globe">🚀 STRIKES</button>
       </div>
     </div>
 
     <div class="tb-right">
       <div id="utc-clock">--:--:-- UTC</div>
-      <button id="nv-btn"    class="ctrl-btn" title="Night Vision">👁 NV</button>
-      <button id="theme-btn" class="ctrl-btn" title="Toggle Theme">◑</button>
-      <button id="reset-btn" class="ctrl-btn" title="Reset View">⌖</button>
+      <button id="crt-btn"   class="ctrl-btn" title="CRT Scanline Effect">CRT</button>
+      <button id="nv-btn"    class="ctrl-btn" title="Night Vision Mode">👁 NV</button>
+      <button id="reset-btn" class="ctrl-btn" title="Reset Map View">⌖</button>
     </div>
   </header>
 
-  <!-- ── Main layout ─────────────────────────────────────── -->
+  <!-- ── Main layout ─────────────────────────────────────────────── -->
   <div id="layout">
 
-    <!-- LEFT PANEL ─────────────────── -->
+    <!-- LEFT PANEL ──────────────────────── -->
     <aside id="left-panel">
 
-      <!-- Stats strip -->
       <div id="stats-strip">
         <div class="stat-cell">
           <div class="stat-val" id="sv-aircraft">—</div>
-          <div class="stat-lbl">AIRCRAFT</div>
+          <div class="stat-lbl">AIRCRAFT <span class="lbl-badge-live">LIVE</span></div>
         </div>
         <div class="stat-cell">
           <div class="stat-val" id="sv-sats">—</div>
-          <div class="stat-lbl">SATELLITES</div>
+          <div class="stat-lbl">SATELLITES <span class="lbl-badge-live">LIVE</span></div>
         </div>
         <div class="stat-cell">
           <div class="stat-val" id="sv-bases">—</div>
-          <div class="stat-lbl">MIL BASES</div>
+          <div class="stat-lbl">MIL BASES <span class="lbl-badge-static">DB</span></div>
         </div>
         <div class="stat-cell">
           <div class="stat-val" id="sv-fires">—</div>
-          <div class="stat-lbl">FIRES</div>
+          <div class="stat-lbl">FIRES <span class="lbl-badge-live">24H</span></div>
         </div>
       </div>
 
-      <!-- Satellite section -->
-      <div class="panel-card" id="sat-card">
+      <!-- Satellite -->
+      <div class="panel-card">
         <div class="card-hdr">
-          <span>◉ SATELLITE TRACK</span>
+          <span>◉ SATELLITE TRACK <span class="badge-live">● LIVE</span></span>
           <div class="tab-group">
             <button class="tab active" data-sat="active">ALL</button>
             <button class="tab" data-sat="military">MIL</button>
@@ -101,46 +94,59 @@
             <button class="tab" data-sat="visual">VIS</button>
           </div>
         </div>
-        <div id="sat-list" class="scroll-list" style="max-height:180px"></div>
+        <div id="sat-list" class="scroll-list" style="max-height:175px"></div>
       </div>
 
-      <!-- Aircraft section -->
+      <!-- Aircraft -->
       <div class="panel-card">
         <div class="card-hdr">
-          <span>✈ LIVE AIRSPACE</span>
+          <span>✈ LIVE AIRSPACE <span class="badge-live">● ADS-B</span></span>
           <span id="mil-count" class="badge-mil">0 MIL</span>
         </div>
         <div id="ac-country-bars"></div>
-        <div id="ac-list" class="scroll-list" style="max-height:200px"></div>
+        <div id="ac-list" class="scroll-list" style="max-height:195px"></div>
       </div>
 
       <!-- Country filter -->
       <div class="panel-card">
         <div class="card-hdr">⬡ COUNTRY FILTER / FLY-TO</div>
-        <div id="country-filter" class="scroll-list" style="max-height:150px"></div>
+        <div id="country-filter" class="scroll-list" style="max-height:145px"></div>
+      </div>
+
+      <!-- Data sources transparency panel -->
+      <div class="panel-card">
+        <div class="card-hdr">ℹ DATA SOURCES</div>
+        <div class="sources-list">
+          <div class="src-row"><span class="badge-live">LIVE</span><span>Aircraft — OpenSky ADS-B (15s)</span></div>
+          <div class="src-row"><span class="badge-live">LIVE</span><span>Satellites — CelesTrak TLE (5m)</span></div>
+          <div class="src-row"><span class="badge-live">LIVE</span><span>Fires — NASA FIRMS (24h)</span></div>
+          <div class="src-row"><span class="badge-live">LIVE</span><span>News — GDELT Project (3m)</span></div>
+          <div class="src-row"><span class="badge-live">LIVE</span><span>Tweets — X public search embed</span></div>
+          <div class="src-row"><span class="badge-live">LIVE</span><span>Video — YouTube 24/7 news streams</span></div>
+          <div class="src-row"><span class="badge-static">DB</span><span>Mil Bases — OSINT database</span></div>
+          <div class="src-row"><span class="badge-static">DB</span><span>Nuclear — SIPRI/FAS 2023</span></div>
+          <div class="src-row"><span class="badge-static">DB</span><span>GPS Jam — Known zones (NOTAMs)</span></div>
+          <div class="src-row"><span class="badge-static">DB</span><span>Strike arcs — Confirmed OSINT routes</span></div>
+        </div>
       </div>
 
     </aside>
 
-    <!-- MAP CONTAINER ─────────────────── -->
+    <!-- MAP ──────────────────────────────── -->
     <div id="map-wrap">
       <div id="map"></div>
-
-      <!-- 3D Globe container (Globe.gl) -->
       <div id="globe-container"></div>
-
-      <!-- Network SVG overlay -->
       <svg id="net-svg"></svg>
 
-      <!-- Scanline + NV overlays -->
+      <!-- CRT noise canvas -->
+      <canvas id="crt-canvas"></canvas>
+
+      <!-- Overlays -->
       <div id="scanlines"></div>
       <div id="nv-vignette"></div>
-
-      <!-- Canvas for swarm particles -->
       <canvas id="swarm-canvas"></canvas>
-
-      <!-- HUD overlays -->
       <div id="crosshair"></div>
+
       <div id="coord-hud">
         <span id="hud-lat">LAT  --°</span>
         <span id="hud-lng">LNG  --°</span>
@@ -154,56 +160,334 @@
       </div>
 
       <div id="bottom-bar">
-        <span id="feed-status" class="live-tag">● LIVE FEED</span>
+        <span class="live-tag">● LIVE</span>
         <span id="last-upd">—</span>
-        <span id="ws-status">WS: CONNECTING</span>
-        <span id="ac-speed-stat"></span>
+        <span class="src-note">OpenSky ADS-B · CelesTrak TLE · GDELT · NASA FIRMS · ADSB.one</span>
+        <span id="ws-status">WS: —</span>
       </div>
     </div>
 
-    <!-- RIGHT PANEL ─────────────────── -->
+    <!-- RIGHT PANEL ─────────────────────── -->
     <aside id="right-panel">
 
-      <!-- Live geopolitical news -->
-      <div class="panel-card" id="news-card">
+      <!-- Live News — GDELT (REAL) -->
+      <div class="panel-card">
         <div class="card-hdr">
-          <span>📡 LIVE INTEL NEWS</span>
-          <button id="refresh-news-btn" class="mini-btn" title="Refresh news">↻</button>
+          <span>📡 INTEL NEWS <span class="badge-live">● GDELT LIVE</span></span>
+          <button id="refresh-news-btn" class="mini-btn">↻</button>
         </div>
-        <div id="news-feed" class="scroll-list" style="max-height:290px"></div>
+        <div id="news-feed" class="scroll-list" style="max-height:280px"></div>
       </div>
 
-      <!-- Activity feed -->
+      <!-- Activity Feed (app-generated) -->
       <div class="panel-card" id="activity-card">
         <div class="card-hdr">
           <span>⚡ ACTIVITY FEED</span>
           <button id="clr-feed" class="mini-btn">CLR</button>
         </div>
-        <div id="activity-feed" class="scroll-list" style="max-height:180px"></div>
+        <div id="activity-feed" class="scroll-list" style="max-height:160px"></div>
       </div>
 
-      <!-- Warhead inventory -->
+      <!-- Warhead Inventory — SIPRI/FAS 2023 (STATIC) -->
       <div class="panel-card">
-        <div class="card-hdr">☢ WARHEAD INVENTORY</div>
+        <div class="card-hdr">☢ WARHEAD INVENTORY <span class="badge-static">SIPRI 2023</span></div>
         <div id="warhead-list"></div>
       </div>
 
-      <!-- GPS Jamming status -->
+      <!-- GPS Jamming — Known zones (STATIC) -->
       <div class="panel-card">
-        <div class="card-hdr">⊗ GPS JAMMING ZONES</div>
+        <div class="card-hdr">⊗ GPS JAMMING <span class="badge-static">KNOWN ZONES</span></div>
         <div id="gpsjam-list"></div>
       </div>
 
-      <!-- Region Intel signals -->
+      <!-- Region Intel Signals — Curated OSINT (STATIC) -->
       <div class="panel-card">
-        <div class="card-hdr">◈ REGION INTEL SIGNALS</div>
+        <div class="card-hdr">◈ REGION INTEL <span class="badge-static">CURATED OSINT</span></div>
         <div id="intel-list"></div>
       </div>
 
     </aside>
   </div>
 
-  <!-- ── App scripts ───────────────────────────────────────── -->
+  <!-- ══════════════════════════════════════════════════════════
+       GLOBAL UNREST TRACKER — Full-screen overlay panel
+       Tabs: [IRN/ISR] [UKR/RUS] [GLOBAL] [LIVE TV]
+       ══════════════════════════════════════════════════════════ -->
+  <div id="conflict-panel">
+
+    <!-- Header with tabs -->
+    <div class="conflict-header">
+      <div class="ctab-bar">
+        <button class="ctab active" data-ctab="iran"    onclick="CONFLICT.switchTab('iran')">🎯 IRN/ISR</button>
+        <button class="ctab"        data-ctab="ukraine" onclick="CONFLICT.switchTab('ukraine')">🇺🇦 UKR/RUS</button>
+        <button class="ctab"        data-ctab="global"  onclick="CONFLICT.switchTab('global')">🌍 GLOBAL</button>
+        <button class="ctab"        data-ctab="video"   onclick="CONFLICT.switchTab('video')">📺 LIVE TV</button>
+      </div>
+      <div class="conflict-title-sm">
+        GLOBAL UNREST TRACKER <span class="badge-live">● MONITORING</span>
+      </div>
+      <button class="conflict-close" onclick="CONFLICT.hide()">✕ CLOSE</button>
+    </div>
+
+    <!-- ── TAB: Iran / Israel ──────────────────────────────── -->
+    <div class="ctab-body" id="ctab-iran">
+
+      <!-- Left col: news + timeline -->
+      <div class="conflict-col">
+        <div class="conflict-section-hdr">
+          📰 LIVE NEWS <span class="badge-live">● GDELT API</span>
+          <button class="mini-btn" onclick="CONFLICT.loadConflictNews()" style="margin-left:auto">↻</button>
+        </div>
+        <div id="conflict-news-list" class="conflict-scroll"></div>
+
+        <div class="conflict-section-hdr">
+          📅 CONFIRMED EVENT TIMELINE <span class="badge-static">VERIFIED OSINT</span>
+        </div>
+        <div id="iran-timeline" class="conflict-scroll"></div>
+      </div>
+
+      <!-- Right col: Twitter + fronts -->
+      <div class="conflict-col">
+        <div class="conflict-section-hdr">
+          🐦 X LIVE TWEETS <span class="badge-live">● PUBLIC SEARCH</span>
+        </div>
+        <div class="twitter-wrap">
+          <a class="twitter-timeline"
+             data-theme="dark"
+             data-chrome="noheader nofooter noborders transparent"
+             data-tweet-limit="8"
+             data-width="310"
+             data-height="340"
+             href="https://twitter.com/search?q=%23IranIsrael+OR+%23IsraelIran+OR+%23Gaza+OR+%22Iron+Dome%22+OR+%23IDF&src=typd&f=live">
+            Loading X feed…
+          </a>
+        </div>
+
+        <div class="conflict-section-hdr" style="margin-top:4px">
+          ⚔ ACTIVE FRONTS <span class="badge-static">CURATED</span>
+        </div>
+        <div class="fronts-grid">
+          <div class="front-card" onclick="APP.flyTo(31.8,35.2,6)">
+            <div class="front-flag">🇮🇱</div>
+            <div class="front-name">ISRAEL</div>
+            <div class="front-status" style="color:#ff3333">UNDER THREAT</div>
+            <div class="front-detail">Iron Dome/Arrow/David's Sling active</div>
+          </div>
+          <div class="front-card" onclick="APP.flyTo(32.4,53.7,5)">
+            <div class="front-flag">🇮🇷</div>
+            <div class="front-name">IRAN</div>
+            <div class="front-status" style="color:#ff9900">AGGRESSOR</div>
+            <div class="front-detail">IRGC Aerospace — 2 direct attacks</div>
+          </div>
+          <div class="front-card" onclick="APP.flyTo(33.5,35.5,7)">
+            <div class="front-flag">🇱🇧</div>
+            <div class="front-name">HEZBOLLAH</div>
+            <div class="front-status" style="color:#ff9900">PROXY FRONT</div>
+            <div class="front-detail">S.Lebanon ceasefire — fragile</div>
+          </div>
+          <div class="front-card" onclick="APP.flyTo(31.5,34.5,9)">
+            <div class="front-flag">🇵🇸</div>
+            <div class="front-name">GAZA</div>
+            <div class="front-status" style="color:#ff3333">ACTIVE WAR</div>
+            <div class="front-detail">IDF ground op + Hamas rockets</div>
+          </div>
+          <div class="front-card" onclick="APP.flyTo(15.3,44.2,6)">
+            <div class="front-flag">🇾🇪</div>
+            <div class="front-name">HOUTHI</div>
+            <div class="front-status" style="color:#ff9900">PROXY</div>
+            <div class="front-detail">150+ Red Sea attacks</div>
+          </div>
+          <div class="front-card" onclick="APP.flyTo(33.3,44.4,6)">
+            <div class="front-flag">🇮🇶</div>
+            <div class="front-name">IRAQ PMF</div>
+            <div class="front-status" style="color:#ffaa00">PROXY</div>
+            <div class="front-detail">Iran-backed militia drones</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /ctab-iran -->
+
+    <!-- ── TAB: Ukraine / Russia ──────────────────────────── -->
+    <div class="ctab-body" id="ctab-ukraine" style="display:none">
+
+      <div class="conflict-col">
+        <div class="conflict-section-hdr">
+          📰 LIVE NEWS <span class="badge-live">● GDELT API</span>
+          <button class="mini-btn" onclick="CONFLICT.loadUkraineNews()" style="margin-left:auto">↻</button>
+        </div>
+        <div id="ukraine-news-list" class="conflict-scroll"></div>
+
+        <div class="conflict-section-hdr">
+          📅 WAR TIMELINE <span class="badge-static">VERIFIED OSINT</span>
+        </div>
+        <div id="ukraine-timeline" class="conflict-scroll"></div>
+      </div>
+
+      <div class="conflict-col">
+        <div class="conflict-section-hdr">
+          🐦 X LIVE TWEETS <span class="badge-live">● PUBLIC SEARCH</span>
+        </div>
+        <div class="twitter-wrap">
+          <a class="twitter-timeline"
+             data-theme="dark"
+             data-chrome="noheader nofooter noborders transparent"
+             data-tweet-limit="8"
+             data-width="310"
+             data-height="340"
+             href="https://twitter.com/search?q=%23Ukraine+OR+%23Kyiv+OR+%23UkraineWar+OR+%23Russia+OR+%22Zelensky%22&src=typd&f=live">
+            Loading X feed…
+          </a>
+        </div>
+
+        <div class="conflict-section-hdr" style="margin-top:4px">
+          ⚔ FRONTLINES <span class="badge-static">OSINT STATUS</span>
+        </div>
+        <div class="fronts-grid">
+          <div class="front-card" onclick="APP.flyTo(50.4,30.5,7)">
+            <div class="front-flag">🇺🇦</div>
+            <div class="front-name">KYIV</div>
+            <div class="front-status" style="color:#00ff88">DEFENDED</div>
+            <div class="front-detail">Patriot/SAMP-T active air defense</div>
+          </div>
+          <div class="front-card" onclick="APP.flyTo(47.5,35.1,7)">
+            <div class="front-flag">⚔</div>
+            <div class="front-name">ZAPORIZHZHIA</div>
+            <div class="front-status" style="color:#ff9900">FRONTLINE</div>
+            <div class="front-detail">Static line — ZNPP hostage risk</div>
+          </div>
+          <div class="front-card" onclick="APP.flyTo(48.0,37.8,7)">
+            <div class="front-flag">⚔</div>
+            <div class="front-name">DONETSK</div>
+            <div class="front-status" style="color:#ff3333">CONTESTED</div>
+            <div class="front-detail">Russia slow advance — Avdiivka fallen</div>
+          </div>
+          <div class="front-card" onclick="APP.flyTo(51.2,35.2,7)">
+            <div class="front-flag">🇷🇺</div>
+            <div class="front-name">KURSK</div>
+            <div class="front-status" style="color:#ff9900">UKR INCURSION</div>
+            <div class="front-detail">Ukraine cross-border op + NK troops</div>
+          </div>
+          <div class="front-card" onclick="APP.flyTo(49.9,36.2,7)">
+            <div class="front-flag">⚔</div>
+            <div class="front-name">KHARKIV</div>
+            <div class="front-status" style="color:#ff9900">THREATENED</div>
+            <div class="front-detail">Daily drone/missile strikes</div>
+          </div>
+          <div class="front-card" onclick="APP.flyTo(55.7,37.6,5)">
+            <div class="front-flag">🇷🇺</div>
+            <div class="front-name">MOSCOW</div>
+            <div class="front-status" style="color:#ffaa00">AGGRESSOR</div>
+            <div class="front-detail">Kremlin — Wagner mutiny suppressed</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /ctab-ukraine -->
+
+    <!-- ── TAB: Global Unrest ──────────────────────────────── -->
+    <div class="ctab-body" id="ctab-global" style="display:none">
+
+      <div class="conflict-col">
+        <div class="conflict-section-hdr">
+          📰 GLOBAL UNREST NEWS <span class="badge-live">● GDELT API</span>
+          <button class="mini-btn" onclick="CONFLICT.loadUnrestNews()" style="margin-left:auto">↻</button>
+        </div>
+        <div id="global-news-list" class="conflict-scroll" style="max-height:55%"></div>
+      </div>
+
+      <div class="conflict-col">
+        <div class="conflict-section-hdr">
+          🐦 X BREAKING <span class="badge-live">● PUBLIC SEARCH</span>
+        </div>
+        <div class="twitter-wrap" style="max-height:320px">
+          <a class="twitter-timeline"
+             data-theme="dark"
+             data-chrome="noheader nofooter noborders transparent"
+             data-tweet-limit="10"
+             data-width="310"
+             data-height="300"
+             href="https://twitter.com/search?q=%23BreakingNews+OR+%23Breaking+OR+%23War+OR+%22airstrike%22+OR+%22protest%22+OR+%22explosion%22&src=typd&f=live">
+            Loading X feed…
+          </a>
+        </div>
+
+        <div class="conflict-section-hdr" style="margin-top:4px">
+          🌍 ACTIVE CRISES <span class="badge-static">OSINT STATUS</span>
+        </div>
+        <div id="global-events-list" class="conflict-scroll" style="max-height:200px"></div>
+      </div>
+
+    </div><!-- /ctab-global -->
+
+    <!-- ── TAB: Live TV ───────────────────────────────────── -->
+    <div class="ctab-body" id="ctab-video" style="display:none; flex-direction:column">
+
+      <div class="video-tab-header">
+        <span class="conflict-section-hdr" style="border:none; padding:8px 12px">
+          📺 24/7 LIVE NEWS STREAMS <span class="badge-live">● LIVE</span>
+        </span>
+        <div id="video-channel-btns" class="vchan-bar"></div>
+        <span class="video-note">▲ YouTube public live streams · muted by default · click to enable audio</span>
+      </div>
+
+      <div class="video-main">
+        <iframe
+          id="live-video-frame"
+          src="about:blank"
+          frameborder="0"
+          allow="autoplay; encrypted-media; fullscreen"
+          allowfullscreen
+        ></iframe>
+      </div>
+
+      <div class="video-secondary-bar">
+        <div class="conflict-section-hdr" style="border:none; font-size:9px; padding:4px 10px">
+          🐦 X BREAKING NEWS <span class="badge-live">● LIVE</span> — global unrest, war, protests
+        </div>
+        <div class="video-twitter-row">
+          <!-- Breaking news tweets alongside video -->
+          <div class="video-twitter-col">
+            <a class="twitter-timeline"
+               data-theme="dark"
+               data-chrome="noheader nofooter noborders transparent"
+               data-tweet-limit="6"
+               data-width="200"
+               data-height="180"
+               href="https://twitter.com/search?q=%23Breaking+OR+%23BreakingNews+OR+%22airstrike%22+OR+%22explosion%22&src=typd&f=live">
+              Loading…
+            </a>
+          </div>
+          <div class="video-twitter-col">
+            <a class="twitter-timeline"
+               data-theme="dark"
+               data-chrome="noheader nofooter noborders transparent"
+               data-tweet-limit="6"
+               data-width="200"
+               data-height="180"
+               href="https://twitter.com/search?q=%23War+OR+%23Ukraine+OR+%23Gaza+OR+%23Iran+OR+%22riot%22+OR+%22protest%22&src=typd&f=live">
+              Loading…
+            </a>
+          </div>
+          <div class="video-twitter-col">
+            <a class="twitter-timeline"
+               data-theme="dark"
+               data-chrome="noheader nofooter noborders transparent"
+               data-tweet-limit="6"
+               data-width="200"
+               data-height="180"
+               href="https://twitter.com/search?q=%23Sudan+OR+%23Congo+OR+%23Myanmar+OR+%23Haiti+OR+%22coup%22+OR+%22uprising%22&src=typd&f=live">
+              Loading…
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /ctab-video -->
+
+  </div><!-- /conflict-panel -->
+
+  <!-- ── Scripts ──────────────────────────────────────────────── -->
   <script src="js/utils.js"></script>
   <script src="js/effects.js"></script>
   <script src="js/military.js"></script>
@@ -212,6 +496,7 @@
   <script src="js/satellites.js"></script>
   <script src="js/swarm.js"></script>
   <script src="js/sidebar.js"></script>
+  <script src="js/conflict.js"></script>
   <script src="js/app.js"></script>
 
 </body>
