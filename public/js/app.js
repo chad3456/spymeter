@@ -101,6 +101,10 @@ const APP = (() => {
               HEATMAP.setEnabled(on, 'embassy');
               SIDEBAR.addFeedItem('satellite', on ? '🇮🇳 Indian embassy layer ON — MEA offices in conflict zones' : 'Embassy layer OFF');
               break;
+            case 'usbases':
+              USBASES.setEnabled(on);
+              SIDEBAR.addFeedItem('military', on ? `🦅 US Overseas Bases ON — ${USBASES.getBases().length} bases across USAFE/CENTCOM/PACAF/AFRICOM` : 'US Bases layer OFF');
+              break;
           }
         }, 120);
       });
@@ -410,6 +414,7 @@ const APP = (() => {
     OIL.init(map);
     MARKETS.init();
     HEATMAP.init(map);
+    USBASES.init(map);
     initLayerControls();
     initViewModes();
 

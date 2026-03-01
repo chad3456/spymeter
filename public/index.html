@@ -64,6 +64,7 @@
         <button class="lbtn"        data-layer="oil"       title="Oil Chokepoints · Tanker Routes · Houthi Zones">🛢 OIL</button>
         <button class="lbtn conflict-btn" data-layer="conflict" title="Global Unrest Tracker">🌍 UNREST</button>
         <button class="lbtn"        data-layer="arcs"      title="Missile Strike Arc Trails">🚀 STRIKES</button>
+        <button class="lbtn"        data-layer="usbases"   title="US Overseas Airbases — IISS 2024 OSINT">🦅 USBASE</button>
         <button class="lbtn"        data-layer="internet"  title="Internet Speed Choropleth — Ookla 2024">🌐 NET</button>
         <button class="lbtn"        data-layer="tourism"   title="Travel Advisory Levels — US State Dept">✈ TRAVEL</button>
         <button class="lbtn"        data-layer="embassy"   title="Indian Embassies in Conflict Zones — MEA">🇮🇳 EMBASSY</button>
@@ -141,13 +142,33 @@
           <span>🇮🇳 INDIANS IN CONFLICT ZONES</span>
           <button class="mini-btn" id="refresh-india-btn">↻</button>
         </div>
-        <div id="india-zones-list" class="scroll-list" style="max-height:190px">
+        <!-- India visa / foreigners summary bar -->
+        <div class="india-visa-bar">
+          <div class="ivb-cell">
+            <div class="ivb-val" style="color:#ff4444" id="india-trapped-total">51,800</div>
+            <div class="ivb-lbl">Indians Abroad (conflict)</div>
+          </div>
+          <div class="ivb-cell">
+            <div class="ivb-val" style="color:#00d4ff" id="india-foreigners-visa">~1.7M</div>
+            <div class="ivb-lbl">Foreigners in India (visa)</div>
+          </div>
+        </div>
+        <div id="india-zones-list" class="scroll-list" style="max-height:170px">
           <div class="news-loading">⟳ Loading MEA data…</div>
         </div>
         <div class="panel-card" style="margin:4px 0 0;padding:5px 8px;background:rgba(0,0,0,0.2)">
           <div style="font-size:7.5px;color:#ffaa00;margin-bottom:3px">📰 RECENT MEA NEWS</div>
-          <div id="india-news-mini" class="scroll-list" style="max-height:80px;font-size:8px"></div>
+          <div id="india-news-mini" class="scroll-list" style="max-height:70px;font-size:8px"></div>
         </div>
+        <div style="font-size:7px;color:#3d5a78;padding:3px 8px 4px">
+          Source: MEA MADAD · MoT GoI 2024 · MHA Annual Report
+        </div>
+      </div>
+
+      <!-- ── 🦅 US Airbases Stats ── -->
+      <div class="panel-card" id="usbase-card" style="display:none">
+        <div class="card-hdr">🦅 US OVERSEAS AIRBASES <span class="badge-static">IISS 2024</span></div>
+        <div id="usbase-stats-list" class="scroll-list" style="max-height:220px"></div>
       </div>
 
       <!-- ── Weapons filter ── -->
@@ -266,24 +287,22 @@
       <!-- TAB: Iran-Israel War 2026 -->
       <div class="rp-tab-body" id="rptab-iranisr" style="display:none">
         <div class="panel-card">
-          <div class="card-hdr">🔥 IRAN ↔ ISRAEL WAR 2025-26 <span class="badge-live">● LIVE X</span></div>
-          <!-- Live Twitter search feed -->
-          <div class="twitter-wrap" style="min-height:260px">
+          <div class="card-hdr">🔥 IRAN INTERNATIONAL <span class="badge-live">● LIVE X</span></div>
+          <!-- Account timeline loads faster than search; @IranIntl_En for Iran/Israel coverage -->
+          <div class="twitter-wrap" style="min-height:240px">
             <a class="twitter-timeline" data-theme="dark"
                data-chrome="noheader nofooter noborders transparent"
-               data-tweet-limit="12" data-width="280" data-height="280"
-               href="https://twitter.com/search?q=%23IranIsrael+OR+%22Iran+Israel%22+OR+%22Iran+attack%22+OR+%22IDF+Iran%22+OR+%22Operation+Days+of+Repentance%22&f=live">
-              Loading Iran-Israel tweets…</a>
+               data-tweet-limit="6" data-width="280" data-height="240"
+               href="https://twitter.com/IranIntl_En">Loading @IranIntl_En…</a>
           </div>
         </div>
         <div class="panel-card">
-          <div class="card-hdr">🔥 HORMUZ / HOUTHI LIVE <span class="badge-live">● LIVE X</span></div>
+          <div class="card-hdr">🔍 OSINT DEFENDER <span class="badge-live">● LIVE X</span></div>
           <div class="twitter-wrap" style="min-height:200px">
             <a class="twitter-timeline" data-theme="dark"
                data-chrome="noheader nofooter noborders transparent"
-               data-tweet-limit="8" data-width="280" data-height="200"
-               href="https://twitter.com/search?q=%23Houthi+OR+%22Red+Sea%22+OR+%22Strait+of+Hormuz%22+OR+%22tanker+attack%22&f=live">
-              Loading Houthi/Hormuz tweets…</a>
+               data-tweet-limit="5" data-width="280" data-height="200"
+               href="https://twitter.com/OSINTdefender">Loading @OSINTdefender…</a>
           </div>
         </div>
         <div class="panel-card">
@@ -665,12 +684,12 @@
         <div id="iran-timeline" class="conflict-scroll"></div>
       </div>
       <div class="conflict-col">
-        <div class="conflict-section-hdr">🐦 X LIVE TWEETS <span class="badge-live">● SEARCH</span></div>
+        <div class="conflict-section-hdr">🐦 X — IRAN INTERNATIONAL <span class="badge-live">● LIVE</span></div>
         <div class="twitter-wrap">
           <a class="twitter-timeline" data-theme="dark"
              data-chrome="noheader nofooter noborders transparent"
-             data-tweet-limit="8" data-width="310" data-height="320"
-             href="https://twitter.com/search?q=%23IranIsrael+OR+%23Gaza+OR+%22Iron+Dome%22+OR+%23IDF&f=live">Loading…</a>
+             data-tweet-limit="6" data-width="310" data-height="280"
+             href="https://twitter.com/IranIntl_En">Loading @IranIntl_En…</a>
         </div>
         <div class="conflict-section-hdr" style="margin-top:4px">⚔ ACTIVE FRONTS <span class="badge-static">CURATED</span></div>
         <div class="fronts-grid">
@@ -694,12 +713,12 @@
         <div id="ukraine-timeline" class="conflict-scroll"></div>
       </div>
       <div class="conflict-col">
-        <div class="conflict-section-hdr">🐦 X LIVE TWEETS <span class="badge-live">● SEARCH</span></div>
+        <div class="conflict-section-hdr">🐦 X — KYIV INDEPENDENT <span class="badge-live">● LIVE</span></div>
         <div class="twitter-wrap">
           <a class="twitter-timeline" data-theme="dark"
              data-chrome="noheader nofooter noborders transparent"
-             data-tweet-limit="8" data-width="310" data-height="320"
-             href="https://twitter.com/search?q=%23Ukraine+OR+%23Kyiv+OR+%23UkraineWar+OR+%22Zelensky%22&f=live">Loading…</a>
+             data-tweet-limit="6" data-width="310" data-height="280"
+             href="https://twitter.com/KyivIndependent">Loading @KyivIndependent…</a>
         </div>
         <div class="conflict-section-hdr" style="margin-top:4px">⚔ FRONTLINES <span class="badge-static">STATUS</span></div>
         <div class="fronts-grid">
@@ -721,12 +740,12 @@
         <div id="global-news-list" class="conflict-scroll" style="max-height:55%"></div>
       </div>
       <div class="conflict-col">
-        <div class="conflict-section-hdr">🐦 X BREAKING <span class="badge-live">● LIVE</span></div>
+        <div class="conflict-section-hdr">🐦 X — DISCLOSE.TV <span class="badge-live">● BREAKING</span></div>
         <div class="twitter-wrap" style="max-height:300px">
           <a class="twitter-timeline" data-theme="dark"
              data-chrome="noheader nofooter noborders transparent"
-             data-tweet-limit="10" data-width="310" data-height="280"
-             href="https://twitter.com/search?q=%23BreakingNews+OR+%23Breaking+OR+%22airstrike%22+OR+%22protest%22+OR+%22explosion%22&f=live">Loading…</a>
+             data-tweet-limit="7" data-width="310" data-height="280"
+             href="https://twitter.com/disclosetv">Loading @disclosetv…</a>
         </div>
         <div class="conflict-section-hdr" style="margin-top:4px">🌍 ACTIVE CRISES <span class="badge-static">OSINT</span></div>
         <div id="global-events-list" class="conflict-scroll" style="max-height:200px"></div>
@@ -743,28 +762,32 @@
         <span class="video-note">muted by default · click for audio</span>
       </div>
       <div class="video-main">
+        <div id="video-load-msg" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#00d4ff;font-size:11px;letter-spacing:1px;pointer-events:none;z-index:10"></div>
         <iframe id="live-video-frame" src="about:blank" frameborder="0"
           allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
       </div>
       <div class="video-secondary-bar">
         <div class="video-twitter-row">
           <div class="video-twitter-col">
+            <div class="vtw-hdr">📡 @Reuters</div>
             <a class="twitter-timeline" data-theme="dark"
                data-chrome="noheader nofooter noborders transparent"
-               data-tweet-limit="6" data-width="200" data-height="170"
-               href="https://twitter.com/search?q=%23Breaking+OR+%22airstrike%22+OR+%22explosion%22&f=live">Loading…</a>
+               data-tweet-limit="4" data-width="200" data-height="155"
+               href="https://twitter.com/Reuters">Loading @Reuters…</a>
           </div>
           <div class="video-twitter-col">
+            <div class="vtw-hdr">📡 @BBCBreaking</div>
             <a class="twitter-timeline" data-theme="dark"
                data-chrome="noheader nofooter noborders transparent"
-               data-tweet-limit="6" data-width="200" data-height="170"
-               href="https://twitter.com/search?q=%23War+OR+%23Ukraine+OR+%23Gaza+OR+%23Iran&f=live">Loading…</a>
+               data-tweet-limit="4" data-width="200" data-height="155"
+               href="https://twitter.com/BBCBreaking">Loading @BBCBreaking…</a>
           </div>
           <div class="video-twitter-col">
+            <div class="vtw-hdr">📡 @AJEnglish</div>
             <a class="twitter-timeline" data-theme="dark"
                data-chrome="noheader nofooter noborders transparent"
-               data-tweet-limit="6" data-width="200" data-height="170"
-               href="https://twitter.com/search?q=%23Sudan+OR+%23Congo+OR+%22coup%22+OR+%22uprising%22&f=live">Loading…</a>
+               data-tweet-limit="4" data-width="200" data-height="155"
+               href="https://twitter.com/AJEnglish">Loading @AJEnglish…</a>
           </div>
         </div>
       </div>
@@ -796,6 +819,7 @@
   <script src="js/conflict.js"></script>
   <script src="js/polls.js"></script>
   <script src="js/heatmap.js"></script>
+  <script src="js/usbases.js"></script>
   <script src="js/app.js"></script>
 
   <script>

@@ -31,6 +31,7 @@ const AC_TTL      = 15_000;
 const SAT_TTL     = 300_000;
 const NEWS_TTL    = 300_000;   // 5 min
 const REGION_TTL  = 15_000;
+const RSS_TTL     = 300_000;   // 5 min
 
 // Normalize ADSB.one aircraft record → OpenSky state-vector array
 // OpenSky indices: [icao24,callsign,origin,_,_, lon,lat,alt_m, on_ground,vel_ms,hdg,vr_ms,...]
@@ -592,6 +593,52 @@ app.get('/api/oil-news', async (req, res) => {
   const result = { articles: unique.slice(0, 25), ts: now, source: 'GDELT Project' };
   oilNewsCache.data = result; oilNewsCache.ts = now;
   res.json(result);
+});
+
+// ─── YouTube Live Video ID (server scrapes channel live page) ──
+const LIVE_VIDEO_CACHE = {};
+const LIVE_VIDEO_TTL   = 10 * 60_000; // 10 min
+// Hardcoded fallback IDs updated periodically (Jan 2026)
+const YT_FALLBACKS = {
+  'aljazeeraenglish': 'jNQXAC9IVRw',
+  'BBCNews':          'w_Ma4oQLyh0',
+  'FRANCE24':         'l8PMl7tUDIE',
+  'dwnews':           'mGFSSBqXqWU',
+  'wionlive':         'GtO7fBzRQPI',
+  'trtworld':         'naxpSC4E9ZY',
+  'ndtv':             'Gx9SzuTGMEw',
+};
+app.get('/api/live-video', async (req, res) => {
+  const { channel } = req.query;
+  if (!channel) return res.status(400).json({ error: 'channel required' });
+  const now = Date.now();
+  if (LIVE_VIDEO_CACHE[channel] && now - LIVE_VIDEO_CACHE[channel].ts < LIVE_VIDEO_TTL)
+    return res.json(LIVE_VIDEO_CACHE[channel].data);
+  try {
+    const resp = await axios.get(`https://www.youtube.com/@${channel}/live`, {
+      timeout: 12_000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      }
+    });
+    // Match the canonical videoId from the YouTube page source
+    const match = resp.data.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+    if (match?.[1]) {
+      const result = { videoId: match[1], source: 'live', channel };
+      LIVE_VIDEO_CACHE[channel] = { data: result, ts: now };
+      return res.json(result);
+    }
+    const fallback = YT_FALLBACKS[channel];
+    if (fallback) return res.json({ videoId: fallback, source: 'fallback', channel });
+    res.status(404).json({ error: 'No live video found' });
+  } catch (err) {
+    if (LIVE_VIDEO_CACHE[channel]) return res.json(LIVE_VIDEO_CACHE[channel].data);
+    const fallback = YT_FALLBACKS[channel];
+    if (fallback) return res.json({ videoId: fallback, source: 'fallback', channel });
+    res.status(503).json({ error: 'Live video lookup failed' });
+  }
 });
 
 // ─── WebSocket ────────────────────────────────────────────

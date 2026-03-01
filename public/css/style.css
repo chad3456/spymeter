@@ -212,6 +212,16 @@ aside {
   overflow: hidden;
   flex-shrink: 0;
 }
+/* Left panel: scrollable so all cards visible */
+#left-panel {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-hi) transparent;
+}
+#left-panel::-webkit-scrollbar { width: 3px; }
+#left-panel::-webkit-scrollbar-thumb { background: var(--border-hi); }
+
 /* Right panel: full-height scrollable column */
 #right-panel {
   border-right: none;
@@ -1341,4 +1351,48 @@ body.crt-active #ws-status.connected { color: #00ff41; }
 .hm-emb-open  { color: var(--green);  }
 .hm-emb-warn  { color: var(--warn);   }
 .hm-emb-closed{ color: var(--danger); }
+
+/* ── US Airbases layer styles ─────────────────────────────── */
+.usbase-popup { font-family: var(--font-mono); font-size: 10px; min-width: 180px; }
+.usbase-name  { font-size: 11px; font-weight: bold; color: #00d4ff; margin-bottom: 3px; }
+.usbase-country{ color: #8ba4c0; margin-bottom: 2px; }
+.usbase-cmd   { font-size: 9px; letter-spacing: 1px; margin-bottom: 3px; }
+.usbase-aircraft{ color: #c8dff0; margin-bottom: 2px; font-size: 9px; }
+.usbase-personnel{ color: #ffaa00; font-size: 9px; }
+
+.usbase-summary { padding: 4px 2px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.usbase-stat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+.usb-lbl { font-size: 7.5px; color: var(--text); }
+.usb-val  { font-size: 11px; font-family: var(--font-ui); font-weight: 700; }
+.usbase-cmd-hdr { font-size: 7px; color: var(--accent); letter-spacing: 1.5px; margin: 4px 0 3px; }
+.usbase-cmd-row { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; }
+.usb-cmd-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.usb-cmd-name{ font-size: 7.5px; color: var(--text); flex: 1; }
+.usb-cmd-count{ font-size: 9px; color: var(--accent); font-weight: bold; }
+
+/* ── India visa summary bar ──────────────────────────────── */
+.india-visa-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+.ivb-cell {
+  flex: 1;
+  padding: 5px 6px;
+  text-align: center;
+  border-right: 1px solid var(--border);
+}
+.ivb-cell:last-child { border-right: none; }
+.ivb-val { font-family: var(--font-ui); font-size: 13px; font-weight: 700; line-height: 1; }
+.ivb-lbl { font-size: 6.5px; color: var(--text-dim); margin-top: 2px; letter-spacing: 0.3px; }
+
+/* ── Video tab loading message ───────────────────────────── */
+.vtw-hdr {
+  font-size: 7.5px;
+  color: var(--accent);
+  letter-spacing: 1px;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+.video-main { position: relative; }
 

@@ -101,18 +101,17 @@ const CONFLICT = (() => {
   ];
 
   // ── Live Video Channels ──────────────────────────────────
-  // videoId = YouTube 24/7 persistent live stream video ID.
-  // listId  = uploads-playlist fallback (UC→UU prefix).
-  // YouTube removed live_stream?channel= embed in 2023;
-  // direct video-ID embed is the reliable modern approach.
+  // handle = YouTube @handle used by /api/live-video to scrape the live stream ID.
+  // fallbackId = hardcoded ID used if server scraping fails.
+  // Server caches live IDs for 10 min, so each channel always shows the current live stream.
   const VIDEO_CHANNELS = [
-    { id:'aljaz',   label:'Al Jazeera',  flag:'🌍', videoId:'jNQXAC9IVRw', listId:'UUNye-wNBqNL5ZzHSJj3l8Bg', color:'#ff9900' },
-    { id:'bbc',     label:'BBC World',   flag:'🇬🇧', videoId:'w_Ma4oQLyh0', listId:'UUC16niRr0X2Uu7mRhbr4gHkQ', color:'#BB1919' },
-    { id:'france24',label:'France 24',   flag:'🇫🇷', videoId:'l8PMl7tUDIE', listId:'UUQfwfsi5VrQ8yKZ-UWmAEFg', color:'#0055A4' },
-    { id:'dw',      label:'DW News',     flag:'🇩🇪', videoId:'mGFSSBqXqWU', listId:'UUknLrEdhRCp1aegoMqRaCZg', color:'#CC0000' },
-    { id:'wion',    label:'WION',        flag:'🇮🇳', videoId:'GtO7fBzRQPI', listId:'UU6SqnbVVQ9veR-YJuTB1R8A', color:'#E63946' },
-    { id:'trt',     label:'TRT World',   flag:'🇹🇷', videoId:'naxpSC4E9ZY', listId:'UUq28adYCDcDMMPbOqnov0rA', color:'#E30A17' },
-    { id:'ndtv',    label:'NDTV 24x7',   flag:'🇮🇳', videoId:'Gx9SzuTGMEw', listId:'UU8o0tjFkMQcXFME6UqxKD6g', color:'#ff8800' },
+    { id:'aljaz',   label:'Al Jazeera',  flag:'🌍', handle:'aljazeeraenglish', fallbackId:'jNQXAC9IVRw', color:'#ff9900' },
+    { id:'bbc',     label:'BBC News',    flag:'🇬🇧', handle:'BBCNews',          fallbackId:'w_Ma4oQLyh0', color:'#BB1919' },
+    { id:'france24',label:'France 24',   flag:'🇫🇷', handle:'FRANCE24',         fallbackId:'l8PMl7tUDIE', color:'#0055A4' },
+    { id:'dw',      label:'DW News',     flag:'🇩🇪', handle:'dwnews',           fallbackId:'mGFSSBqXqWU', color:'#CC0000' },
+    { id:'wion',    label:'WION',        flag:'🇮🇳', handle:'wionlive',         fallbackId:'GtO7fBzRQPI', color:'#E63946' },
+    { id:'trt',     label:'TRT World',   flag:'🇹🇷', handle:'trtworld',         fallbackId:'naxpSC4E9ZY', color:'#E30A17' },
+    { id:'ndtv',    label:'NDTV 24x7',   flag:'🇮🇳', handle:'ndtv',             fallbackId:'Gx9SzuTGMEw', color:'#ff8800' },
   ];
 
   // ── Tab switching ────────────────────────────────────────
@@ -223,19 +222,31 @@ const CONFLICT = (() => {
     switchVideo(activeVideo);
   }
 
-  function switchVideo(chanId) {
+  async function switchVideo(chanId) {
     activeVideo = chanId;
     const ch    = VIDEO_CHANNELS.find(c => c.id === chanId);
     const frame = document.getElementById('live-video-frame');
+    const loadMsg = document.getElementById('video-load-msg');
     if (!ch || !frame) return;
     document.querySelectorAll('.vchan-btn').forEach(b => b.classList.toggle('active', b.dataset.chan === chanId));
-    // Primary: direct live-stream video ID (most reliable post-2023 YouTube API change)
-    // Fallback: uploads-playlist of the channel (shows most recent/live videos)
-    frame.src = `https://www.youtube-nocookie.com/embed/${ch.videoId}?autoplay=1&mute=1&controls=1&rel=0&iv_load_policy=3`;
-    // If video fails to load (e.g. stream offline), auto-try playlist
-    frame.onerror = () => {
-      if (ch.listId) frame.src = `https://www.youtube-nocookie.com/embed?listType=playlist&list=${ch.listId}&autoplay=1&mute=1&controls=1`;
-    };
+
+    // Show loading feedback
+    if (loadMsg) { loadMsg.textContent = `⟳ Loading ${ch.label} live stream…`; loadMsg.style.display = 'block'; }
+    frame.style.opacity = '0.3';
+
+    let videoId = ch.fallbackId;
+    try {
+      // Server scrapes YouTube @handle/live page to get the current live stream ID
+      const resp = await fetch(`/api/live-video?channel=${ch.handle}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.videoId) videoId = data.videoId;
+      }
+    } catch (_) {}
+
+    frame.src = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=1&rel=0&iv_load_policy=3&modestbranding=1`;
+    frame.style.opacity = '1';
+    if (loadMsg) loadMsg.style.display = 'none';
   }
 
   // ── Show / Hide / Toggle ─────────────────────────────────
