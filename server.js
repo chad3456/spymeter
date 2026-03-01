@@ -4,6 +4,7 @@ const cors = require('cors');
 const WebSocket = require('ws');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const compression = require('compression');
 
 const app = express();
@@ -299,6 +300,96 @@ app.get('/api/reddit', async (req, res) => {
   const result = { posts: posts.slice(0, 25), ts: now };
   redditCache.data = result; redditCache.ts = now;
   res.json(result);
+});
+
+// ─── RSS Live News (BBC, France24, DW, Guardian) ─────────
+const rssCache = { data: null, ts: 0 };
+const RSS_TTL  = 60_000; // 1 min cache
+
+const RSS_FEEDS = [
+  { name: 'BBC World',   url: 'http://feeds.bbci.co.uk/news/world/rss.xml' },
+  { name: 'Reuters',     url: 'https://feeds.reuters.com/reuters/topNews' },
+  { name: 'France24',    url: 'https://www.france24.com/en/rss' },
+  { name: 'DW',          url: 'https://rss.dw.com/rdf/rss-en-all' },
+  { name: 'Guardian',    url: 'https://www.theguardian.com/world/rss' },
+  { name: 'Al Jazeera',  url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+];
+
+function parseRSS(xml, sourceName) {
+  const items = [];
+  const itemBlocks = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
+  for (const block of itemBlocks.slice(0, 8)) {
+    const title   = (block.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/) || [])[1] || '';
+    const link    = (block.match(/<link[^>]*>([\s\S]*?)<\/link>/)  || [])[1] || '';
+    const pubDate = (block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/) || [])[1] || '';
+    if (!title.trim()) continue;
+    items.push({
+      title:   title.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'").trim(),
+      url:     link.trim(),
+      source:  sourceName,
+      date:    pubDate.trim(),
+      country: '',
+      tone:    '0',
+      isRSS:   true,
+    });
+  }
+  return items;
+}
+
+app.get('/api/rss', async (req, res) => {
+  const now = Date.now();
+  if (rssCache.data && now - rssCache.ts < RSS_TTL) return res.json(rssCache.data);
+  const allArticles = [];
+  for (const feed of RSS_FEEDS) {
+    try {
+      const r = await axios.get(feed.url, { timeout: 8_000, responseType: 'text', headers: { Accept: 'application/rss+xml,application/xml,text/xml,*/*' } });
+      allArticles.push(...parseRSS(r.data, feed.name));
+    } catch (_) {}
+  }
+  const result = { articles: allArticles.slice(0, 35), ts: now, source: 'RSS Feeds' };
+  rssCache.data = result; rssCache.ts = now;
+  res.json(result);
+});
+
+// ─── Polls / Predictions ──────────────────────────────────
+const POLLS_FILE = path.join(__dirname, 'polls.json');
+const DEFAULT_POLLS = [
+  { id:'india-iran-israel',   question:'Will India officially side with Israel or Iran?',               options:['Side with Israel','Side with Iran','Stay Neutral','Strategic Ambiguity'], votes:[0,0,0,0] },
+  { id:'ukraine-survive',     question:'Will Ukraine retain sovereignty by end of 2026?',               options:['Yes — survives','No — Russia wins','Ceasefire/partition','Peace deal'], votes:[0,0,0,0] },
+  { id:'iran-nuclear',        question:'Will Iran develop a nuclear weapon by 2026?',                   options:['Yes — confirmed','No','Unknown / hidden','IAEA will catch it'], votes:[0,0,0,0] },
+  { id:'china-taiwan',        question:'Will China attempt to take Taiwan by 2030?',                    options:['Yes — military action','No — status quo','Economic pressure only','Diplomatic solution'], votes:[0,0,0,0] },
+  { id:'nk-nuclear-test',     question:'Will North Korea conduct a nuclear test in 2025?',              options:['Yes','No','Multiple tests','Underground only'], votes:[0,0,0,0] },
+  { id:'russia-nuke-use',     question:'Will Russia use tactical nuclear weapons in Ukraine?',          options:['Yes — first use','No — never','Threat only','NATO intervention stops it'], votes:[0,0,0,0] },
+  { id:'middle-east-war',     question:'Will the Middle East see a full regional war in 2025?',        options:['Yes — major escalation','No — contained','Limited exchanges only','Iran directly attacks'], votes:[0,0,0,0] },
+  { id:'pakistan-india',      question:'Will India and Pakistan enter military conflict by 2026?',      options:['Yes — border war','No — restrained','Kashmir skirmish only','Nuclear standoff'], votes:[0,0,0,0] },
+  { id:'us-iran-deal',        question:'Will USA and Iran reach a nuclear agreement?',                  options:['Yes — new deal','No — collapse','Partial deal','Military action first'], votes:[0,0,0,0] },
+  { id:'nato-direct',         question:'Will NATO troops directly engage Russian forces?',              options:['Yes — direct clash','No','Covert only','Article 5 triggered'], votes:[0,0,0,0] },
+];
+
+function loadPolls() {
+  try {
+    if (fs.existsSync(POLLS_FILE)) return JSON.parse(fs.readFileSync(POLLS_FILE, 'utf8'));
+  } catch (_) {}
+  return DEFAULT_POLLS;
+}
+function savePolls(polls) {
+  try { fs.writeFileSync(POLLS_FILE, JSON.stringify(polls, null, 2)); } catch (_) {}
+}
+
+app.get('/api/polls', (req, res) => {
+  res.json(loadPolls());
+});
+
+app.post('/api/polls/:id/vote', express.json(), (req, res) => {
+  const { id }   = req.params;
+  const { option } = req.body;
+  const polls    = loadPolls();
+  const poll     = polls.find(p => p.id === id);
+  if (!poll || option === undefined || option < 0 || option >= poll.votes.length)
+    return res.status(400).json({ error: 'Invalid poll or option' });
+  poll.votes[option]++;
+  savePolls(polls);
+  res.json(poll);
 });
 
 // ─── WebSocket ────────────────────────────────────────────

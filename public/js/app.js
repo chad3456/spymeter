@@ -130,6 +130,8 @@ const APP = (() => {
   }
 
   /* ── 3D Globe – Globe.gl ──────────────────────────────── */
+  let globeRetryTimer = null;
+
   function initGlobe() {
     const container = document.getElementById('globe-container');
     if (!container) return;
@@ -155,7 +157,9 @@ const APP = (() => {
     }
 
     globe.width(container.offsetWidth).height(container.offsetHeight);
-    updateGlobePoints();
+
+    // Force a fresh aircraft fetch when globe opens, then update points
+    AIRCRAFT.refresh().then(() => updateGlobePoints()).catch(() => updateGlobePoints());
 
     if (arcsEnabled) applyGlobeArcs();
 
@@ -168,16 +172,28 @@ const APP = (() => {
   function updateGlobePoints() {
     if (!globe) return;
     const states = AIRCRAFT.getData();
+
+    // If no data yet, retry in 4s (first fetch may still be in flight)
+    if (!states || states.length === 0) {
+      clearTimeout(globeRetryTimer);
+      globeRetryTimer = setTimeout(() => {
+        if (globe && document.getElementById('globe-container').style.display !== 'none')
+          updateGlobePoints();
+      }, 4000);
+      return;
+    }
+
     const pts = states.filter(s => s[6] && s[5]).map(s => {
       const cs  = (s[1]||'').trim();
       const mil = AIRCRAFT.isMilitary(cs);
       const t   = AIRCRAFT.detectType(cs, s[8]);
       return {
         lat:   s[6], lng: s[5],
-        alt:   Math.min((s[7]||0)/900_000, 0.1),
+        alt:   Math.min((s[7]||0)/600_000, 0.12),
         color: t==='drone' ? '#ff2200' : mil ? '#ff9900' : UTILS.countryColor(s[2]||''),
         label: `${cs||s[0]} [${s[2]||'?'}] ${s[7] ? Math.round(s[7]*3.281).toLocaleString() : '?'}ft`,
-        size:  mil ? 0.4 : 0.22,
+        size:  t==='drone' ? 1.0 : mil ? 0.85 : 0.55,
+        mil,
       };
     });
 
@@ -186,14 +202,28 @@ const APP = (() => {
       .pointAltitude(d => d.alt)
       .pointColor(d => d.color)
       .pointRadius(d => d.size)
-      .pointLabel(d => d.label);
+      .pointLabel(d => d.label)
+      .pointsMerge(false)
+      .pointResolution(6);
+
+    // Hexbin density layer — orange towers showing traffic concentration
+    globe.hexBinPointsData(pts)
+      .hexBinPointLat(d => d.lat)
+      .hexBinPointLng(d => d.lng)
+      .hexBinPointWeight(d => d.mil ? 3 : 1)
+      .hexBinResolution(3)
+      .hexAltitude(d => Math.min(d.sumWeight / 600, 0.08))
+      .hexBinMerge(false)
+      .hexTopColor(d => `rgba(255,${d.sumWeight > 10 ? 80 : 170},0,0.9)`)
+      .hexSideColor(d => `rgba(255,${d.sumWeight > 10 ? 60 : 140},0,0.25)`)
+      .hexLabel(d => `${d.points.length} aircraft`);
 
     // Military base rings
     const rings = MILITARY.getBases().map(b => ({
       lat: b.lat, lng: b.lng,
-      maxR: 0.8, propagationSpeed: 1.5,
-      repeatPeriod: 1200 + Math.random()*800,
-      color: () => `rgba(255,153,0,${Math.random()*0.6+0.1})`,
+      maxR: 1.2, propagationSpeed: 2.0,
+      repeatPeriod: 1000 + Math.random()*600,
+      color: () => `rgba(255,153,0,${Math.random()*0.7+0.15})`,
     }));
     globe.ringsData(rings).ringLat(d=>d.lat).ringLng(d=>d.lng)
       .ringMaxRadius(d=>d.maxR).ringColor(d=>d.color)

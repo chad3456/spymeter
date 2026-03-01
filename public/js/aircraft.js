@@ -278,6 +278,7 @@ const AIRCRAFT = (() => {
 
   return {
     init, setEnabled, setCountryFilter, handleWSUpdate,
-    getData, getMarkers, isMilitary, detectType
+    getData, getMarkers, isMilitary, detectType,
+    refresh: fetchData,
   };
 })();

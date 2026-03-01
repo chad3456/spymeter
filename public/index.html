@@ -180,7 +180,9 @@
       <!-- Right panel tab switcher -->
       <div class="rp-tabs">
         <button class="rptab active" data-rptab="news">📡 NEWS</button>
+        <button class="rptab" data-rptab="rss">⚡ LIVE</button>
         <button class="rptab" data-rptab="reddit">🔴 REDDIT</button>
+        <button class="rptab" data-rptab="polls">🗳 POLLS</button>
         <button class="rptab" data-rptab="sources">👤 SOURCES</button>
         <button class="rptab" data-rptab="intel">◈ INTEL</button>
       </div>
@@ -203,6 +205,17 @@
         </div>
       </div>
 
+      <!-- TAB: RSS Live Feed -->
+      <div class="rp-tab-body" id="rptab-rss" style="display:none">
+        <div class="panel-card">
+          <div class="card-hdr">
+            <span>⚡ LIVE RSS <span class="badge-live">● BBC · Reuters · AJ · DW</span></span>
+            <button id="refresh-rss-btn" class="mini-btn">↻</button>
+          </div>
+          <div id="rss-feed" class="scroll-list" style="max-height:calc(100vh - 220px)"></div>
+        </div>
+      </div>
+
       <!-- TAB: Reddit -->
       <div class="rp-tab-body" id="rptab-reddit" style="display:none">
         <div class="panel-card">
@@ -220,76 +233,290 @@
         </div>
       </div>
 
+      <!-- TAB: Geopolitical Polls -->
+      <div class="rp-tab-body" id="rptab-polls" style="display:none">
+        <div class="panel-card">
+          <div class="card-hdr">
+            <span>🗳 PREDICT <span class="badge-live">● LIVE VOTING</span></span>
+            <span id="polls-count" class="polls-count-badge"></span>
+          </div>
+          <div id="polls-list" class="scroll-list" style="max-height:calc(100vh - 200px)"></div>
+        </div>
+      </div>
+
       <!-- TAB: Verified Sources / Journalists -->
       <div class="rp-tab-body" id="rptab-sources" style="display:none">
-        <div class="panel-card">
-          <div class="card-hdr">👤 VERIFIED WAR JOURNALISTS <span class="badge-live">● X PROFILES</span></div>
-          <div class="journalist-list">
-            <div class="journalist-card" onclick="showJournalistFeed('AdityaRajKaul','India/Geopolitics','🇮🇳')">
-              <div class="jrn-avatar">AK</div>
-              <div class="jrn-info">
-                <div class="jrn-name">Aditya Raj Kaul</div>
-                <div class="jrn-handle">@AdityaRajKaul</div>
-                <div class="jrn-beat">India · Kashmir · Terrorism · Geopolitics</div>
-              </div>
-            </div>
-            <div class="journalist-card" onclick="showJournalistFeed('sidhant','India/Breaking','🇮🇳')">
-              <div class="jrn-avatar">SS</div>
-              <div class="jrn-info">
-                <div class="jrn-name">Sidhant Sibal</div>
-                <div class="jrn-handle">@sidhant</div>
-                <div class="jrn-beat">India · Foreign Policy · Breaking News</div>
-              </div>
-            </div>
-            <div class="journalist-card" onclick="showJournalistFeed('yaldahakim','Middle East/Breaking','🌍')">
-              <div class="jrn-avatar">YH</div>
-              <div class="jrn-info">
-                <div class="jrn-name">Yalda Hakim</div>
-                <div class="jrn-handle">@yaldahakim</div>
-                <div class="jrn-beat">BBC · Middle East · Afghanistan · Conflict</div>
-              </div>
-            </div>
-            <div class="journalist-card" onclick="showJournalistFeed('clarissaward','Middle East/War','🌍')">
-              <div class="jrn-avatar">CW</div>
-              <div class="jrn-info">
-                <div class="jrn-name">Clarissa Ward</div>
-                <div class="jrn-handle">@clarissaward</div>
-                <div class="jrn-beat">CNN Chief Intl. Correspondent · War zones</div>
-              </div>
-            </div>
-            <div class="journalist-card" onclick="showJournalistFeed('OSINTdefender','OSINT/Military','⚔')">
-              <div class="jrn-avatar">OD</div>
-              <div class="jrn-info">
-                <div class="jrn-name">OSINT Defender</div>
-                <div class="jrn-handle">@OSINTdefender</div>
-                <div class="jrn-beat">Open Source Intel · Military · Verification</div>
-              </div>
-            </div>
-            <div class="journalist-card" onclick="showJournalistFeed('oryxspioenkop','Equipment Losses','⚔')">
-              <div class="jrn-avatar">OR</div>
-              <div class="jrn-info">
-                <div class="jrn-name">Oryx OSINT</div>
-                <div class="jrn-handle">@oryxspioenkop</div>
-                <div class="jrn-beat">Documented military equipment losses · Ukraine/Gaza</div>
-              </div>
-            </div>
-            <div class="journalist-card" onclick="showJournalistFeed('IntelCrab','OSINT/Intel','🔍')">
-              <div class="jrn-avatar">IC</div>
-              <div class="jrn-info">
-                <div class="jrn-name">Intel Crab</div>
-                <div class="jrn-handle">@IntelCrab</div>
-                <div class="jrn-beat">Geoint · Conflict monitoring · Satellite imagery</div>
-              </div>
-            </div>
-            <div class="journalist-card" onclick="showJournalistFeed('GeoConfirmed','OSINT/Geo','🗺')">
-              <div class="jrn-avatar">GC</div>
-              <div class="jrn-info">
-                <div class="jrn-name">GeoConfirmed</div>
-                <div class="jrn-handle">@GeoConfirmed</div>
-                <div class="jrn-beat">Geolocation · Ukraine/Gaza conflict mapping</div>
-              </div>
-            </div>
+
+        <!-- Search / Filter bar -->
+        <div class="src-search-bar">
+          <input id="src-search" type="text" placeholder="🔍 Search journalists…" oninput="filterJournalists(this.value)" />
+          <div class="src-cat-bar" id="src-cat-bar">
+            <button class="src-cat active" onclick="filterJournalistCat('all',this)">ALL</button>
+            <button class="src-cat" onclick="filterJournalistCat('osint',this)">OSINT</button>
+            <button class="src-cat" onclick="filterJournalistCat('war',this)">WAR</button>
+            <button class="src-cat" onclick="filterJournalistCat('india',this)">INDIA</button>
+            <button class="src-cat" onclick="filterJournalistCat('mideast',this)">MIDEAST</button>
+            <button class="src-cat" onclick="filterJournalistCat('ukraine',this)">UKR/RUS</button>
+            <button class="src-cat" onclick="filterJournalistCat('news',this)">MEDIA</button>
           </div>
+        </div>
+
+        <div class="panel-card" style="padding:0">
+          <div class="journalist-list" id="journalist-list">
+
+            <!-- ── OSINT ANALYSTS ───────────────────────── -->
+            <div class="jrn-category-hdr">⚔ OSINT ANALYSTS</div>
+
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('OSINTdefender','OSINT/Military','⚔')">
+              <div class="jrn-avatar" style="background:#ff440022;color:#ff4400">OD</div>
+              <div class="jrn-info"><div class="jrn-name">OSINT Defender</div><div class="jrn-handle">@OSINTdefender</div><div class="jrn-beat">Open Source Intel · Military · Verification</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('oryxspioenkop','Equipment Losses','⚔')">
+              <div class="jrn-avatar" style="background:#ff990022;color:#ff9900">OR</div>
+              <div class="jrn-info"><div class="jrn-name">Oryx OSINT</div><div class="jrn-handle">@oryxspioenkop</div><div class="jrn-beat">Documented equipment losses · Ukraine/Gaza</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('IntelCrab','OSINT/Intel','🔍')">
+              <div class="jrn-avatar" style="background:#00d4ff22;color:#00d4ff">IC</div>
+              <div class="jrn-info"><div class="jrn-name">Intel Crab</div><div class="jrn-handle">@IntelCrab</div><div class="jrn-beat">Geoint · Conflict monitoring · Satellite imagery</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('GeoConfirmed','OSINT/Geo','🗺')">
+              <div class="jrn-avatar" style="background:#00ff8822;color:#00ff88">GC</div>
+              <div class="jrn-info"><div class="jrn-name">GeoConfirmed</div><div class="jrn-handle">@GeoConfirmed</div><div class="jrn-beat">Geolocation · Ukraine/Gaza conflict mapping</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('RALee85','Russia/Military','🔍')">
+              <div class="jrn-avatar" style="background:#cc44ff22;color:#cc44ff">RL</div>
+              <div class="jrn-info"><div class="jrn-name">Rob Lee</div><div class="jrn-handle">@RALee85</div><div class="jrn-beat">FPRI · Russia/Ukraine military analyst</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('JosephHDempsey','Defense/IISS','⚔')">
+              <div class="jrn-avatar" style="background:#4488ff22;color:#4488ff">JD</div>
+              <div class="jrn-info"><div class="jrn-name">Joseph Dempsey</div><div class="jrn-handle">@JosephHDempsey</div><div class="jrn-beat">IISS · Defense analyst · Equipment tracking</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('CovertShores','Naval/OSINT','🚢')">
+              <div class="jrn-avatar" style="background:#0088ff22;color:#0088ff">CS</div>
+              <div class="jrn-info"><div class="jrn-name">Covert Shores</div><div class="jrn-handle">@CovertShores</div><div class="jrn-beat">Naval OSINT · Submarines · Special operations</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('CalibreObscura','Weapons/OSINT','⚔')">
+              <div class="jrn-avatar" style="background:#ff880022;color:#ff8800">CO</div>
+              <div class="jrn-info"><div class="jrn-name">Calibre Obscura</div><div class="jrn-handle">@CalibreObscura</div><div class="jrn-beat">Small arms · Weapons identification · Conflict zones</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('ELINTNews','ELINT/Signals','📡')">
+              <div class="jrn-avatar" style="background:#00ffaa22;color:#00ffaa">EN</div>
+              <div class="jrn-info"><div class="jrn-name">ELINT News</div><div class="jrn-handle">@ELINTNews</div><div class="jrn-beat">Electronic intelligence · Signals · Aviation OSINT</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('AircraftSpots','Aviation/OSINT','✈')">
+              <div class="jrn-avatar" style="background:#ffcc0022;color:#ffcc00">AS</div>
+              <div class="jrn-info"><div class="jrn-name">Aircraft Spots</div><div class="jrn-handle">@AircraftSpots</div><div class="jrn-beat">Military aviation spotting · ADS-B · Special ops flights</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('sentdefender','Breaking/OSINT','🌍')">
+              <div class="jrn-avatar" style="background:#ff336622;color:#ff3366">SD</div>
+              <div class="jrn-info"><div class="jrn-name">Sentinel Defender</div><div class="jrn-handle">@sentdefender</div><div class="jrn-beat">Global conflicts · Breaking OSINT · Military operations</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('Conflicts','Conflict Monitor','⚔')">
+              <div class="jrn-avatar" style="background:#ff660022;color:#ff6600">CM</div>
+              <div class="jrn-info"><div class="jrn-name">Conflicts Monitor</div><div class="jrn-handle">@Conflicts</div><div class="jrn-beat">Global conflict alerts · Breaking military news</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('disclosetv','Breaking/Verify','🔍')">
+              <div class="jrn-avatar" style="background:#aa44ff22;color:#aa44ff">DT</div>
+              <div class="jrn-info"><div class="jrn-name">Disclose.tv</div><div class="jrn-handle">@disclosetv</div><div class="jrn-beat">Breaking news · Geopolitical events · Verification</div></div>
+            </div>
+            <div class="journalist-card" data-cat="osint" onclick="showJournalistFeed('spectatorindex','Data/Geopolitics','📊')">
+              <div class="jrn-avatar" style="background:#33aaff22;color:#33aaff">SI</div>
+              <div class="jrn-info"><div class="jrn-name">Spectator Index</div><div class="jrn-handle">@spectatorindex</div><div class="jrn-beat">Data journalism · Geopolitical stats · World events</div></div>
+            </div>
+
+            <!-- ── WAR CORRESPONDENTS ───────────────────── -->
+            <div class="jrn-category-hdr">📹 WAR CORRESPONDENTS</div>
+
+            <div class="journalist-card" data-cat="war" onclick="showJournalistFeed('clarissaward','Middle East/War','🌍')">
+              <div class="jrn-avatar" style="background:#ff336622;color:#ff3366">CW</div>
+              <div class="jrn-info"><div class="jrn-name">Clarissa Ward</div><div class="jrn-handle">@clarissaward</div><div class="jrn-beat">CNN Chief Intl. Correspondent · War zones</div></div>
+            </div>
+            <div class="journalist-card" data-cat="war" onclick="showJournalistFeed('yaldahakim','Middle East/Breaking','🌍')">
+              <div class="jrn-avatar" style="background:#cc44ff22;color:#cc44ff">YH</div>
+              <div class="jrn-info"><div class="jrn-name">Yalda Hakim</div><div class="jrn-handle">@yaldahakim</div><div class="jrn-beat">BBC · Middle East · Afghanistan · Conflict</div></div>
+            </div>
+            <div class="journalist-card" data-cat="war" onclick="showJournalistFeed('RichardEngel','War/Breaking','📹')">
+              <div class="jrn-avatar" style="background:#4488ff22;color:#4488ff">RE</div>
+              <div class="jrn-info"><div class="jrn-name">Richard Engel</div><div class="jrn-handle">@RichardEngel</div><div class="jrn-beat">NBC News Chief Foreign Correspondent</div></div>
+            </div>
+            <div class="journalist-card" data-cat="war" onclick="showJournalistFeed('LizSly','Middle East/War','📰')">
+              <div class="jrn-avatar" style="background:#00d4ff22;color:#00d4ff">LS</div>
+              <div class="jrn-info"><div class="jrn-name">Liz Sly</div><div class="jrn-handle">@LizSly</div><div class="jrn-beat">Washington Post · Middle East Bureau Chief</div></div>
+            </div>
+            <div class="journalist-card" data-cat="war" onclick="showJournalistFeed('benhubbard','Middle East/NYT','📰')">
+              <div class="jrn-avatar" style="background:#00ff8822;color:#00ff88">BH</div>
+              <div class="jrn-info"><div class="jrn-name">Ben Hubbard</div><div class="jrn-handle">@benhubbard</div><div class="jrn-beat">NYT Beirut Bureau Chief · Middle East</div></div>
+            </div>
+            <div class="journalist-card" data-cat="war" onclick="showJournalistFeed('nytimesworld','Breaking/Global','🌍')">
+              <div class="jrn-avatar" style="background:#ff990022;color:#ff9900">NT</div>
+              <div class="jrn-info"><div class="jrn-name">NYT World</div><div class="jrn-handle">@nytimesworld</div><div class="jrn-beat">New York Times · World coverage</div></div>
+            </div>
+            <div class="journalist-card" data-cat="war" onclick="showJournalistFeed('BNONews','Breaking/News','⚡')">
+              <div class="jrn-avatar" style="background:#ff440022;color:#ff4400">BN</div>
+              <div class="jrn-info"><div class="jrn-name">BNO News</div><div class="jrn-handle">@BNONews</div><div class="jrn-beat">Breaking News Online · Global incidents · Verified</div></div>
+            </div>
+
+            <!-- ── INDIA / SOUTH ASIA ──────────────────── -->
+            <div class="jrn-category-hdr">🇮🇳 INDIA / SOUTH ASIA</div>
+
+            <div class="journalist-card" data-cat="india" onclick="showJournalistFeed('AdityaRajKaul','India/Geopolitics','🇮🇳')">
+              <div class="jrn-avatar" style="background:#ff882222;color:#ff8822">AK</div>
+              <div class="jrn-info"><div class="jrn-name">Aditya Raj Kaul</div><div class="jrn-handle">@AdityaRajKaul</div><div class="jrn-beat">India · Kashmir · Terrorism · Geopolitics</div></div>
+            </div>
+            <div class="journalist-card" data-cat="india" onclick="showJournalistFeed('sidhant','India/Breaking','🇮🇳')">
+              <div class="jrn-avatar" style="background:#ff441122;color:#ff4411">SS</div>
+              <div class="jrn-info"><div class="jrn-name">Sidhant Sibal</div><div class="jrn-handle">@sidhant</div><div class="jrn-beat">India · Foreign Policy · Breaking News</div></div>
+            </div>
+            <div class="journalist-card" data-cat="india" onclick="showJournalistFeed('ANI','India/Breaking','🇮🇳')">
+              <div class="jrn-avatar" style="background:#ff990022;color:#ff9900">AN</div>
+              <div class="jrn-info"><div class="jrn-name">ANI News</div><div class="jrn-handle">@ANI</div><div class="jrn-beat">Asian News International · India breaking news</div></div>
+            </div>
+            <div class="journalist-card" data-cat="india" onclick="showJournalistFeed('ndtv','India/News','🇮🇳')">
+              <div class="jrn-avatar" style="background:#ff336622;color:#ff3366">ND</div>
+              <div class="jrn-info"><div class="jrn-name">NDTV</div><div class="jrn-handle">@ndtv</div><div class="jrn-beat">India's premier news network · 24/7 coverage</div></div>
+            </div>
+            <div class="journalist-card" data-cat="india" onclick="showJournalistFeed('timesofindia','India/News','🇮🇳')">
+              <div class="jrn-avatar" style="background:#4488ff22;color:#4488ff">TI</div>
+              <div class="jrn-info"><div class="jrn-name">Times of India</div><div class="jrn-handle">@timesofindia</div><div class="jrn-beat">India · National · International news coverage</div></div>
+            </div>
+            <div class="journalist-card" data-cat="india" onclick="showJournalistFeed('Shekhar_Gupta','India/Analysis','🇮🇳')">
+              <div class="jrn-avatar" style="background:#00d4ff22;color:#00d4ff">SG</div>
+              <div class="jrn-info"><div class="jrn-name">Shekhar Gupta</div><div class="jrn-handle">@Shekhar_Gupta</div><div class="jrn-beat">The Print · India's strategic/political analysis</div></div>
+            </div>
+            <div class="journalist-card" data-cat="india" onclick="showJournalistFeed('bdutt','India/Breaking','🇮🇳')">
+              <div class="jrn-avatar" style="background:#00ff8822;color:#00ff88">BD</div>
+              <div class="jrn-info"><div class="jrn-name">Barkha Dutt</div><div class="jrn-handle">@bdutt</div><div class="jrn-beat">MOJO Story · India's top war correspondent</div></div>
+            </div>
+            <div class="journalist-card" data-cat="india" onclick="showJournalistFeed('ilanawish','Pakistan/Analysis','🇵🇰')">
+              <div class="jrn-avatar" style="background:#44aa0022;color:#44aa00">IW</div>
+              <div class="jrn-info"><div class="jrn-name">Ilana Wish</div><div class="jrn-handle">@ilanawish</div><div class="jrn-beat">Pakistan · South Asia nuclear analyst</div></div>
+            </div>
+
+            <!-- ── MIDDLE EAST ─────────────────────────── -->
+            <div class="jrn-category-hdr">🌍 MIDDLE EAST</div>
+
+            <div class="journalist-card" data-cat="mideast" onclick="showJournalistFeed('AJEnglish','Middle East/Breaking','🌍')">
+              <div class="jrn-avatar" style="background:#00d4ff22;color:#00d4ff">AJ</div>
+              <div class="jrn-info"><div class="jrn-name">Al Jazeera English</div><div class="jrn-handle">@AJEnglish</div><div class="jrn-beat">Al Jazeera · Middle East · Global news network</div></div>
+            </div>
+            <div class="journalist-card" data-cat="mideast" onclick="showJournalistFeed('MiddleEastEye','Middle East/Analysis','🌍')">
+              <div class="jrn-avatar" style="background:#ff990022;color:#ff9900">ME</div>
+              <div class="jrn-info"><div class="jrn-name">Middle East Eye</div><div class="jrn-handle">@MiddleEastEye</div><div class="jrn-beat">Independent · Palestine · Conflict reporting</div></div>
+            </div>
+            <div class="journalist-card" data-cat="mideast" onclick="showJournalistFeed('AlArabiya_Eng','Middle East/Breaking','🌍')">
+              <div class="jrn-avatar" style="background:#cc44ff22;color:#cc44ff">AA</div>
+              <div class="jrn-info"><div class="jrn-name">Al Arabiya English</div><div class="jrn-handle">@AlArabiya_Eng</div><div class="jrn-beat">Al Arabiya · Saudi/Gulf perspective · Arabic world</div></div>
+            </div>
+            <div class="journalist-card" data-cat="mideast" onclick="showJournalistFeed('IranIntl_En','Iran/Analysis','🇮🇷')">
+              <div class="jrn-avatar" style="background:#ff440022;color:#ff4400">II</div>
+              <div class="jrn-info"><div class="jrn-name">Iran International</div><div class="jrn-handle">@IranIntl_En</div><div class="jrn-beat">Iran · IRGC · Nuclear · Regime coverage</div></div>
+            </div>
+            <div class="journalist-card" data-cat="mideast" onclick="showJournalistFeed('i24NEWS_EN','Israel/Breaking','🇮🇱')">
+              <div class="jrn-avatar" style="background:#4488ff22;color:#4488ff">i2</div>
+              <div class="jrn-info"><div class="jrn-name">i24 News</div><div class="jrn-handle">@i24NEWS_EN</div><div class="jrn-beat">Israel · Gaza · IDF · 24h live coverage</div></div>
+            </div>
+            <div class="journalist-card" data-cat="mideast" onclick="showJournalistFeed('TimesofIsrael','Israel/News','🇮🇱')">
+              <div class="jrn-avatar" style="background:#8888ff22;color:#8888ff">TL</div>
+              <div class="jrn-info"><div class="jrn-name">Times of Israel</div><div class="jrn-handle">@TimesofIsrael</div><div class="jrn-beat">Israel · Gaza · Regional news</div></div>
+            </div>
+            <div class="journalist-card" data-cat="mideast" onclick="showJournalistFeed('HannahAllam','Iran/IRGC','🌍')">
+              <div class="jrn-avatar" style="background:#ff880022;color:#ff8800">HA</div>
+              <div class="jrn-info"><div class="jrn-name">Hannah Allam</div><div class="jrn-handle">@HannahAllam</div><div class="jrn-beat">WaPo · National security · Extremism reporting</div></div>
+            </div>
+
+            <!-- ── UKRAINE / RUSSIA ────────────────────── -->
+            <div class="jrn-category-hdr">🇺🇦 UKRAINE / RUSSIA</div>
+
+            <div class="journalist-card" data-cat="ukraine" onclick="showJournalistFeed('KyivIndependent','Ukraine/Breaking','🇺🇦')">
+              <div class="jrn-avatar" style="background:#4488ff22;color:#4488ff">KI</div>
+              <div class="jrn-info"><div class="jrn-name">Kyiv Independent</div><div class="jrn-handle">@KyivIndependent</div><div class="jrn-beat">Ukraine's leading English-language newspaper</div></div>
+            </div>
+            <div class="journalist-card" data-cat="ukraine" onclick="showJournalistFeed('KyivPost','Ukraine/News','🇺🇦')">
+              <div class="jrn-avatar" style="background:#ff990022;color:#ff9900">KP</div>
+              <div class="jrn-info"><div class="jrn-name">Kyiv Post</div><div class="jrn-handle">@KyivPost</div><div class="jrn-beat">Ukraine · War coverage · Breaking news</div></div>
+            </div>
+            <div class="journalist-card" data-cat="ukraine" onclick="showJournalistFeed('DefMon3','Defense Monitor','⚔')">
+              <div class="jrn-avatar" style="background:#ff440022;color:#ff4400">DM</div>
+              <div class="jrn-info"><div class="jrn-name">Defense Monitor</div><div class="jrn-handle">@DefMon3</div><div class="jrn-beat">Ukraine frontlines · Equipment · OSINT tracking</div></div>
+            </div>
+            <div class="journalist-card" data-cat="ukraine" onclick="showJournalistFeed('wartranslated','Ukraine/Translated','🇺🇦')">
+              <div class="jrn-avatar" style="background:#00ff8822;color:#00ff88">WT</div>
+              <div class="jrn-info"><div class="jrn-name">War Translated</div><div class="jrn-handle">@wartranslated</div><div class="jrn-beat">Translating Ukrainian/Russian military sources</div></div>
+            </div>
+            <div class="journalist-card" data-cat="ukraine" onclick="showJournalistFeed('UkraineWorld','Ukraine/Context','🇺🇦')">
+              <div class="jrn-avatar" style="background:#cc44ff22;color:#cc44ff">UW</div>
+              <div class="jrn-info"><div class="jrn-name">Ukraine World</div><div class="jrn-handle">@UkraineWorld</div><div class="jrn-beat">Ukraine perspective · Context · Fact-checking</div></div>
+            </div>
+            <div class="journalist-card" data-cat="ukraine" onclick="showJournalistFeed('nexta_tv','Belarus/Russia/War','⚡')">
+              <div class="jrn-avatar" style="background:#ff336622;color:#ff3366">NX</div>
+              <div class="jrn-info"><div class="jrn-name">NEXTA</div><div class="jrn-handle">@nexta_tv</div><div class="jrn-beat">Belarus opposition · Russia war updates · Fast breaking</div></div>
+            </div>
+            <div class="journalist-card" data-cat="ukraine" onclick="showJournalistFeed('WarMonitor3','Ukraine OSINT','⚔')">
+              <div class="jrn-avatar" style="background:#ff880022;color:#ff8800">WM</div>
+              <div class="jrn-info"><div class="jrn-name">War Monitor</div><div class="jrn-handle">@WarMonitor3</div><div class="jrn-beat">Ukraine war updates · Frontline OSINT</div></div>
+            </div>
+            <div class="journalist-card" data-cat="ukraine" onclick="showJournalistFeed('MT_Anderson','Russia Military','🇷🇺')">
+              <div class="jrn-avatar" style="background:#ff660022;color:#ff6600">MA</div>
+              <div class="jrn-info"><div class="jrn-name">MT Anderson</div><div class="jrn-handle">@MT_Anderson</div><div class="jrn-beat">Russia military analysis · Order of battle</div></div>
+            </div>
+
+            <!-- ── GLOBAL NEWS ORGS ────────────────────── -->
+            <div class="jrn-category-hdr">📡 GLOBAL NEWS ORGS</div>
+
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('BBCBreaking','BBC/Breaking','📡')">
+              <div class="jrn-avatar" style="background:#ff440022;color:#ff4400">BB</div>
+              <div class="jrn-info"><div class="jrn-name">BBC Breaking News</div><div class="jrn-handle">@BBCBreaking</div><div class="jrn-beat">BBC · World breaking news · Verified global events</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('Reuters','Breaking/Wire','📡')">
+              <div class="jrn-avatar" style="background:#ff990022;color:#ff9900">RT</div>
+              <div class="jrn-info"><div class="jrn-name">Reuters</div><div class="jrn-handle">@Reuters</div><div class="jrn-beat">Reuters wire service · Global verified reporting</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('AP','Breaking/Wire','📡')">
+              <div class="jrn-avatar" style="background:#4488ff22;color:#4488ff">AP</div>
+              <div class="jrn-info"><div class="jrn-name">AP News</div><div class="jrn-handle">@AP</div><div class="jrn-beat">Associated Press · Global breaking news</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('AFP','Breaking/Wire','📡')">
+              <div class="jrn-avatar" style="background:#00d4ff22;color:#00d4ff">AF</div>
+              <div class="jrn-info"><div class="jrn-name">AFP</div><div class="jrn-handle">@AFP</div><div class="jrn-beat">Agence France-Presse · Global wire service</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('DW_World','DW/Breaking','📡')">
+              <div class="jrn-avatar" style="background:#00ff8822;color:#00ff88">DW</div>
+              <div class="jrn-info"><div class="jrn-name">DW World</div><div class="jrn-handle">@DW_World</div><div class="jrn-beat">Deutsche Welle · Europe · Global news</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('France24_en','France24/Breaking','📡')">
+              <div class="jrn-avatar" style="background:#cc44ff22;color:#cc44ff">F2</div>
+              <div class="jrn-info"><div class="jrn-name">France 24 English</div><div class="jrn-handle">@France24_en</div><div class="jrn-beat">France 24 · International · 24/7 news</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('WION','WION/Breaking','📡')">
+              <div class="jrn-avatar" style="background:#ff880022;color:#ff8800">WN</div>
+              <div class="jrn-info"><div class="jrn-name">WION</div><div class="jrn-handle">@WION</div><div class="jrn-beat">World is One News · India perspective · Global</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('trtworld','TRT/Breaking','📡')">
+              <div class="jrn-avatar" style="background:#33aaff22;color:#33aaff">TW</div>
+              <div class="jrn-info"><div class="jrn-name">TRT World</div><div class="jrn-handle">@trtworld</div><div class="jrn-beat">TRT · Turkey perspective · Middle East/Global</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('TheEconomist','Analysis/Geo','📊')">
+              <div class="jrn-avatar" style="background:#ff336622;color:#ff3366">EC</div>
+              <div class="jrn-info"><div class="jrn-name">The Economist</div><div class="jrn-handle">@TheEconomist</div><div class="jrn-beat">Geopolitics · Analysis · Economic implications</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('ForeignPolicy','Geopolitics/Analysis','📊')">
+              <div class="jrn-avatar" style="background:#4488ff22;color:#4488ff">FP</div>
+              <div class="jrn-info"><div class="jrn-name">Foreign Policy</div><div class="jrn-handle">@ForeignPolicy</div><div class="jrn-beat">US foreign policy · Global security · Analysis</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('DefenseNews','Defense/Military','⚔')">
+              <div class="jrn-avatar" style="background:#ff990022;color:#ff9900">DN</div>
+              <div class="jrn-info"><div class="jrn-name">Defense News</div><div class="jrn-handle">@DefenseNews</div><div class="jrn-beat">Military procurement · Defense industry · US DoD</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('AusAirPower','Aviation/Military','✈')">
+              <div class="jrn-avatar" style="background:#00d4ff22;color:#00d4ff">AP2</div>
+              <div class="jrn-info"><div class="jrn-name">Aus Air Power</div><div class="jrn-handle">@AusAirPower</div><div class="jrn-beat">Australian Air Power · Indo-Pacific aviation analysis</div></div>
+            </div>
+            <div class="journalist-card" data-cat="news" onclick="showJournalistFeed('ian_bremmer','Geopolitics/Risk','🌍')">
+              <div class="jrn-avatar" style="background:#00ff8822;color:#00ff88">IB</div>
+              <div class="jrn-info"><div class="jrn-name">Ian Bremmer</div><div class="jrn-handle">@ian_bremmer</div><div class="jrn-beat">Eurasia Group founder · Geopolitical risk analysis</div></div>
+            </div>
+
+          </div><!-- /journalist-list -->
         </div>
 
         <!-- Journalist tweet embed area -->
@@ -476,6 +703,7 @@
   <script src="js/swarm.js"></script>
   <script src="js/sidebar.js"></script>
   <script src="js/conflict.js"></script>
+  <script src="js/polls.js"></script>
   <script src="js/app.js"></script>
 
   <script>
@@ -485,10 +713,17 @@
         document.querySelectorAll('.rptab').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.rp-tab-body').forEach(b => b.style.display = 'none');
         btn.classList.add('active');
-        const body = document.getElementById('rptab-' + btn.dataset.rptab);
+        const tab  = btn.dataset.rptab;
+        const body = document.getElementById('rptab-' + tab);
         if (body) body.style.display = 'block';
+        // Lazy-init on first open
+        if (tab === 'polls'  && !btn._pollsInited)  { btn._pollsInited = true; POLLS.init(); }
+        if (tab === 'rss'    && !btn._rssInited)     { btn._rssInited   = true; POLLS.loadRSSNews(); }
       });
     });
+
+    // ── RSS refresh button ─────────────────────────────────
+    document.getElementById('refresh-rss-btn')?.addEventListener('click', () => POLLS.loadRSSNews());
 
     // ── Journalist profile embed ───────────────────────────
     function showJournalistFeed(handle, beat, flag) {
@@ -504,10 +739,28 @@
            data-tweet-limit="8" data-width="250" data-height="320"
            href="https://twitter.com/${handle}">Loading @${handle}…</a>`;
       if (window.twttr?.widgets) window.twttr.widgets.load(embed);
+      // Scroll to embed
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
     function hideJournalistFeed() {
       const card = document.getElementById('journalist-feed-card');
       if (card) card.style.display = 'none';
+    }
+
+    // ── Journalist search / category filter ───────────────
+    function filterJournalists(query) {
+      const q = query.toLowerCase();
+      document.querySelectorAll('#journalist-list .journalist-card').forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = (!q || text.includes(q)) ? '' : 'none';
+      });
+    }
+    function filterJournalistCat(cat, btn) {
+      document.querySelectorAll('.src-cat').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('#journalist-list .journalist-card').forEach(card => {
+        card.style.display = (cat === 'all' || card.dataset.cat === cat) ? '' : 'none';
+      });
     }
   </script>
 
