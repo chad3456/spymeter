@@ -30,6 +30,7 @@
   --font-ui:      'Rajdhani', sans-serif;
   --topbar-h:     46px;
   --cls-h:        18px;
+  --ticker-h:     30px;
   --panel-w:      268px;
   --transition:   0.15s ease;
 }
@@ -60,10 +61,66 @@ html, body {
   border-bottom: 1px solid #003300;
 }
 
+/* ── Stock Market Ticker Bar ────────────────────────────── */
+#market-ticker {
+  position: fixed;
+  top: var(--cls-h); left: 0; right: 0;
+  height: var(--ticker-h);
+  background: rgba(2,6,10,0.97);
+  border-bottom: 1px solid rgba(0,212,255,0.18);
+  display: flex; align-items: center;
+  z-index: 1001;
+  overflow: hidden;
+}
+.ticker-filter {
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 8px; flex-shrink: 0;
+  border-right: 1px solid var(--border-hi);
+  height: 100%;
+}
+.ticker-label {
+  font-size: 8px; font-weight: 700; color: var(--accent);
+  letter-spacing: 1px; margin-right: 2px; white-space: nowrap;
+}
+.tkbtn {
+  font-size: 7.5px; padding: 1px 5px; border-radius: 2px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  color: var(--text-dim); cursor: pointer; font-family: var(--font-mono);
+  transition: all var(--transition); white-space: nowrap;
+}
+.tkbtn.active { background: rgba(0,212,255,0.15); border-color: var(--accent); color: var(--accent); }
+.ticker-ts-lbl {
+  font-size: 7px; color: var(--text-dim); white-space: nowrap; margin-left: 4px;
+}
+.ticker-scroll-wrap {
+  flex: 1; overflow: hidden; position: relative; height: 100%;
+  display: flex; align-items: center;
+}
+#ticker-items {
+  display: flex; align-items: center; gap: 0;
+  white-space: nowrap; padding-left: 8px;
+  animation: ticker-scroll 40s linear infinite;
+}
+#ticker-items:hover { animation-play-state: paused; }
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-item {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 0 10px; cursor: default;
+}
+.ticker-item:hover { background: rgba(0,212,255,0.07); }
+.tk-flag  { font-size: 10px; }
+.tk-name  { font-size: 8px; color: var(--text-dim); letter-spacing: 0.5px; }
+.tk-price { font-size: 9px; color: var(--text-hi); font-weight: 700; }
+.tk-chg   { font-size: 8.5px; font-weight: 700; }
+.tk-sep   { color: var(--border-hi); font-size: 10px; padding: 0 2px; }
+
 /* ── Top bar ────────────────────────────────────────────── */
 #topbar {
   position: fixed;
-  top: var(--cls-h); left: 0; right: 0;
+  top: calc(var(--cls-h) + var(--ticker-h)); left: 0; right: 0;
   height: var(--topbar-h);
   background: linear-gradient(180deg, #050a12 0%, #03060b 100%);
   border-bottom: 1px solid var(--border-hi);
@@ -140,7 +197,7 @@ html, body {
 /* ── Layout ─────────────────────────────────────────────── */
 #layout {
   position: fixed;
-  top: calc(var(--cls-h) + var(--topbar-h));
+  top: calc(var(--cls-h) + var(--ticker-h) + var(--topbar-h));
   left: 0; right: 0; bottom: 0;
   display: flex;
 }
@@ -1138,4 +1195,88 @@ body.crt-active #ws-status.connected { color: #00ff41; }
 
 /* ── Hide mobile-only menu button on desktop ─────────────── */
 #mob-menu-btn { display: none; }
+
+/* ── Oil Layer ───────────────────────────────────────────── */
+.oil-marker-wrap { display: flex; align-items: center; justify-content: center; }
+.leaflet-tooltip.oil-tooltip {
+  background: rgba(10,15,25,0.92); border: 1px solid rgba(255,136,0,0.5);
+  color: #ff9900; font-family: var(--font-mono); font-size: 9px;
+  padding: 2px 6px; border-radius: 2px; white-space: nowrap;
+}
+
+/* Oil Impact Floating Panel */
+#oil-impact-panel {
+  position: absolute; right: 10px; bottom: 48px;
+  width: 240px; background: rgba(4,8,14,0.92);
+  border: 1px solid rgba(255,136,0,0.4);
+  border-radius: 4px; z-index: 500;
+  font-family: var(--font-mono); font-size: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,136,0,0.08);
+  backdrop-filter: blur(6px);
+}
+.oil-panel-hdr {
+  font-size: 8px; font-weight: 700; letter-spacing: 1px;
+  color: #ff9900; padding: 5px 8px;
+  border-bottom: 1px solid rgba(255,136,0,0.2);
+  display: flex; align-items: center; gap: 5px;
+}
+.oil-impact-row {
+  padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.oil-impact-row:last-child { border-bottom: none; }
+.oil-evt  { color: var(--text-hi); font-size: 8px; margin-bottom: 1px; }
+.oil-imp  { display: flex; align-items: center; gap: 4px; margin-bottom: 1px; }
+.oil-pct  { font-size: 10px; font-weight: 700; }
+.oil-bbl  { font-size: 8px; color: var(--text-dim); }
+.oil-desc { color: var(--text-dim); font-size: 7.5px; line-height: 1.3; }
+
+/* ── Markets Panel ───────────────────────────────────────── */
+.mkt-group-hdr {
+  font-size: 8px; font-weight: 700; color: var(--accent);
+  padding: 5px 9px 3px; background: rgba(0,212,255,0.04);
+  border-top: 1px solid rgba(0,212,255,0.1);
+  letter-spacing: 1px; text-transform: uppercase;
+}
+.mkt-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 9px; border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.mkt-row:hover { background: rgba(0,212,255,0.04); }
+.mkt-left  { display: flex; align-items: center; gap: 7px; }
+.mkt-right { text-align: right; }
+.mkt-flag  { font-size: 13px; }
+.mkt-name  { font-size: 10px; color: var(--text-hi); font-weight: 600; }
+.mkt-state { font-size: 7px; }
+.mkt-price { font-size: 11px; font-weight: 700; color: var(--text-hi); }
+.mkt-chg   { font-size: 9px; font-weight: 700; }
+.mkt-abs   { font-size: 8px; color: var(--text-dim); font-weight: normal; }
+
+/* ── India Citizens Panel ────────────────────────────────── */
+.india-zone-row {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 8px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background var(--transition);
+}
+.india-zone-row:hover { background: rgba(255,136,0,0.06); }
+.iz-flag     { font-size: 16px; flex-shrink: 0; }
+.iz-info     { flex: 1; min-width: 0; }
+.iz-country  { font-size: 9.5px; font-weight: 600; color: var(--text-hi); }
+.iz-advisory { font-size: 7.5px; font-weight: 700; letter-spacing: 0.5px; }
+.iz-nums     { text-align: right; flex-shrink: 0; }
+.iz-total    { font-size: 11px; font-weight: 700; }
+.iz-label    { font-size: 7px; color: var(--text-dim); }
+.iz-evac     { font-size: 7.5px; color: #00ff88; }
+
+/* ── Mobile ticker adjustments ───────────────────────────── */
+@media (max-width: 768px) {
+  :root { --ticker-h: 26px; }
+  #market-ticker { overflow-x: auto; }
+  .ticker-filter { gap: 2px; padding: 0 5px; }
+  .ticker-label  { display: none; }
+  .tkbtn { font-size: 7px; padding: 1px 4px; }
+  #left-panel, #right-panel {
+    top: calc(var(--cls-h) + var(--ticker-h) + var(--topbar-h));
+  }
+}
 

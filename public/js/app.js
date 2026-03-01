@@ -80,6 +80,10 @@ const APP = (() => {
               btn.classList.toggle('active', true);
               CONFLICT.toggle();
               break;
+            case 'oil':
+              OIL.setEnabled(on);
+              SIDEBAR.addFeedItem('military', on ? '🛢 Oil layer ON — chokepoints, Houthi zones, facilities visible' : 'Oil layer OFF');
+              break;
             case 'arcs':
               arcsEnabled = on;
               if (globe) { on ? applyGlobeArcs() : clearGlobeArcs(); }
@@ -391,6 +395,8 @@ const APP = (() => {
     SATELLITES.init(map);
     WEAPONS.init(map);
     SWARM.init(map);
+    OIL.init(map);
+    MARKETS.init();
     initLayerControls();
     initViewModes();
 

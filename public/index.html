@@ -23,6 +23,22 @@
   <!-- Classification banner -->
   <div id="cls-banner">SPYMETER // OSINT // OPEN SOURCE INTELLIGENCE // UNCLASSIFIED // PUBLIC DATA ONLY</div>
 
+  <!-- ── Stock Market Ticker Bar ────────────────────────── -->
+  <div id="market-ticker">
+    <div class="ticker-filter">
+      <span class="ticker-label">📈 MARKETS</span>
+      <button class="tkbtn active" data-tkf="all"   onclick="MARKETS.setFilter('all')">ALL</button>
+      <button class="tkbtn"        data-tkf="us"    onclick="MARKETS.setFilter('us')">🇺🇸 US</button>
+      <button class="tkbtn"        data-tkf="india" onclick="MARKETS.setFilter('india')">🇮🇳 INDIA</button>
+      <button class="tkbtn"        data-tkf="china" onclick="MARKETS.setFilter('china')">🇨🇳 CHINA</button>
+      <button class="tkbtn"        data-tkf="oil"   onclick="MARKETS.setFilter('oil')">🛢 OIL</button>
+      <span class="ticker-ts-lbl">Updated <span id="ticker-ts">—</span> <span class="badge-static">15m delay</span></span>
+    </div>
+    <div class="ticker-scroll-wrap">
+      <div id="ticker-items" class="ticker-items"></div>
+    </div>
+  </div>
+
   <!-- ── Top nav ─────────────────────────────────────────── -->
   <header id="topbar">
     <div class="tb-left">
@@ -45,6 +61,7 @@
         <button class="lbtn"        data-layer="gpsjam"    title="GPS Jamming — KNOWN">⊗ JAM</button>
         <button class="lbtn"        data-layer="fires"     title="NASA FIRMS 24h">🔥 FIRE</button>
         <button class="lbtn"        data-layer="weapons"   title="Military Equipment — Air Def/ATGM/ICBM/Artillery">⚔ WEAPONS</button>
+        <button class="lbtn"        data-layer="oil"       title="Oil Chokepoints · Tanker Routes · Houthi Zones">🛢 OIL</button>
         <button class="lbtn conflict-btn" data-layer="conflict" title="Global Unrest Tracker">🌍 UNREST</button>
         <button class="lbtn"        data-layer="arcs"      title="Missile Strike Arc Trails">🚀 STRIKES</button>
       </div>
@@ -115,6 +132,21 @@
         <div id="country-filter" class="scroll-list" style="max-height:120px"></div>
       </div>
 
+      <!-- ── 🇮🇳 Indians in War Zones ── -->
+      <div class="panel-card" id="india-zones-card">
+        <div class="card-hdr">
+          <span>🇮🇳 INDIANS IN CONFLICT ZONES</span>
+          <button class="mini-btn" id="refresh-india-btn">↻</button>
+        </div>
+        <div id="india-zones-list" class="scroll-list" style="max-height:190px">
+          <div class="news-loading">⟳ Loading MEA data…</div>
+        </div>
+        <div class="panel-card" style="margin:4px 0 0;padding:5px 8px;background:rgba(0,0,0,0.2)">
+          <div style="font-size:7.5px;color:#ffaa00;margin-bottom:3px">📰 RECENT MEA NEWS</div>
+          <div id="india-news-mini" class="scroll-list" style="max-height:80px;font-size:8px"></div>
+        </div>
+      </div>
+
       <!-- ── Weapons filter ── -->
       <div class="panel-card" id="weapons-filter-card" style="display:none">
         <div class="card-hdr">⚔ WEAPON TYPE FILTER <span class="badge-static">SIPRI DB</span></div>
@@ -154,6 +186,9 @@
       <canvas id="swarm-canvas"></canvas>
       <div id="crosshair"></div>
 
+      <!-- Oil impact floating panel (shown when OIL layer active) -->
+      <div id="oil-impact-panel" style="display:none"></div>
+
       <div id="coord-hud">
         <span id="hud-lat">LAT  --°</span>
         <span id="hud-lng">LNG  --°</span>
@@ -181,6 +216,8 @@
       <div class="rp-tabs">
         <button class="rptab active" data-rptab="news">📡 NEWS</button>
         <button class="rptab" data-rptab="rss">⚡ LIVE</button>
+        <button class="rptab" data-rptab="markets">📈 MKTS</button>
+        <button class="rptab" data-rptab="iranisr">🔥 IRN/ISR</button>
         <button class="rptab" data-rptab="reddit">🔴 REDDIT</button>
         <button class="rptab" data-rptab="polls">🗳 POLLS</button>
         <button class="rptab" data-rptab="sources">👤 SOURCES</button>
@@ -202,6 +239,52 @@
             <button id="clr-feed" class="mini-btn">CLR</button>
           </div>
           <div id="activity-feed" class="scroll-list" style="max-height:140px"></div>
+        </div>
+      </div>
+
+      <!-- TAB: Markets & War Economy -->
+      <div class="rp-tab-body" id="rptab-markets" style="display:none">
+        <div class="panel-card">
+          <div class="card-hdr">
+            <span>📈 MARKET INDICES <span class="badge-static">15m DELAY</span></span>
+            <button class="mini-btn" id="refresh-market-btn">↻</button>
+          </div>
+          <div id="market-panel-list" class="scroll-list" style="max-height:260px"></div>
+        </div>
+        <div class="panel-card">
+          <div class="card-hdr">⚔ WAR IMPACT — MARKET NEWS <span class="badge-live">● 5h GDELT</span></div>
+          <div id="market-news-feed" class="scroll-list" style="max-height:calc(100vh - 480px)"></div>
+        </div>
+      </div>
+
+      <!-- TAB: Iran-Israel War 2026 -->
+      <div class="rp-tab-body" id="rptab-iranisr" style="display:none">
+        <div class="panel-card">
+          <div class="card-hdr">🔥 IRAN ↔ ISRAEL WAR 2025-26 <span class="badge-live">● LIVE X</span></div>
+          <!-- Live Twitter search feed -->
+          <div class="twitter-wrap" style="min-height:260px">
+            <a class="twitter-timeline" data-theme="dark"
+               data-chrome="noheader nofooter noborders transparent"
+               data-tweet-limit="12" data-width="280" data-height="280"
+               href="https://twitter.com/search?q=%23IranIsrael+OR+%22Iran+Israel%22+OR+%22Iran+attack%22+OR+%22IDF+Iran%22+OR+%22Operation+Days+of+Repentance%22&f=live">
+              Loading Iran-Israel tweets…</a>
+          </div>
+        </div>
+        <div class="panel-card">
+          <div class="card-hdr">🔥 HORMUZ / HOUTHI LIVE <span class="badge-live">● LIVE X</span></div>
+          <div class="twitter-wrap" style="min-height:200px">
+            <a class="twitter-timeline" data-theme="dark"
+               data-chrome="noheader nofooter noborders transparent"
+               data-tweet-limit="8" data-width="280" data-height="200"
+               href="https://twitter.com/search?q=%23Houthi+OR+%22Red+Sea%22+OR+%22Strait+of+Hormuz%22+OR+%22tanker+attack%22&f=live">
+              Loading Houthi/Hormuz tweets…</a>
+          </div>
+        </div>
+        <div class="panel-card">
+          <div class="card-hdr">📰 IRN/ISR INTEL NEWS <span class="badge-live">● GDELT</span></div>
+          <div id="iranisr-news-feed" class="scroll-list" style="max-height:220px">
+            <div class="news-loading">⟳ Loading…</div>
+          </div>
         </div>
       </div>
 
@@ -701,6 +784,8 @@
   <script src="js/satellites.js"></script>
   <script src="js/weapons.js"></script>
   <script src="js/swarm.js"></script>
+  <script src="js/oil.js"></script>
+  <script src="js/markets.js"></script>
   <script src="js/sidebar.js"></script>
   <script src="js/conflict.js"></script>
   <script src="js/polls.js"></script>
@@ -717,10 +802,74 @@
         const body = document.getElementById('rptab-' + tab);
         if (body) body.style.display = 'block';
         // Lazy-init on first open
-        if (tab === 'polls'  && !btn._pollsInited)  { btn._pollsInited = true; POLLS.init(); }
-        if (tab === 'rss'    && !btn._rssInited)     { btn._rssInited   = true; POLLS.loadRSSNews(); }
+        if (tab === 'polls'   && !btn._pollsInited)  { btn._pollsInited  = true; POLLS.init(); }
+        if (tab === 'rss'     && !btn._rssInited)     { btn._rssInited    = true; POLLS.loadRSSNews(); }
+        if (tab === 'markets' && !btn._mktInited)     { btn._mktInited    = true; MARKETS.init(); }
+        if (tab === 'iranisr' && !btn._irnInited)     { btn._irnInited    = true; loadIranIsrNews(); if (window.twttr?.widgets) window.twttr.widgets.load(); }
       });
     });
+
+    // ── Markets refresh ────────────────────────────────────
+    document.getElementById('refresh-market-btn')?.addEventListener('click', () => { MARKETS.fetchMarkets(); MARKETS.loadMarketNews(); });
+
+    // ── Iran/Israel news (GDELT conflict endpoint) ─────────
+    async function loadIranIsrNews() {
+      const el = document.getElementById('iranisr-news-feed');
+      if (!el) return;
+      el.innerHTML = '<div class="news-loading">⟳ Fetching Iran-Israel intel…</div>';
+      try {
+        const r = await fetch('/api/conflict-news');
+        const d = r.ok ? await r.json() : { articles: [] };
+        const arts = d.articles || [];
+        if (!arts.length) { el.innerHTML = '<div class="news-loading">No recent articles</div>'; return; }
+        el.innerHTML = arts.map(a => {
+          const col = parseFloat(a.tone||0) < -3 ? '#ff4444' : parseFloat(a.tone||0) > 2 ? '#00ff88' : '#888';
+          return `<a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
+            <div class="news-title">${a.title}</div>
+            <div class="news-meta">
+              <span class="news-src">${a.source}</span>
+              <span class="news-tone" style="color:${col}">${parseFloat(a.tone||0).toFixed(1)}</span>
+            </div>
+          </a>`;
+        }).join('');
+      } catch (_) { el.innerHTML = '<div class="news-loading">Unavailable</div>'; }
+    }
+
+    // ── India Citizens data ────────────────────────────────
+    async function loadIndiaCitizens() {
+      const listEl = document.getElementById('india-zones-list');
+      const newsEl = document.getElementById('india-news-mini');
+      if (!listEl) return;
+      try {
+        const r = await fetch('/api/india-citizens');
+        const d = r.ok ? await r.json() : { zones: [], news: [] };
+        const zones = d.zones || [];
+        listEl.innerHTML = zones.map(z => `
+          <div class="india-zone-row" onclick="APP.flyTo(${z.lat},${z.lng},5)" title="${z.mea}">
+            <div class="iz-flag">${z.flag}</div>
+            <div class="iz-info">
+              <div class="iz-country">${z.country}</div>
+              <div class="iz-advisory" style="color:${z.color}">${z.advisoryLevel}</div>
+            </div>
+            <div class="iz-nums">
+              <div class="iz-total" style="color:${z.color}">${(z.total||0).toLocaleString()}</div>
+              <div class="iz-label">present</div>
+              ${z.evacuated ? `<div class="iz-evac">${z.evacuated.toLocaleString()} evac'd</div>` : ''}
+            </div>
+          </div>`).join('');
+
+        if (newsEl && d.news?.length) {
+          newsEl.innerHTML = d.news.slice(0,4).map(n => `
+            <a class="news-item" href="${n.url}" target="_blank" rel="noopener noreferrer" style="padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+              <div class="news-title" style="font-size:8px">${n.title}</div>
+            </a>`).join('');
+        }
+      } catch (_) {
+        listEl.innerHTML = '<div class="news-loading">MEA data unavailable</div>';
+      }
+    }
+    document.getElementById('refresh-india-btn')?.addEventListener('click', loadIndiaCitizens);
+    setTimeout(loadIndiaCitizens, 2000);
 
     // ── RSS refresh button ─────────────────────────────────
     document.getElementById('refresh-rss-btn')?.addEventListener('click', () => POLLS.loadRSSNews());

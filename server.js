@@ -392,6 +392,151 @@ app.post('/api/polls/:id/vote', express.json(), (req, res) => {
   res.json(poll);
 });
 
+// ─── Stock Markets – Yahoo Finance (15-min delayed, free) ─
+const marketCache = { data: null, ts: 0 };
+const MARKET_TTL  = 300_000; // 5 min
+
+const MARKET_SYMBOLS = [
+  // US Markets
+  { sym:'^GSPC',    label:'S&P 500',  group:'us',    flag:'🇺🇸' },
+  { sym:'^IXIC',    label:'NASDAQ',   group:'us',    flag:'🇺🇸' },
+  { sym:'^DJI',     label:'DOW',      group:'us',    flag:'🇺🇸' },
+  { sym:'^VIX',     label:'VIX',      group:'us',    flag:'⚡' },
+  // India Markets
+  { sym:'^NSEI',    label:'NIFTY 50', group:'india', flag:'🇮🇳' },
+  { sym:'^BSESN',   label:'SENSEX',   group:'india', flag:'🇮🇳' },
+  // China Markets
+  { sym:'000001.SS',label:'SHANGHAI', group:'china', flag:'🇨🇳' },
+  { sym:'^HSI',     label:'HANG SENG',group:'china', flag:'🇨🇳' },
+  // Oil / Commodities
+  { sym:'CL=F',     label:'WTI CRUDE',group:'oil',   flag:'🛢' },
+  { sym:'BZ=F',     label:'BRENT',    group:'oil',   flag:'🛢' },
+  { sym:'GC=F',     label:'GOLD',     group:'oil',   flag:'🥇' },
+];
+
+app.get('/api/markets', async (req, res) => {
+  const now = Date.now();
+  if (marketCache.data && now - marketCache.ts < MARKET_TTL) return res.json(marketCache.data);
+  const symbols = MARKET_SYMBOLS.map(m => m.sym).join(',');
+  try {
+    const r = await axios.get(
+      `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,shortName`,
+      { timeout: 10_000, headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' } }
+    );
+    const quotes = r.data?.quoteResponse?.result || [];
+    const quoteMap = {};
+    quotes.forEach(q => { quoteMap[q.symbol] = q; });
+
+    const result = MARKET_SYMBOLS.map(m => {
+      const q = quoteMap[m.sym] || {};
+      return {
+        sym:    m.sym, label: m.label, group: m.group, flag: m.flag,
+        price:  q.regularMarketPrice  != null ? parseFloat(q.regularMarketPrice.toFixed(2))  : null,
+        change: q.regularMarketChange != null ? parseFloat(q.regularMarketChange.toFixed(2))  : null,
+        pct:    q.regularMarketChangePercent != null ? parseFloat(q.regularMarketChangePercent.toFixed(2)) : null,
+        state:  q.marketState || 'CLOSED',
+      };
+    });
+    const out = { quotes: result, ts: now, source: 'Yahoo Finance (15-min delay)' };
+    marketCache.data = out; marketCache.ts = now;
+    res.json(out);
+  } catch (err) {
+    if (marketCache.data) return res.json(marketCache.data);
+    res.json({ quotes: MARKET_SYMBOLS.map(m => ({ ...m, price: null, change: null, pct: null })), ts: now, error: 'Market data unavailable' });
+  }
+});
+
+// ─── Market news (war-related stocks impact, GDELT) ───────
+const marketNewsCache = { data: null, ts: 0 };
+app.get('/api/market-news', async (req, res) => {
+  const now = Date.now();
+  if (marketNewsCache.data && now - marketNewsCache.ts < 300_000) return res.json(marketNewsCache.data);
+  const queries = [
+    'oil crude energy market Iran sanctions stock',
+    'defense stock market war military spending Lockheed Raytheon',
+    'stock market geopolitical risk China Taiwan dollar',
+  ];
+  const all = [];
+  for (const q of queries) {
+    try {
+      const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+        params: { query: q, mode: 'artlist', maxrecords: 8, format: 'json', sort: 'datedesc', timespan: '5h' },
+        timeout: 8_000
+      });
+      if (r.data?.articles) all.push(...r.data.articles.map(a => ({
+        title: a.title||'', url: a.url||'', source: a.domain||'',
+        date: a.seendate||'', tone: a.tone ? parseFloat(a.tone).toFixed(1) : '0',
+      })));
+    } catch (_) {}
+  }
+  const seen = new Set();
+  const unique = all.filter(a => { if (!a.title || seen.has(a.url)) return false; seen.add(a.url); return true; });
+  unique.sort((a, b) => b.date.localeCompare(a.date));
+  const result = { articles: unique.slice(0, 20), ts: now };
+  marketNewsCache.data = result; marketNewsCache.ts = now;
+  res.json(result);
+});
+
+// ─── Indians in War Zones – MEA Advisory + GDELT ─────────
+const INDIA_MEA_DATA = [
+  { country:'Israel/Gaza', flag:'🇮🇱🇵🇸', total:18000, evacuated:5000, status:'HIGH ALERT', advisoryLevel:'AVOID', mea:'Advisory active — MEA helpline +91-11-2301-2113', color:'#ff3333', lat:31.7, lng:34.9 },
+  { country:'Lebanon',     flag:'🇱🇧',      total:6000,  evacuated:2000, status:'HIGH ALERT', advisoryLevel:'AVOID', mea:'MEA advisory — evacuation flights arranged', color:'#ff6600', lat:33.9, lng:35.5 },
+  { country:'Ukraine',     flag:'🇺🇦',      total:2800,  evacuated:22500, status:'MONITORING', advisoryLevel:'AVOID', mea:'Op Ganga complete — students evacuated 2022', color:'#ffaa00', lat:49.0, lng:31.0 },
+  { country:'Sudan',       flag:'🇸🇩',      total:3000,  evacuated:3900,  status:'MONITORING', advisoryLevel:'AVOID', mea:'Op Kaveri 2023 — most evacuated', color:'#ff9900', lat:15.5, lng:32.5 },
+  { country:'Yemen',       flag:'🇾🇪',      total:200,   evacuated:4700,  status:'LOW',        advisoryLevel:'AVOID', mea:'All advisories active — do not travel', color:'#ffcc00', lat:15.5, lng:48.0 },
+  { country:'Russia',      flag:'🇷🇺',      total:18000, evacuated:0,    status:'MONITORING', advisoryLevel:'CAUTION', mea:'Students advised to exercise caution', color:'#ff6600', lat:55.7, lng:37.6 },
+  { country:'Myanmar',     flag:'🇲🇲',      total:800,   evacuated:0,    status:'MONITORING', advisoryLevel:'CAUTION', mea:'MEA monitoring — 800 Indians in conflict zones', color:'#ffaa00', lat:16.8, lng:96.2 },
+  { country:'Iran',        flag:'🇮🇷',      total:3000,  evacuated:0,    status:'HIGH ALERT', advisoryLevel:'AVOID', mea:'MEA advisory active — escalation risk', color:'#ff3333', lat:32.4, lng:53.7 },
+];
+
+const indiaAbroadCache = { data: null, ts: 0 };
+app.get('/api/india-citizens', async (req, res) => {
+  const now = Date.now();
+  if (indiaAbroadCache.data && now - indiaAbroadCache.ts < 300_000) return res.json(indiaAbroadCache.data);
+  let news = [];
+  try {
+    const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: { query: 'Indians evacuated stranded conflict zone MEA ministry external affairs', mode: 'artlist', maxrecords: 10, format: 'json', sort: 'datedesc', timespan: '72h' },
+      timeout: 8_000
+    });
+    if (r.data?.articles) news = r.data.articles.map(a => ({ title: a.title||'', url: a.url||'', source: a.domain||'', date: a.seendate||'' }));
+  } catch (_) {}
+  const result = { zones: INDIA_MEA_DATA, news: news.slice(0, 8), ts: now, source: 'MEA India + GDELT' };
+  indiaAbroadCache.data = result; indiaAbroadCache.ts = now;
+  res.json(result);
+});
+
+// ─── Oil Geopolitical News (GDELT) ────────────────────────
+const oilNewsCache = { data: null, ts: 0 };
+app.get('/api/oil-news', async (req, res) => {
+  const now = Date.now();
+  if (oilNewsCache.data && now - oilNewsCache.ts < 300_000) return res.json(oilNewsCache.data);
+  const queries = [
+    'crude oil price Iran Hormuz Houthi tanker Red Sea',
+    'OPEC oil production cut sanctions energy supply',
+    'oil pipeline sabotage energy infrastructure attack',
+  ];
+  const all = [];
+  for (const q of queries) {
+    try {
+      const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+        params: { query: q, mode: 'artlist', maxrecords: 10, format: 'json', sort: 'datedesc', timespan: '24h' },
+        timeout: 8_000
+      });
+      if (r.data?.articles) all.push(...r.data.articles.map(a => ({
+        title: a.title||'', url: a.url||'', source: a.domain||'',
+        date: a.seendate||'', tone: a.tone ? parseFloat(a.tone).toFixed(1) : '0',
+      })));
+    } catch (_) {}
+  }
+  const seen = new Set();
+  const unique = all.filter(a => { if (!a.title || seen.has(a.url)) return false; seen.add(a.url); return true; });
+  unique.sort((a, b) => b.date.localeCompare(a.date));
+  const result = { articles: unique.slice(0, 25), ts: now, source: 'GDELT Project' };
+  oilNewsCache.data = result; oilNewsCache.ts = now;
+  res.json(result);
+});
+
 // ─── WebSocket ────────────────────────────────────────────
 const clients = new Set();
 wss.on('connection', ws => {
