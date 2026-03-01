@@ -89,6 +89,18 @@ const APP = (() => {
               if (globe) { on ? applyGlobeArcs() : clearGlobeArcs(); }
               SIDEBAR.addFeedItem('military', on ? '🚀 Strike arcs ON — switch to GLOBE view' : 'Strike arcs OFF');
               break;
+            case 'internet':
+              HEATMAP.setEnabled(on, 'internet');
+              SIDEBAR.addFeedItem('satellite', on ? '🌐 Internet speed layer ON — Ookla 2024 data' : 'Internet speed layer OFF');
+              break;
+            case 'tourism':
+              HEATMAP.setEnabled(on, 'tourism');
+              SIDEBAR.addFeedItem('satellite', on ? '✈ Travel advisory layer ON — US State Dept levels 1-4' : 'Travel advisory layer OFF');
+              break;
+            case 'embassy':
+              HEATMAP.setEnabled(on, 'embassy');
+              SIDEBAR.addFeedItem('satellite', on ? '🇮🇳 Indian embassy layer ON — MEA offices in conflict zones' : 'Embassy layer OFF');
+              break;
           }
         }, 120);
       });
@@ -397,6 +409,7 @@ const APP = (() => {
     SWARM.init(map);
     OIL.init(map);
     MARKETS.init();
+    HEATMAP.init(map);
     initLayerControls();
     initViewModes();
 

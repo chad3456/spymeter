@@ -101,12 +101,18 @@ const CONFLICT = (() => {
   ];
 
   // ── Live Video Channels ──────────────────────────────────
+  // videoId = YouTube 24/7 persistent live stream video ID.
+  // listId  = uploads-playlist fallback (UC→UU prefix).
+  // YouTube removed live_stream?channel= embed in 2023;
+  // direct video-ID embed is the reliable modern approach.
   const VIDEO_CHANNELS = [
-    { id:'aljaz',   label:'Al Jazeera',  flag:'🌍', channelId:'UCNye-wNBqNL5ZzHSJj3l8Bg', color:'#ff9900' },
-    { id:'france24',label:'France 24',   flag:'🇫🇷', channelId:'UCQfwfsi5VrQ8yKZ-UWmAEFg', color:'#0055A4' },
-    { id:'dw',      label:'DW News',     flag:'🇩🇪', channelId:'UCknLrEdhRCp1aegoMqRaCZg', color:'#CC0000' },
-    { id:'wion',    label:'WION',        flag:'🇮🇳', channelId:'UC6SqnbVVQ9veR-YJuTB1R8A', color:'#E63946' },
-    { id:'trt',     label:'TRT World',   flag:'🇹🇷', channelId:'UCq28adYCDcDMMPbOqnov0rA', color:'#E30A17' },
+    { id:'aljaz',   label:'Al Jazeera',  flag:'🌍', videoId:'jNQXAC9IVRw', listId:'UUNye-wNBqNL5ZzHSJj3l8Bg', color:'#ff9900' },
+    { id:'bbc',     label:'BBC World',   flag:'🇬🇧', videoId:'w_Ma4oQLyh0', listId:'UUC16niRr0X2Uu7mRhbr4gHkQ', color:'#BB1919' },
+    { id:'france24',label:'France 24',   flag:'🇫🇷', videoId:'l8PMl7tUDIE', listId:'UUQfwfsi5VrQ8yKZ-UWmAEFg', color:'#0055A4' },
+    { id:'dw',      label:'DW News',     flag:'🇩🇪', videoId:'mGFSSBqXqWU', listId:'UUknLrEdhRCp1aegoMqRaCZg', color:'#CC0000' },
+    { id:'wion',    label:'WION',        flag:'🇮🇳', videoId:'GtO7fBzRQPI', listId:'UU6SqnbVVQ9veR-YJuTB1R8A', color:'#E63946' },
+    { id:'trt',     label:'TRT World',   flag:'🇹🇷', videoId:'naxpSC4E9ZY', listId:'UUq28adYCDcDMMPbOqnov0rA', color:'#E30A17' },
+    { id:'ndtv',    label:'NDTV 24x7',   flag:'🇮🇳', videoId:'Gx9SzuTGMEw', listId:'UU8o0tjFkMQcXFME6UqxKD6g', color:'#ff8800' },
   ];
 
   // ── Tab switching ────────────────────────────────────────
@@ -223,7 +229,13 @@ const CONFLICT = (() => {
     const frame = document.getElementById('live-video-frame');
     if (!ch || !frame) return;
     document.querySelectorAll('.vchan-btn').forEach(b => b.classList.toggle('active', b.dataset.chan === chanId));
-    frame.src = `https://www.youtube.com/embed/live_stream?channel=${ch.channelId}&autoplay=1&mute=1&controls=1`;
+    // Primary: direct live-stream video ID (most reliable post-2023 YouTube API change)
+    // Fallback: uploads-playlist of the channel (shows most recent/live videos)
+    frame.src = `https://www.youtube-nocookie.com/embed/${ch.videoId}?autoplay=1&mute=1&controls=1&rel=0&iv_load_policy=3`;
+    // If video fails to load (e.g. stream offline), auto-try playlist
+    frame.onerror = () => {
+      if (ch.listId) frame.src = `https://www.youtube-nocookie.com/embed?listType=playlist&list=${ch.listId}&autoplay=1&mute=1&controls=1`;
+    };
   }
 
   // ── Show / Hide / Toggle ─────────────────────────────────

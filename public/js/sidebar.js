@@ -173,8 +173,8 @@ const SIDEBAR = (() => {
     }).join('');
   }
 
-  // Auto-refresh news every 3 min, Reddit every 5 min
-  setInterval(loadNews, 180_000);
+  // Auto-refresh: news + Reddit both every 5 min
+  setInterval(loadNews, 300_000);
   setInterval(loadRedditFeed, 300_000);
 
   document.getElementById('refresh-news-btn')?.addEventListener('click', loadNews);

@@ -29,23 +29,77 @@ const cache = {
 };
 const AC_TTL      = 15_000;
 const SAT_TTL     = 300_000;
-const NEWS_TTL    = 180_000;   // 3 min
+const NEWS_TTL    = 300_000;   // 5 min
 const REGION_TTL  = 15_000;
 
-// ─── Aircraft – OpenSky Network (real ADS-B, 15s delay) ──
+// Normalize ADSB.one aircraft record → OpenSky state-vector array
+// OpenSky indices: [icao24,callsign,origin,_,_, lon,lat,alt_m, on_ground,vel_ms,hdg,vr_ms,...]
+const ICAO_COUNTRY = {
+  '38':'France','3C':'Germany','3D':'Germany','40':'UK','43':'UK','44':'UK',
+  '71':'India','72':'India','73':'India','74':'India','75':'India','76':'India',
+  '49':'USA','A0':'USA','A2':'USA','A4':'USA','A6':'USA','A8':'USA','AA':'USA',
+  'AC':'USA','AE':'USA','E4':'Brazil','E8':'Argentina','7C':'Australia',
+  'C0':'Canada','C8':'Canada','E0':'Colombia',
+  '78':'Myanmar','79':'Thailand','7A':'Vietnam','7B':'Philippines',
+  '8A':'Iran','70':'Iraq','738':'Israel','4B':'Turkey','77':'Pakistan',
+  'RA':'Russia','86':'China','87':'China','88':'China','89':'China',
+  'E0':'Saudi Arabia','896':'S.Arabia','F0':'Japan','71':'India',
+  '510':'Ukraine','48':'Russia',
+};
+function icaoToCountry(hex) {
+  const h = (hex||'').toUpperCase();
+  for (const [prefix, country] of Object.entries(ICAO_COUNTRY)) {
+    if (h.startsWith(prefix)) return country;
+  }
+  return '';
+}
+function normalizeADSBOne(ac) {
+  return [
+    ac.hex,                                        // [0] icao24
+    (ac.flight||'').trim(),                        // [1] callsign
+    icaoToCountry(ac.hex),                         // [2] origin_country
+    null, null,                                    // [3] time_pos, [4] last_contact
+    ac.lon,                                        // [5] longitude
+    ac.lat,                                        // [6] latitude
+    ac.alt_baro != null ? ac.alt_baro * 0.3048 : 0, // [7] alt meters (feet→m)
+    ac.on_ground === 1 || ac.on_ground === true,   // [8] on_ground
+    ac.gs != null ? ac.gs * 0.5144 : 0,           // [9] velocity m/s (knots→m/s)
+    ac.track || 0,                                 // [10] heading
+    ac.baro_rate != null ? ac.baro_rate * 0.00508 : 0, // [11] vert_rate m/s (ft/min→m/s)
+  ];
+}
+
+// ─── Aircraft – OpenSky primary, ADSB.one fallback ───────
 app.get('/api/aircraft', async (req, res) => {
   const now = Date.now();
   if (cache.aircraft.data && now - cache.aircraft.ts < AC_TTL)
     return res.json(cache.aircraft.data);
+
+  // Try OpenSky first (real ADS-B, best coverage)
   try {
     const resp = await axios.get('https://opensky-network.org/api/states/all', {
+      timeout: 12_000, headers: { Accept: 'application/json' }
+    });
+    if (resp.data?.states?.length) {
+      cache.aircraft = { data: resp.data, ts: now };
+      return res.json(resp.data);
+    }
+  } catch (_) {}
+
+  // Fallback: ADSB.one (military-inclusive, no auth required)
+  try {
+    const resp2 = await axios.get('https://api.adsb.one/v2/all', {
       timeout: 15_000, headers: { Accept: 'application/json' }
     });
-    cache.aircraft = { data: resp.data, ts: now };
-    res.json(resp.data);
-  } catch (err) {
+    const states = (resp2.data?.ac || [])
+      .filter(ac => ac.lat != null && ac.lon != null)
+      .map(normalizeADSBOne);
+    const result = { states, ts: now, source: 'ADSB.one' };
+    cache.aircraft = { data: result, ts: now };
+    return res.json(result);
+  } catch (err2) {
     if (cache.aircraft.data) return res.json(cache.aircraft.data);
-    res.status(503).json({ error: 'Aircraft feed unavailable', detail: err.message });
+    res.status(503).json({ error: 'Aircraft feed unavailable', detail: err2.message });
   }
 });
 
@@ -302,17 +356,20 @@ app.get('/api/reddit', async (req, res) => {
   res.json(result);
 });
 
-// ─── RSS Live News (BBC, France24, DW, Guardian) ─────────
+// ─── RSS Live News (Reuters, BBC, NYT, The Hindu, AJ …) ──
 const rssCache = { data: null, ts: 0 };
-const RSS_TTL  = 60_000; // 1 min cache
 
 const RSS_FEEDS = [
-  { name: 'BBC World',   url: 'http://feeds.bbci.co.uk/news/world/rss.xml' },
-  { name: 'Reuters',     url: 'https://feeds.reuters.com/reuters/topNews' },
-  { name: 'France24',    url: 'https://www.france24.com/en/rss' },
-  { name: 'DW',          url: 'https://rss.dw.com/rdf/rss-en-all' },
-  { name: 'Guardian',    url: 'https://www.theguardian.com/world/rss' },
-  { name: 'Al Jazeera',  url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+  { name: 'Reuters',       url: 'https://feeds.reuters.com/reuters/worldNews' },
+  { name: 'BBC World',     url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
+  { name: 'NYT World',     url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml' },
+  { name: 'The Hindu',     url: 'https://www.thehindu.com/news/international/feeder/default.rss' },
+  { name: 'Al Jazeera',    url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+  { name: 'France 24',     url: 'https://www.france24.com/en/rss' },
+  { name: 'DW',            url: 'https://rss.dw.com/rdf/rss-en-all' },
+  { name: 'Guardian',      url: 'https://www.theguardian.com/world/rss' },
+  { name: 'Times of India',url: 'https://timesofindia.indiatimes.com/rssfeeds/-2128838597.cms' },
+  { name: 'AP News',       url: 'https://feeds.apnews.com/rss/apf-intlnews' },
 ];
 
 function parseRSS(xml, sourceName) {

@@ -64,6 +64,9 @@
         <button class="lbtn"        data-layer="oil"       title="Oil Chokepoints · Tanker Routes · Houthi Zones">🛢 OIL</button>
         <button class="lbtn conflict-btn" data-layer="conflict" title="Global Unrest Tracker">🌍 UNREST</button>
         <button class="lbtn"        data-layer="arcs"      title="Missile Strike Arc Trails">🚀 STRIKES</button>
+        <button class="lbtn"        data-layer="internet"  title="Internet Speed Choropleth — Ookla 2024">🌐 NET</button>
+        <button class="lbtn"        data-layer="tourism"   title="Travel Advisory Levels — US State Dept">✈ TRAVEL</button>
+        <button class="lbtn"        data-layer="embassy"   title="Indian Embassies in Conflict Zones — MEA">🇮🇳 EMBASSY</button>
       </div>
     </div>
 
@@ -188,6 +191,9 @@
 
       <!-- Oil impact floating panel (shown when OIL layer active) -->
       <div id="oil-impact-panel" style="display:none"></div>
+
+      <!-- Heatmap legend panel (shown when any heatmap layer active) -->
+      <div id="heatmap-legend" style="display:none"></div>
 
       <div id="coord-hud">
         <span id="hud-lat">LAT  --°</span>
@@ -789,6 +795,7 @@
   <script src="js/sidebar.js"></script>
   <script src="js/conflict.js"></script>
   <script src="js/polls.js"></script>
+  <script src="js/heatmap.js"></script>
   <script src="js/app.js"></script>
 
   <script>
