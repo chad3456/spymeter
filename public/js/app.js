@@ -47,33 +47,69 @@ const APP = (() => {
     connect();
   }
 
-  /* ── Layer controls ───────────────────────────────────── */
+  /* ── Layer controls (debounced 120ms to prevent lag) ─── */
+  let layerDebounceTimers = {};
   function initLayerControls() {
     document.querySelectorAll('.lbtn').forEach(btn => {
       btn.addEventListener('click', () => {
         const layer = btn.dataset.layer;
         const on    = btn.classList.toggle('active');
-        switch (layer) {
-          case 'aircraft':   AIRCRAFT.setEnabled(on); break;
-          case 'satellites': SATELLITES.setEnabled(on); break;
-          case 'military':   MILITARY.setEnabled('military', on); break;
-          case 'nuclear':    MILITARY.setEnabled('nuclear', on); SIDEBAR.addFeedItem('military', on ? '☢ Nuclear overlay ON' : 'Nuclear overlay OFF'); break;
-          case 'gpsjam':     MILITARY.setEnabled('gpsjam', on); break;
-          case 'fires':      FIRES.setEnabled(on); break;
-          case 'swarm':      SWARM.setEnabled(on); break;
-          case 'airspace':   MILITARY.setEnabled('gpsjam', on); break;
-          case 'conflict':
-            btn.classList.toggle('active', true);
-            CONFLICT.toggle();
-            break;
-          case 'arcs':
-            arcsEnabled = on;
-            if (globe) { on ? applyGlobeArcs() : clearGlobeArcs(); }
-            SIDEBAR.addFeedItem('military', on ? '🚀 Strike arc trails ON — switch to GLOBE view' : 'Strike arcs OFF');
-            break;
-        }
+
+        // Debounce: avoid rapid re-renders
+        clearTimeout(layerDebounceTimers[layer]);
+        layerDebounceTimers[layer] = setTimeout(() => {
+          switch (layer) {
+            case 'aircraft':   AIRCRAFT.setEnabled(on); break;
+            case 'satellites': SATELLITES.setEnabled(on); break;
+            case 'military':   MILITARY.setEnabled('military', on); break;
+            case 'nuclear':
+              MILITARY.setEnabled('nuclear', on);
+              SIDEBAR.addFeedItem('military', on ? '☢ Nuclear sites ON — India, Pakistan, Iran now visible' : 'Nuclear overlay OFF');
+              break;
+            case 'gpsjam':     MILITARY.setEnabled('gpsjam', on); break;
+            case 'fires':      FIRES.setEnabled(on); break;
+            case 'swarm':      SWARM.setEnabled(on); break;
+            case 'weapons':
+              WEAPONS.setEnabled(on);
+              const wCard = document.getElementById('weapons-filter-card');
+              if (wCard) wCard.style.display = on ? 'block' : 'none';
+              if (on) initWeaponsFilterUI();
+              SIDEBAR.addFeedItem('military', on ? '⚔ Weapons layer ON — Air Def/ATGM/ICBM/Artillery' : 'Weapons layer OFF');
+              break;
+            case 'conflict':
+              btn.classList.toggle('active', true);
+              CONFLICT.toggle();
+              break;
+            case 'arcs':
+              arcsEnabled = on;
+              if (globe) { on ? applyGlobeArcs() : clearGlobeArcs(); }
+              SIDEBAR.addFeedItem('military', on ? '🚀 Strike arcs ON — switch to GLOBE view' : 'Strike arcs OFF');
+              break;
+          }
+        }, 120);
       });
     });
+  }
+
+  /* ── Weapons filter UI init ───────────────────────────── */
+  function initWeaponsFilterUI() {
+    const bar = document.getElementById('weapons-filter-bar');
+    if (!bar || bar.children.length > 0) return;
+    WEAPONS.FILTER_TYPES.forEach(ft => {
+      const btn = document.createElement('button');
+      btn.className = 'wfbtn' + (ft.id === 'all' ? ' active' : '');
+      btn.dataset.wf = ft.id;
+      btn.textContent = ft.emoji + ' ' + ft.label;
+      btn.onclick = () => {
+        WEAPONS.setFilter(ft.id);
+        const total = ft.id === 'all' ? WEAPONS.getSystems().length : WEAPONS.getSystems().filter(s => s.type === ft.id).length;
+        const stat = document.getElementById('weapons-stat');
+        if (stat) stat.textContent = `Showing ${total} systems`;
+      };
+      bar.appendChild(btn);
+    });
+    const stat = document.getElementById('weapons-stat');
+    if (stat) stat.textContent = `Showing ${WEAPONS.getSystems().length} systems`;
   }
 
   /* ── View switcher ────────────────────────────────────── */
@@ -293,6 +329,26 @@ const APP = (() => {
 
   function resetView() { map?.flyTo([20,0],3,{duration:1.5}); if (globe) globe.pointOfView({lat:20,lng:0,altitude:2.5},1500); }
 
+  /* ── Mobile panel helper ──────────────────────────────── */
+  function showMobilePanel(panel) {
+    if (panel === 'left') {
+      document.getElementById('left-panel')?.classList.toggle('mob-open');
+    } else {
+      // Switch right panel tab
+      const tabMap = { news:'news', reddit:'reddit', sources:'sources', intel:'intel' };
+      const rptab = tabMap[panel];
+      if (rptab) {
+        document.querySelectorAll('.rptab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.rp-tab-body').forEach(b => b.style.display = 'none');
+        const btn  = document.querySelector(`.rptab[data-rptab="${rptab}"]`);
+        const body = document.getElementById(`rptab-${rptab}`);
+        if (btn)  btn.classList.add('active');
+        if (body) body.style.display = 'block';
+        document.getElementById('right-panel')?.classList.add('mob-open');
+      }
+    }
+  }
+
   /* ── Boot ─────────────────────────────────────────────── */
   function boot() {
     map = initMap();
@@ -303,6 +359,7 @@ const APP = (() => {
     FIRES.init(map);
     AIRCRAFT.init(map);
     SATELLITES.init(map);
+    WEAPONS.init(map);
     SWARM.init(map);
     initLayerControls();
     initViewModes();
@@ -311,14 +368,20 @@ const APP = (() => {
     document.getElementById('crt-btn')?.addEventListener('click', toggleCRT);
     document.getElementById('reset-btn')?.addEventListener('click', resetView);
 
+    // Close mobile panels when tapping map
+    document.getElementById('map')?.addEventListener('click', () => {
+      document.getElementById('left-panel')?.classList.remove('mob-open');
+      document.getElementById('right-panel')?.classList.remove('mob-open');
+    });
+
     initWebSocket();
 
-    SIDEBAR.addFeedItem('satellite', '🌍 SPYMETER initialized — OpenSky ADS-B + CelesTrak TLE active');
-    SIDEBAR.addFeedItem('aircraft',  'Fetching live ADS-B from OpenSky Network (15s cadence)…');
-    SIDEBAR.addFeedItem('military',  `${MILITARY.getBases().length} military bases loaded | SIPRI nuclear db ready`);
-    SIDEBAR.addFeedItem('satellite', 'GDELT news feed active — 3-minute refresh cycle');
+    SIDEBAR.addFeedItem('satellite', '🌍 SPYMETER online — OpenSky ADS-B + CelesTrak TLE active');
+    SIDEBAR.addFeedItem('aircraft',  '✈ Fetching live ADS-B from OpenSky Network…');
+    SIDEBAR.addFeedItem('military',  `⬡ ${MILITARY.getBases().length} military bases loaded | India nuclear sites visible`);
+    SIDEBAR.addFeedItem('satellite', '⚔ Weapons layer ready — toggle ⚔ WEAPONS in topbar');
   }
 
   document.addEventListener('DOMContentLoaded', boot);
-  return { flyTo, resetView };
+  return { flyTo, resetView, showMobilePanel };
 })();

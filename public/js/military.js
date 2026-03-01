@@ -84,6 +84,20 @@ const MILITARY = (() => {
     { name:'Natanz Nuclear Site',       country:'Iran', type:'ground', lat:33.724, lng:51.727,  notes:'Uranium enrichment, underground' },
     { name:'Fordow Enrichment Plant',   country:'Iran', type:'ground', lat:34.887, lng:50.993,  notes:'Underground enrichment, Qom' },
     { name:'Shahid Nojeh Air Base',     country:'Iran', type:'air',    lat:35.211, lng:48.654,  notes:'IRGC, F-14 Tomcat remaining' },
+    // ── India ──
+    { name:'INS Karwar (Seabird)',      country:'India', type:'naval', lat:14.804, lng:74.123,  notes:'India largest naval base — under expansion' },
+    { name:'Ambala Air Force Station',  country:'India', type:'air',   lat:30.370, lng:76.817,  notes:'IAF Rafale home base — 17 Golden Arrows Sqn' },
+    { name:'Leh Air Base',             country:'India', type:'air',   lat:34.135, lng:77.546,  notes:'Highest operational airbase in Asia — Ladakh (14,000ft)' },
+    { name:'Hindon Air Force Station', country:'India', type:'air',   lat:28.698, lng:77.473,  notes:'Largest IAF base, near Delhi — Su-30MKI' },
+    { name:'INS Visakhapatnam',        country:'India', type:'naval', lat:17.693, lng:83.314,  notes:'Eastern Naval Command HQ — submarine & P-8I base' },
+    { name:'Pathankot Air Force Station',country:'India',type:'air',  lat:32.233, lng:75.634,  notes:'IAF forward base, Punjab — Mirage 2000' },
+    // ── Saudi Arabia ──
+    { name:'Prince Sultan Air Base',   country:'Saudi Arabia', type:'air', lat:24.062, lng:47.580, notes:'USAF forward deployed, key Gulf hub' },
+    { name:'King Khalid Military City',country:'Saudi Arabia', type:'ground',lat:27.895, lng:45.527, notes:'Large military complex, NE Saudi Arabia' },
+    // ── Pakistan ──
+    { name:'Minhas Air Base',          country:'Pakistan', type:'air',   lat:33.869, lng:72.400, notes:'PAF No.2 FW — F-16, JF-17 Thunder' },
+    { name:'Masroor Air Base',         country:'Pakistan', type:'air',   lat:24.893, lng:66.938, notes:'PAF southern base, Karachi — F-7PG' },
+    { name:'PNS Mehran',              country:'Pakistan', type:'naval', lat:24.923, lng:67.141, notes:'Pakistan Navy HQ Karachi — P-3C Orion' },
   ];
 
   /* ── Nuclear sites (public data from FAS/SIPRI/news) ── */
@@ -105,6 +119,17 @@ const MILITARY = (() => {
     { name:'Yongbyon Complex',         country:'North Korea',lat:39.795,lng:125.742,type:'production',warheads:0,   notes:'NK plutonium + enrichment' },
     { name:'Baotou Nuclear Plant',     country:'China',  lat:40.616,  lng:110.017,  type:'production',warheads:0,   notes:'China fuel fabrication' },
     { name:'Jiuquan (PLARF ICBM)',     country:'China',  lat:40.958,  lng:100.291,  type:'test',      warheads:0,   notes:'China ICBM test range' },
+    // ── India nuclear sites (public OSINT / SIPRI / BARC) ──
+    { name:'BARC Trombay',            country:'India',  lat:19.017,  lng:73.017,   type:'research',  warheads:0,   notes:'Bhabha Atomic Research Centre — India primary nuclear weapons design lab' },
+    { name:'Pokhran Test Range',      country:'India',  lat:27.067,  lng:71.437,   type:'test',      warheads:0,   notes:'Site of Pokhran-I (1974 Smiling Buddha) and Pokhran-II (1998 Shakti) nuclear tests' },
+    { name:'Tarapur Atomic Power',    country:'India',  lat:19.833,  lng:72.649,   type:'production',warheads:0,   notes:'India first nuclear power plant — operational, generates fissile material' },
+    { name:'IGCAR Kalpakkam',         country:'India',  lat:12.557,  lng:80.174,   type:'research',  warheads:0,   notes:'Indira Gandhi Centre for Atomic Research — fast breeder reactor program' },
+    { name:'NFC Hyderabad',           country:'India',  lat:17.407,  lng:78.396,   type:'production',warheads:0,   notes:'Nuclear Fuel Complex — HEU/LEU fuel fabrication for weapons and reactors' },
+    { name:'DRDO DRDL Hyderabad',     country:'India',  lat:17.452,  lng:78.534,   type:'research',  warheads:0,   notes:'Defence R&D Lab — Agni ICBM/MRBM missile design and test' },
+    // ── Pakistan ──
+    { name:'Kahuta Research Labs',    country:'Pakistan',lat:33.634, lng:73.387,   type:'production',warheads:0,   notes:'Pakistan HEU enrichment (PAEC) — Khan Research Laboratories' },
+    { name:'Khushab Reactor Complex', country:'Pakistan',lat:32.076, lng:72.200,   type:'production',warheads:0,   notes:'Pakistan plutonium production reactors (4 reactors)' },
+    { name:'Chasma Nuclear Complex',  country:'Pakistan',lat:32.390, lng:71.460,   type:'production',warheads:0,   notes:'Civilian nuclear power + weapons-grade material speculation' },
   ];
 
   /* ── Known GPS jamming zones (public/news-reported) ─── */
@@ -173,6 +198,7 @@ const MILITARY = (() => {
       'USA':'#3399ff','Russia':'#ff3333','China':'#ffaa00','United Kingdom':'#cc44ff',
       'France':'#4488ff','Israel':'#8888ff','NATO':'#00d4ff','North Korea':'#aa0033',
       'Iran':'#aa4400','Pakistan':'#44aa00','Kazakhstan':'#888800',
+      'India':'#ff8844','Saudi Arabia':'#aacc00','Germany':'#44dd88',
     };
     return colors[country] || '#888888';
   }

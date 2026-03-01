@@ -45,39 +45,87 @@ const SIDEBAR = (() => {
     if (feed) feed.innerHTML = '';
   });
 
+  // Helper: build a Google News search URL so static fallbacks link to real articles
+  function newsSearchUrl(title) {
+    return `https://news.google.com/search?q=${encodeURIComponent(title)}&hl=en-US&gl=US&ceid=US:en`;
+  }
+
   // ── Curated fallback intel (always shown if API empty) ──
   const STATIC_INTEL = [
-    { title:'Russia launches Shahed-136 drone swarm targeting Kyiv energy grid', url:'#', source:'UA Defense Intelligence', date:'', tone:'-8.2', country:'Ukraine' },
-    { title:'Israel IDF conducts precision strikes on Iranian proxy sites in Syria', url:'#', source:'IDF Spokesperson', date:'', tone:'-6.5', country:'Israel' },
-    { title:'China PLA Navy carrier group exits South China Sea via Luzon Strait', url:'#', source:'USNI News', date:'', tone:'-3.1', country:'China' },
-    { title:'North Korea ICBM engine test detected at Sohae launch facility via SAR', url:'#', source:'38 North', date:'', tone:'-5.0', country:'North Korea' },
-    { title:'NATO activates VJTF rapid reaction force for Baltic region rotation', url:'#', source:'NATO HQ', date:'', tone:'-2.8', country:'NATO' },
-    { title:'Pakistan conducts Fatah-II MLRS test, range 400km confirmed', url:'#', source:'ISPR', date:'', tone:'-4.0', country:'Pakistan' },
-    { title:'EUROCONTROL NOTAM: GPS spoofing degradation Baltic, Eastern Med active', url:'#', source:'EUROCONTROL', date:'', tone:'-3.5', country:'Europe' },
-    { title:'Sudan conflict: RSF advance on Khartoum, humanitarian corridor blocked', url:'#', source:'UN OCHA', date:'', tone:'-9.1', country:'Sudan' },
-    { title:'Iran enriches uranium to 84% at Fordow — IAEA inspectors denied access', url:'#', source:'IAEA', date:'', tone:'-7.2', country:'Iran' },
-    { title:'Taiwan Strait: PLA J-20 and Su-35 median line crossing, 6 aircraft', url:'#', source:'ROC MND', date:'', tone:'-5.5', country:'Taiwan' },
-    { title:'Myanmar junta airstrikes on resistance strongholds, 38 casualties', url:'#', source:'Irrawaddy', date:'', tone:'-8.8', country:'Myanmar' },
-    { title:'Houthi anti-ship missiles target Red Sea commercial shipping — UKMTO', url:'#', source:'UKMTO', date:'', tone:'-6.0', country:'Yemen' },
-    { title:'US THAAD battery deployed to South Korea following NK escalation', url:'#', source:'USFK', date:'', tone:'-4.2', country:'South Korea' },
-    { title:'Wagner Group mercenaries redeploy from Mali to Libya border region', url:'#', source:'ACLED', date:'', tone:'-5.1', country:'Africa' },
-    { title:'Magnitude 6.8 earthquake strikes Turkey-Syria border, casualties reported', url:'#', source:'USGS', date:'', tone:'-7.0', country:'Turkey' },
-  ];
+    { title:'Russia launches Shahed-136 drone swarm targeting Kyiv energy grid', source:'UA Defense Intelligence', date:'', tone:'-8.2', country:'Ukraine' },
+    { title:'Israel IDF conducts precision strikes on Iranian proxy sites in Syria', source:'IDF Spokesperson', date:'', tone:'-6.5', country:'Israel' },
+    { title:'China PLA Navy carrier group exits South China Sea via Luzon Strait', source:'USNI News', date:'', tone:'-3.1', country:'China' },
+    { title:'North Korea ICBM engine test detected at Sohae launch facility via SAR', source:'38 North', date:'', tone:'-5.0', country:'North Korea' },
+    { title:'NATO activates VJTF rapid reaction force for Baltic region rotation', source:'NATO HQ', date:'', tone:'-2.8', country:'NATO' },
+    { title:'Pakistan Fatah-II MLRS test confirmed 400km range', source:'ISPR', date:'', tone:'-4.0', country:'Pakistan' },
+    { title:'EUROCONTROL NOTAM: GPS spoofing Baltic, Eastern Mediterranean active', source:'EUROCONTROL', date:'', tone:'-3.5', country:'Europe' },
+    { title:'Sudan RSF advance humanitarian corridor blocked UN OCHA', source:'UN OCHA', date:'', tone:'-9.1', country:'Sudan' },
+    { title:'Iran uranium enrichment Fordow IAEA inspectors', source:'IAEA', date:'', tone:'-7.2', country:'Iran' },
+    { title:'Taiwan Strait PLA J-20 median line crossing military exercises', source:'ROC MND', date:'', tone:'-5.5', country:'Taiwan' },
+    { title:'Myanmar junta airstrikes resistance strongholds casualties', source:'Irrawaddy', date:'', tone:'-8.8', country:'Myanmar' },
+    { title:'Houthi anti-ship missiles Red Sea commercial shipping UKMTO', source:'UKMTO', date:'', tone:'-6.0', country:'Yemen' },
+    { title:'US THAAD battery South Korea North Korea escalation', source:'USFK', date:'', tone:'-4.2', country:'South Korea' },
+    { title:'Wagner mercenaries Mali Libya border region ACLED', source:'ACLED', date:'', tone:'-5.1', country:'Africa' },
+    { title:'India Agni-V ICBM MIRV test successful DRDO', source:'DRDO', date:'', tone:'-3.0', country:'India' },
+  ].map(item => ({ ...item, url: newsSearchUrl(item.title) }));
+
+  // Parse GDELT date and check freshness (discard if > 7 days old)
+  function isFreshArticle(dateStr) {
+    if (!dateStr || dateStr.length < 8) return true; // keep if no date
+    try {
+      const y  = dateStr.slice(0, 4);
+      const mo = dateStr.slice(4, 6);
+      const d  = dateStr.slice(6, 8);
+      const h  = dateStr.slice(9, 11) || '00';
+      const mn = dateStr.slice(11, 13) || '00';
+      const dt = new Date(`${y}-${mo}-${d}T${h}:${mn}:00Z`);
+      return Date.now() - dt.getTime() < 7 * 24 * 3600 * 1000; // 7 days
+    } catch (_) { return true; }
+  }
 
   async function loadNews() {
     const feed = document.getElementById('news-feed');
     if (!feed) return;
-    feed.innerHTML = '<div class="news-loading">⟳ Fetching live intel…</div>';
+    feed.innerHTML = '<div class="news-loading">⟳ Fetching live intel from GDELT…</div>';
 
     try {
       const resp = await window.fetch('/api/news');
       const data = resp.ok ? await resp.json() : { articles: [] };
-      const live  = (data.articles || []).filter(a => a.title && a.title.length > 10);
-      // Merge live + static, live on top
+      const live  = (data.articles || []).filter(a => a.title && a.title.length > 10 && isFreshArticle(a.date));
       const merged = [...live, ...STATIC_INTEL].slice(0, 28);
-      renderNews(merged);
+      renderNews(merged, live.length);
     } catch (_) {
-      renderNews(STATIC_INTEL);
+      renderNews(STATIC_INTEL, 0);
+    }
+  }
+
+  // ── Reddit war feed ─────────────────────────────────── */
+  async function loadRedditFeed() {
+    const el = document.getElementById('reddit-feed');
+    if (!el) return;
+    el.innerHTML = '<div class="news-loading">⟳ Fetching Reddit…</div>';
+    try {
+      const resp = await window.fetch('/api/reddit');
+      const data = resp.ok ? await resp.json() : { posts: [] };
+      const posts = data.posts || [];
+      if (!posts.length) { el.innerHTML = '<div class="news-loading">No posts available</div>'; return; }
+      el.innerHTML = posts.slice(0, 20).map(p => {
+        const hrs = Math.round((Date.now() / 1000 - p.time) / 3600);
+        const timeStr = hrs < 1 ? 'just now' : hrs < 24 ? `${hrs}h ago` : `${Math.round(hrs/24)}d ago`;
+        const score = p.score >= 1000 ? (p.score/1000).toFixed(1) + 'k' : p.score;
+        return `
+          <a class="news-item reddit-item" href="${p.url}" target="_blank" rel="noopener noreferrer">
+            <div class="news-title">${p.title}</div>
+            <div class="news-meta">
+              <span class="reddit-sub">r/${p.sub}</span>
+              <span class="news-date">${timeStr}</span>
+              <span class="reddit-score">▲ ${score}</span>
+              <span class="reddit-cmts">💬 ${p.comments}</span>
+            </div>
+          </a>`;
+      }).join('');
+    } catch (_) {
+      el.innerHTML = '<div class="news-loading">Reddit unavailable</div>';
     }
   }
 
@@ -101,7 +149,7 @@ const SIDEBAR = (() => {
     } catch (_) { return ''; }
   }
 
-  function renderNews(articles) {
+  function renderNews(articles, liveCount = 0) {
     const feed = document.getElementById('news-feed');
     if (!feed) return;
     if (!articles.length) {
@@ -125,10 +173,12 @@ const SIDEBAR = (() => {
     }).join('');
   }
 
-  // Auto-refresh news every 5 min
-  setInterval(loadNews, 300_000);
+  // Auto-refresh news every 3 min, Reddit every 5 min
+  setInterval(loadNews, 180_000);
+  setInterval(loadRedditFeed, 300_000);
 
   document.getElementById('refresh-news-btn')?.addEventListener('click', loadNews);
+  document.getElementById('refresh-reddit-btn')?.addEventListener('click', loadRedditFeed);
 
   // ── Aircraft stats ─────────────────────────────────── */
   let acCountryData = {};
@@ -338,13 +388,13 @@ const SIDEBAR = (() => {
     populateIntel();
     populateWarheads();
     initSatTabs();
-    // Load news on boot
-    setTimeout(loadNews, 2000);
+    setTimeout(loadNews, 1500);
+    setTimeout(loadRedditFeed, 3000);
   }
 
   return {
     addFeedItem, updateAircraftStats, populateSatList, highlightSat,
     populateWarheads, populateGPSJam, buildCountryFilter, toggleCountry,
-    loadNews, init
+    loadNews, loadRedditFeed, init
   };
 })();

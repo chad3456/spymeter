@@ -265,6 +265,42 @@ app.get('/api/unrest-news', async (req, res) => {
   }
 });
 
+// ─── Reddit war/news feed (no API key needed) ────────────
+const redditCache = { data: null, ts: 0 };
+app.get('/api/reddit', async (req, res) => {
+  const now = Date.now();
+  if (redditCache.data && now - redditCache.ts < 120_000) return res.json(redditCache.data);
+  const subs = ['worldnews', 'ukraine', 'geopolitics', 'CombatFootage', 'IsraelPalestine'];
+  const posts = [];
+  for (const sub of subs) {
+    try {
+      const r = await axios.get(`https://www.reddit.com/r/${sub}/hot.json?limit=8`, {
+        headers: { 'User-Agent': 'OSINT-Tracker/1.0 (open-source research tool)' },
+        timeout: 6_000
+      });
+      const children = r.data?.data?.children || [];
+      posts.push(...children
+        .filter(p => !p.data.stickied && p.data.score > 50)
+        .map(p => ({
+          title:    p.data.title,
+          url:      p.data.url?.startsWith('http') ? p.data.url : `https://reddit.com${p.data.permalink}`,
+          permalink:`https://reddit.com${p.data.permalink}`,
+          sub:      p.data.subreddit,
+          score:    p.data.score,
+          comments: p.data.num_comments,
+          time:     p.data.created_utc,
+          flair:    p.data.link_flair_text || '',
+          thumbnail:p.data.thumbnail || '',
+        }))
+      );
+    } catch (_) {}
+  }
+  posts.sort((a, b) => b.score - a.score);
+  const result = { posts: posts.slice(0, 25), ts: now };
+  redditCache.data = result; redditCache.ts = now;
+  res.json(result);
+});
+
 // ─── WebSocket ────────────────────────────────────────────
 const clients = new Set();
 wss.on('connection', ws => {
