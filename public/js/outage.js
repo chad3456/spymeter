@@ -56,10 +56,11 @@ const OUTAGE = (() => {
         return res.json();
       })
       .then((data) => {
-        // Accept either a bare array or { outages: [...] }
+        // Accept bare array, { outages: [...] }, or { regions: [...] }
         if (Array.isArray(data)) return data;
-        if (data && Array.isArray(data.outages)) return data.outages;
-        throw new Error('Unexpected payload from /api/outage — expected Array or { outages: [...] }');
+        if (data && Array.isArray(data.outages))  return data.outages;
+        if (data && Array.isArray(data.regions))  return data.regions;
+        throw new Error('Unexpected payload from /api/outage — expected Array or { outages/regions: [...] }');
       });
   }
 

@@ -1509,3 +1509,55 @@ body.crt-active #ws-status.connected { color: #00ff41; }
   font-family: var(--font-mono);
   padding: 3px 7px;
 }
+
+/* ── Iran-Israel 2026 War tab ────────────────────────────── */
+.war2026-status-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 6px 0;
+}
+.wsb-cell {
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 5px 4px;
+  text-align: center;
+  background: rgba(0,0,0,0.3);
+}
+.wsb-val { font-family: var(--font-ui); font-size: 14px; font-weight: 700; line-height: 1; }
+.wsb-lbl { font-size: 6.5px; color: var(--text-dim); margin-top: 2px; letter-spacing: 0.5px; text-transform: uppercase; }
+
+.front-hot { border-color: rgba(255,34,0,0.4) !important; box-shadow: 0 0 6px rgba(255,34,0,0.25); }
+
+.iran2026-map-btns { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 6px; }
+.im-btn {
+  font-size: 8.5px;
+  padding: 2px 7px;
+  background: rgba(255,68,0,0.12);
+  border: 1px solid rgba(255,68,0,0.35);
+  color: #ff9900;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+}
+.im-btn:hover { background: rgba(255,68,0,0.25); color: #ffcc00; }
+
+.conflict-source-note {
+  font-size: 8px;
+  color: var(--text-dim);
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 3px;
+}
+.badge-static-sm {
+  display: inline-block;
+  font-size: 6.5px;
+  padding: 1px 3px;
+  background: rgba(100,100,100,0.2);
+  border: 1px solid rgba(100,100,100,0.3);
+  color: #888;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+}

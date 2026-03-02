@@ -666,11 +666,12 @@
 
     <div class="conflict-header">
       <div class="ctab-bar">
-        <button class="ctab active" data-ctab="iran"    onclick="CONFLICT.switchTab('iran')">🎯 IRN/ISR</button>
-        <button class="ctab"        data-ctab="ukraine" onclick="CONFLICT.switchTab('ukraine')">🇺🇦 UKR/RUS</button>
-        <button class="ctab"        data-ctab="global"  onclick="CONFLICT.switchTab('global')">🌍 GLOBAL</button>
-        <button class="ctab"        data-ctab="video"       onclick="CONFLICT.switchTab('video')">📺 LIVE TV</button>
-        <button class="ctab"        data-ctab="simulation"  onclick="CONFLICT.switchTab('simulation')">💥 SIMUL</button>
+        <button class="ctab active" data-ctab="iran"      onclick="CONFLICT.switchTab('iran')">🎯 IRN/ISR</button>
+        <button class="ctab"        data-ctab="iran2026"   onclick="CONFLICT.switchTab('iran2026')">🔥 IRN/ISR 2026</button>
+        <button class="ctab"        data-ctab="ukraine"    onclick="CONFLICT.switchTab('ukraine')">🇺🇦 UKR/RUS</button>
+        <button class="ctab"        data-ctab="global"     onclick="CONFLICT.switchTab('global')">🌍 GLOBAL</button>
+        <button class="ctab"        data-ctab="video"      onclick="CONFLICT.switchTab('video')">📺 LIVE TV</button>
+        <button class="ctab"        data-ctab="simulation" onclick="CONFLICT.switchTab('simulation')">💥 SIMUL</button>
       </div>
       <div class="conflict-title-sm">GLOBAL UNREST TRACKER <span class="badge-live">● MONITORING</span></div>
       <button class="conflict-close" onclick="CONFLICT.hide()">✕ CLOSE</button>
@@ -703,6 +704,81 @@
           <div class="front-card" onclick="APP.flyTo(31.5,34.5,9)"><div class="front-flag">🇵🇸</div><div class="front-name">GAZA</div><div class="front-status" style="color:#ff3333">ACTIVE WAR</div><div class="front-detail">IDF ground + Hamas rockets</div></div>
           <div class="front-card" onclick="APP.flyTo(15.3,44.2,6)"><div class="front-flag">🇾🇪</div><div class="front-name">HOUTHI</div><div class="front-status" style="color:#ff9900">PROXY</div><div class="front-detail">150+ Red Sea attacks</div></div>
           <div class="front-card" onclick="APP.flyTo(33.3,44.4,6)"><div class="front-flag">🇮🇶</div><div class="front-name">IRAQ PMF</div><div class="front-status" style="color:#ffaa00">PROXY</div><div class="front-detail">Iran-backed drone strikes</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Iran vs Israel 2026 — DEDICATED WAR TAB -->
+    <div class="ctab-body" id="ctab-iran2026" style="display:none">
+      <div class="conflict-col">
+        <div class="conflict-section-hdr" style="color:#ff4400">
+          🔥 IRAN vs ISRAEL — LIVE WAR 2026
+          <span class="badge-live" style="background:#ff4400;margin-left:4px">● ONGOING</span>
+          <button class="mini-btn" id="iran2026-refresh" style="margin-left:auto">↻</button>
+        </div>
+        <!-- War status bar -->
+        <div class="war2026-status-bar">
+          <div class="wsb-cell" style="border-color:#ff4400">
+            <div class="wsb-val" style="color:#ff4400">127</div>
+            <div class="wsb-lbl">OIL $/bbl</div>
+          </div>
+          <div class="wsb-cell" style="border-color:#ff6600">
+            <div class="wsb-val" style="color:#ff6600">DAY <span id="iran2026-day">?</span></div>
+            <div class="wsb-lbl">OF CONFLICT</div>
+          </div>
+          <div class="wsb-cell" style="border-color:#ffaa00">
+            <div class="wsb-val" style="color:#ffaa00">S3</div>
+            <div class="wsb-lbl">ESCALATION</div>
+          </div>
+          <div class="wsb-cell" style="border-color:#ff2200">
+            <div class="wsb-val" style="color:#ff2200">3</div>
+            <div class="wsb-lbl">FRONTS ACTIVE</div>
+          </div>
+        </div>
+        <!-- Active fronts 2026 -->
+        <div class="fronts-grid" style="margin:6px 0">
+          <div class="front-card front-hot" onclick="APP.flyTo(31.8,35.2,7)"><div class="front-flag">🇮🇱</div><div class="front-name">HAIFA</div><div class="front-status" style="color:#ff2200">UNDER FIRE</div><div class="front-detail">Ballistic strikes Feb 14+</div></div>
+          <div class="front-card front-hot" onclick="APP.flyTo(32.4,53.7,5)"><div class="front-flag">🇮🇷</div><div class="front-name">ISFAHAN</div><div class="front-status" style="color:#ff6600">IAF STRUCK</div><div class="front-detail">IRGC command destroyed</div></div>
+          <div class="front-card" onclick="APP.flyTo(26.3,56.4,6)"><div class="front-flag">🌊</div><div class="front-name">HORMUZ</div><div class="front-status" style="color:#ff4400">MINED</div><div class="front-detail">Iran blocks shipping</div></div>
+          <div class="front-card" onclick="APP.flyTo(33.5,35.5,7)"><div class="front-flag">🇱🇧</div><div class="front-name">BEIRUT</div><div class="front-status" style="color:#ff9900">HEZBOLLAH</div><div class="front-detail">2,000+ rockets north</div></div>
+          <div class="front-card" onclick="APP.flyTo(15.3,44.2,6)"><div class="front-flag">🇾🇪</div><div class="front-name">HOUTHIS</div><div class="front-status" style="color:#ff9900">RED SEA</div><div class="front-detail">Drone attacks Israel</div></div>
+          <div class="front-card" onclick="APP.flyTo(31.5,34.5,9)"><div class="front-flag">🇵🇸</div><div class="front-name">GAZA</div><div class="front-status" style="color:#ff6600">SIEGE</div><div class="front-detail">Ongoing IDF operations</div></div>
+        </div>
+        <!-- Map buttons for key sites -->
+        <div class="iran2026-map-btns">
+          <button class="im-btn" onclick="APP.flyTo(35.7,51.4,7)">📍 Tehran</button>
+          <button class="im-btn" onclick="APP.flyTo(31.8,35.2,8)">📍 Jerusalem</button>
+          <button class="im-btn" onclick="APP.flyTo(32.8,34.99,9)">📍 Haifa</button>
+          <button class="im-btn" onclick="APP.flyTo(32.4,53.7,7)">📍 Isfahan</button>
+          <button class="im-btn" onclick="APP.flyTo(26.3,56.4,7)">📍 Hormuz</button>
+          <button class="im-btn" onclick="APP.flyTo(33.5,35.5,8)">📍 Beirut</button>
+        </div>
+        <!-- Live GDELT news -->
+        <div class="conflict-section-hdr" style="margin-top:6px">
+          📰 LIVE INTEL <span class="badge-live">● GDELT 2026</span>
+        </div>
+        <div id="iran2026-news" class="conflict-scroll" style="max-height:220px">
+          <div class="conflict-loading">⟳ Fetching live updates…</div>
+        </div>
+      </div>
+      <div class="conflict-col">
+        <!-- War timeline 2026 -->
+        <div class="conflict-section-hdr">📅 WAR TIMELINE — 2026 <span class="badge-static">VERIFIED</span></div>
+        <div id="iran2026-timeline" class="conflict-scroll" style="max-height:280px"></div>
+        <!-- Live X feeds -->
+        <div class="conflict-section-hdr" style="margin-top:6px">🐦 X — IRAN INTERNATIONAL <span class="badge-live">● LIVE</span></div>
+        <div class="twitter-wrap" style="max-height:220px">
+          <a class="twitter-timeline" data-theme="dark"
+             data-chrome="noheader nofooter noborders transparent"
+             data-tweet-limit="5" data-width="310" data-height="220"
+             href="https://twitter.com/IranIntl_En">Loading @IranIntl_En…</a>
+        </div>
+        <div class="conflict-section-hdr" style="margin-top:4px">🐦 @OSINTdefender <span class="badge-live">● LIVE</span></div>
+        <div class="twitter-wrap" style="max-height:180px">
+          <a class="twitter-timeline" data-theme="dark"
+             data-chrome="noheader nofooter noborders transparent"
+             data-tweet-limit="4" data-width="310" data-height="180"
+             href="https://twitter.com/OSINTdefender">Loading @OSINTdefender…</a>
         </div>
       </div>
     </div>

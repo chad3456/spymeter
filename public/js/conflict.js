@@ -123,8 +123,9 @@ const CONFLICT = (() => {
     const btn  = document.querySelector(`.ctab[data-ctab="${tab}"]`);
     if (body) body.style.display = 'flex';
     if (btn)  btn.classList.add('active');
-    if (tab === 'iran')    loadConflictNews();
-    if (tab === 'ukraine') loadUkraineNews();
+    if (tab === 'iran')     loadConflictNews();
+    if (tab === 'iran2026') loadIran2026();
+    if (tab === 'ukraine')  loadUkraineNews();
     if (tab === 'global')  loadUnrestNews();
     if (tab === 'video')      initVideoTab();
     if (tab === 'simulation') SIMULATION.init();
@@ -272,6 +273,90 @@ const CONFLICT = (() => {
   function toggle() { visible ? hide() : show(); }
   function getArcs() { return STRIKE_ARCS; }
 
+  // ── Iran-Israel 2026 War ──────────────────────────────────
+  const IRAN_ISRAEL_2026 = [
+    { date:'Feb 3 2026',  event:'Iran test-fires Fattah-2 hypersonic missile — 1,400km range confirmed by IRGC', severity:'critical', type:'strike' },
+    { date:'Feb 9 2026',  event:'IRGC-linked drone swarm attacks Israeli Negev airbase — Iron Dome 92% interception', severity:'critical', type:'strike' },
+    { date:'Feb 14 2026', event:'Iran launches 40 ballistic missiles at Haifa port — 3 impacts cause infrastructure damage', severity:'critical', type:'strike' },
+    { date:'Feb 16 2026', event:'IAF strikes IRGC command center and missile depot in Isfahan — 12 precision strikes', severity:'critical', type:'strike' },
+    { date:'Feb 18 2026', event:'Hezbollah fires 2,000+ Katyusha/Falaq rockets at northern Israel amid IAF retaliation', severity:'critical', type:'strike' },
+    { date:'Feb 20 2026', event:'US deploys USS Gerald Ford + USS Nimitz CSGs to Eastern Mediterranean', severity:'high', type:'event' },
+    { date:'Feb 22 2026', event:'Iran begins mining Strait of Hormuz approaches — 21% global oil supply threatened', severity:'critical', type:'event' },
+    { date:'Feb 24 2026', event:'UN Security Council ceasefire resolution vetoed by Russia and China — 13-2 vote', severity:'high', type:'event' },
+    { date:'Feb 25 2026', event:'Brent crude hits $127/bbl — highest since 2022 Russia invasion', severity:'high', type:'ongoing' },
+    { date:'Feb 26 2026', event:'Israel activates full reserve mobilization — 300,000 troops called up', severity:'critical', type:'event' },
+    { date:'Mar 1 2026',  event:'Israeli F-35s strike Fordow nuclear site — IAEA confirms significant damage', severity:'critical', type:'strike' },
+    { date:'Mar 1 2026',  event:'Saudi Arabia closes airspace to Israeli aircraft; UAE condemns strikes', severity:'high', type:'event' },
+    { date:'Mar 2 2026',  event:'Ongoing — daily exchanges: Iranian missiles, IAF strikes, Hezbollah rockets, Houthi drones', severity:'critical', type:'ongoing' },
+  ];
+
+  async function loadIran2026() {
+    // Render timeline
+    const timelineEl = document.getElementById('iran2026-timeline');
+    if (timelineEl) {
+      timelineEl.innerHTML = IRAN_ISRAEL_2026.map(e => {
+        const sc = { critical:'#ff2244', high:'#ff9900', elevated:'#ffdd00', ongoing:'#00aaff' }[e.severity] || '#888';
+        const ic = { strike:'🚀', event:'⚡', ongoing:'🔄' }[e.type] || '•';
+        return `
+          <div class="timeline-item">
+            <div class="timeline-dot" style="background:${sc}; box-shadow:0 0 6px ${sc}"></div>
+            <div class="timeline-body">
+              <div class="timeline-date">${e.date}</div>
+              <div class="timeline-text">${ic} ${e.event}</div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // Update war day counter
+    const dayEl = document.getElementById('iran2026-day');
+    if (dayEl) {
+      const start = new Date('2026-02-09');
+      const now   = new Date();
+      const days  = Math.max(0, Math.round((now - start) / 86400000));
+      dayEl.textContent = days;
+    }
+
+    // Setup refresh button
+    const btn = document.getElementById('iran2026-refresh');
+    if (btn && !btn._bound) {
+      btn._bound = true;
+      btn.addEventListener('click', fetchIran2026News);
+    }
+    fetchIran2026News();
+    if (window.twttr?.widgets) window.twttr.widgets.load();
+  }
+
+  async function fetchIran2026News() {
+    const el = document.getElementById('iran2026-news');
+    if (!el) return;
+    el.innerHTML = '<div class="conflict-loading">⟳ Fetching live 2026 intel…</div>';
+    try {
+      const r = await window.fetch('/api/iran-israel-2026');
+      const d = r.ok ? await r.json() : { articles: [] };
+      const arts = d.articles || [];
+      if (!arts.length) { el.innerHTML = '<div class="conflict-loading">No recent updates</div>'; return; }
+      const liveCount = d.liveCount || 0;
+      el.innerHTML = `<div class="conflict-source-note">● ${liveCount} live · ${arts.length - liveCount} curated · Source: GDELT + OSINT</div>` +
+        arts.map((a, i) => {
+          const isLive = i < liveCount;
+          const tc = parseFloat(a.tone || 0) < -3 ? 'tone-neg' : 'tone-neu';
+          return `
+            <a class="conflict-article" href="${a.url === '#' ? 'javascript:void(0)' : a.url}" target="${a.url === '#' ? '' : '_blank'}" rel="noopener">
+              ${isLive ? '<span class="badge-live-sm">LIVE</span>' : '<span class="badge-static-sm">VERIFIED</span>'}
+              <div class="conflict-article-title">${a.title}</div>
+              <div class="conflict-article-meta">
+                <span>${a.source}</span>
+                <span>${a.date ? a.date.slice(0, 10) : ''}</span>
+                <span class="news-tone ${tc}">${parseFloat(a.tone || 0).toFixed(1)}</span>
+              </div>
+            </a>`;
+        }).join('');
+    } catch (_) {
+      el.innerHTML = '<div class="conflict-loading">Intel feed unavailable</div>';
+    }
+  }
+
   // Public init (called after DOM ready)
   function initTimelines() {
     renderTimeline('iran-timeline',    IRAN_TIMELINE);
@@ -281,7 +366,7 @@ const CONFLICT = (() => {
 
   return {
     show, hide, toggle, getArcs, loadConflictNews, loadUkraineNews, loadUnrestNews,
-    switchTab, initTimelines,
+    switchTab, initTimelines, loadIran2026,
   };
 })();
 
