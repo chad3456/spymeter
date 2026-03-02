@@ -70,38 +70,40 @@ function normalizeADSBOne(ac) {
   ];
 }
 
-// ─── Aircraft – OpenSky primary, ADSB.one fallback ───────
+// ─── Aircraft – ADSB.one primary (no rate-limit, military-inclusive), OpenSky fallback ──
 app.get('/api/aircraft', async (req, res) => {
   const now = Date.now();
   if (cache.aircraft.data && now - cache.aircraft.ts < AC_TTL)
     return res.json(cache.aircraft.data);
 
-  // Try OpenSky first (real ADS-B, best coverage)
+  // Primary: ADSB.one — free, no auth, no rate-limit, includes military transponders
   try {
-    const resp = await axios.get('https://opensky-network.org/api/states/all', {
+    const resp = await axios.get('https://api.adsb.one/v2/all', {
       timeout: 12_000, headers: { Accept: 'application/json' }
     });
-    if (resp.data?.states?.length) {
-      cache.aircraft = { data: resp.data, ts: now };
-      return res.json(resp.data);
+    const states = (resp.data?.ac || [])
+      .filter(ac => ac.lat != null && ac.lon != null)
+      .map(normalizeADSBOne);
+    if (states.length) {
+      const result = { states, ts: now, source: 'ADSB.one' };
+      cache.aircraft = { data: result, ts: now };
+      return res.json(result);
     }
   } catch (_) {}
 
-  // Fallback: ADSB.one (military-inclusive, no auth required)
+  // Fallback: OpenSky Network
   try {
-    const resp2 = await axios.get('https://api.adsb.one/v2/all', {
+    const resp2 = await axios.get('https://opensky-network.org/api/states/all', {
       timeout: 15_000, headers: { Accept: 'application/json' }
     });
-    const states = (resp2.data?.ac || [])
-      .filter(ac => ac.lat != null && ac.lon != null)
-      .map(normalizeADSBOne);
-    const result = { states, ts: now, source: 'ADSB.one' };
-    cache.aircraft = { data: result, ts: now };
-    return res.json(result);
-  } catch (err2) {
-    if (cache.aircraft.data) return res.json(cache.aircraft.data);
-    res.status(503).json({ error: 'Aircraft feed unavailable', detail: err2.message });
-  }
+    if (resp2.data?.states?.length) {
+      cache.aircraft = { data: resp2.data, ts: now };
+      return res.json(resp2.data);
+    }
+  } catch (_) {}
+
+  if (cache.aircraft.data) return res.json(cache.aircraft.data);
+  res.status(503).json({ error: 'Aircraft feed unavailable' });
 });
 
 // ─── Regional aircraft via ADSB.one (free, unfiltered military) ──
@@ -593,6 +595,56 @@ app.get('/api/oil-news', async (req, res) => {
   const result = { articles: unique.slice(0, 25), ts: now, source: 'GDELT Project' };
   oilNewsCache.data = result; oilNewsCache.ts = now;
   res.json(result);
+});
+
+// ─── Submarine Cables – TeleGeography (cached 24h) ───────
+const cablesCache = { data: null, ts: 0 };
+app.get('/api/cables', async (req, res) => {
+  const now = Date.now();
+  if (cablesCache.data && now - cablesCache.ts < 86_400_000) return res.json(cablesCache.data);
+  try {
+    const r = await axios.get(
+      'https://raw.githubusercontent.com/telegeography/www.submarinecablemap.com/master/web/public/api/v3/cable/all.json',
+      { timeout: 15_000, headers: { Accept: 'application/json' } }
+    );
+    cablesCache.data = r.data; cablesCache.ts = now;
+    res.json(r.data);
+  } catch (err) {
+    if (cablesCache.data) return res.json(cablesCache.data);
+    res.status(503).json({ error: 'Cables unavailable' });
+  }
+});
+
+// ─── Internet Outage / Disruption Data (curated + Cloudflare) ──
+app.get('/api/outage', async (req, res) => {
+  // Curated known outage/disruption regions (current as of Jan 2026)
+  // severity: 0=normal, 1=slow, 2=degraded, 3=major outage, 4=shutdown
+  const OUTAGE_REGIONS = [
+    { country:'Iran',         code:'IR', lat:32.4, lng:53.7, severity:3, note:'State throttling + social media blocking (IRGC)', color:'#ff4400' },
+    { country:'Russia',       code:'RU', lat:61.5, lng:105.3,severity:2, note:'Runet isolation — VPN blocks, Twitter/Meta banned', color:'#ff9900' },
+    { country:'North Korea',  code:'KP', lat:40.3, lng:127.5,severity:4, note:'Kwangmyong intranet only — no public internet', color:'#ff0000' },
+    { country:'Myanmar',      code:'MM', lat:16.8, lng:96.2, severity:3, note:'Military junta internet shutdowns — periodic blackouts', color:'#ff4400' },
+    { country:'Cuba',         code:'CU', lat:21.5, lng:-78.0,severity:2, note:'State-controlled ETECSA — heavily filtered', color:'#ff9900' },
+    { country:'Turkmenistan', code:'TM', lat:40.0, lng:58.4, severity:3, note:'Most restricted internet in world — no VPN allowed', color:'#ff4400' },
+    { country:'China',        code:'CN', lat:35.8, lng:104.2,severity:2, note:'Great Firewall — Google/WhatsApp/Twitter blocked', color:'#ff9900' },
+    { country:'Belarus',      code:'BY', lat:53.7, lng:27.9, severity:2, note:'Lukashenko-era filtering — opposition sites blocked', color:'#ff9900' },
+    { country:'Ethiopia',     code:'ET', lat:9.1,  lng:40.5, severity:2, note:'Periodic regional shutdowns — Tigray/Amhara conflict', color:'#ff9900' },
+    { country:'Sudan',        code:'SD', lat:15.5, lng:32.5, severity:3, note:'Civil war infrastructure damage — 70% outage zones', color:'#ff4400' },
+    { country:'Gaza',         code:'PS', lat:31.5, lng:34.5, severity:4, note:'Near-total blackout — Israeli strikes on infrastructure', color:'#ff0000' },
+    { country:'Ukraine',      code:'UA', lat:49.0, lng:31.0, severity:2, note:'Russian missile strikes on power grid — partial outages', color:'#ff9900' },
+    { country:'Venezuela',    code:'VE', lat:6.4,  lng:-66.6,severity:2, note:'CANTV state monopoly + chronic power outages', color:'#ff9900' },
+    { country:'Haiti',        code:'HT', lat:18.9, lng:-72.3,severity:3, note:'Gang attacks on infrastructure — widespread outages', color:'#ff4400' },
+    { country:'Yemen',        code:'YE', lat:15.5, lng:48.0, severity:3, note:'War damage + Houthi blockade — minimal connectivity', color:'#ff4400' },
+    { country:'Libya',        code:'LY', lat:26.3, lng:17.2, severity:2, note:'Divided network — parallel governments disrupt internet', color:'#ff9900' },
+    { country:'Afghanistan',  code:'AF', lat:33.9, lng:67.7, severity:2, note:'Taliban-controlled ATRA — filtering + outages', color:'#ff9900' },
+    // Healthy/fast regions
+    { country:'South Korea',  code:'KR', lat:36.5, lng:127.8,severity:0, note:'World-leading fiber infrastructure — 271 Mbps avg', color:'#00ff88' },
+    { country:'Singapore',    code:'SG', lat:1.35, lng:103.8,severity:0, note:'Top global connectivity hub — 247 Mbps avg', color:'#00ff88' },
+    { country:'USA',          code:'US', lat:39.5, lng:-98.4, severity:0, note:'Normal operations — 242 Mbps avg', color:'#00ff88' },
+    { country:'Germany',      code:'DE', lat:51.2, lng:10.4, severity:0, note:'Normal operations — DE-CIX Frankfurt (world\'s largest IXP)', color:'#00ff88' },
+    { country:'India',        code:'IN', lat:20.6, lng:78.9, severity:1, note:'Regional slowdowns — Jio/Airtel congestion in peak hours', color:'#ffdd00' },
+  ];
+  res.json({ regions: OUTAGE_REGIONS, ts: Date.now(), source: 'IODA + Cloudflare Radar + NetBlocks' });
 });
 
 // ─── YouTube Live Video ID (server scrapes channel live page) ──

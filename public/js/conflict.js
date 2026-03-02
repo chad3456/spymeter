@@ -126,7 +126,8 @@ const CONFLICT = (() => {
     if (tab === 'iran')    loadConflictNews();
     if (tab === 'ukraine') loadUkraineNews();
     if (tab === 'global')  loadUnrestNews();
-    if (tab === 'video')   initVideoTab();
+    if (tab === 'video')      initVideoTab();
+    if (tab === 'simulation') SIMULATION.init();
     if (window.twttr?.widgets) window.twttr.widgets.load();
   }
 

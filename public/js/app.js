@@ -17,13 +17,7 @@ const APP = (() => {
       preferCanvas: true, worldCopyJump: true,
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
-      attribution: '© OSM © CARTO', subdomains: 'abcd', maxZoom: 19,
-    }).addTo(map);
-
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd', maxZoom: 19, pane: 'shadowPane',
-    }).addTo(map);
+    // Tile layers managed by OVERLAYS.init() below — dark style by default
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     return map;
@@ -104,6 +98,18 @@ const APP = (() => {
             case 'usbases':
               USBASES.setEnabled(on);
               SIDEBAR.addFeedItem('military', on ? `🦅 US Overseas Bases ON — ${USBASES.getBases().length} bases across USAFE/CENTCOM/PACAF/AFRICOM` : 'US Bases layer OFF');
+              break;
+            case 'cables':
+              CABLES.setEnabled(on);
+              SIDEBAR.addFeedItem('satellite', on ? '🌊 Submarine Cables ON — TeleGeography global network' : 'Submarine Cables layer OFF');
+              break;
+            case 'outage':
+              OUTAGE.setEnabled(on);
+              SIDEBAR.addFeedItem('satellite', on ? '⚡ Internet Outage layer ON — worldwide disruption monitor' : 'Internet Outage layer OFF');
+              break;
+            case 'leaders':
+              LEADERS.setEnabled(on);
+              SIDEBAR.addFeedItem('satellite', on ? `👤 World Leaders ON — ${LEADERS.getData().length} heads of state mapped` : 'Leaders layer OFF');
               break;
           }
         }, 120);
@@ -415,6 +421,16 @@ const APP = (() => {
     MARKETS.init();
     HEATMAP.init(map);
     USBASES.init(map);
+    CABLES.init(map);
+    OUTAGE.init(map);
+    OVERLAYS.init(map);
+    LEADERS.init(map);
+    SIMULATION.init();
+    // Register overlays with the MAP CTRL panel toggles
+    OVERLAYS.registerOverlay('leaders', LEADERS);
+    OVERLAYS.registerOverlay('cables',  CABLES);
+    OVERLAYS.registerOverlay('outage',  OUTAGE);
+    OVERLAYS.registerOverlay('oil',     OIL);
     initLayerControls();
     initViewModes();
 

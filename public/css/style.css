@@ -1396,3 +1396,116 @@ body.crt-active #ws-status.connected { color: #00ff41; }
 }
 .video-main { position: relative; }
 
+
+/* ── World Leaders markers ───────────────────────────────── */
+.leader-marker {
+  position: relative;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 2px solid #00ff88;
+  box-shadow: 0 0 8px rgba(0,255,136,0.6);
+  overflow: visible;
+  background: #040608;
+}
+.leader-fallback {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+}
+.leader-dot {
+  position: absolute;
+  bottom: -4px; right: -4px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  border: 1px solid #040608;
+  animation: leader-pulse 2s ease-in-out infinite;
+}
+@keyframes leader-pulse {
+  0%,100% { box-shadow: 0 0 4px currentColor; }
+  50%      { box-shadow: 0 0 10px currentColor; }
+}
+.leader-popup {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-hi);
+  padding: 4px 0;
+  min-width: 180px;
+}
+.lp-flag  { font-size: 24px; text-align: center; margin-bottom: 4px; }
+.lp-name  { font-size: 13px; font-weight: bold; color: #c8dff0; text-align: center; }
+.lp-country { font-size: 10px; color: var(--text); text-align: center; margin-bottom: 4px; }
+.lp-title { font-size: 9.5px; text-align: center; margin-bottom: 6px; }
+.lp-row   { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 2px; font-size: 9px; }
+.lp-key   { color: var(--text-dim); }
+.lp-val   { color: var(--text-hi); }
+.lp-note  { margin-top: 6px; font-size: 8.5px; color: var(--text-dim); text-align: center; }
+
+/* ── Simulation panel ────────────────────────────────────── */
+.sim-header   { padding: 8px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.sim-title    { font-family: var(--font-ui); font-size: 14px; font-weight: 700; color: #ff6600; letter-spacing: 2px; }
+.sim-subtitle { font-size: 9px; color: var(--text-dim); margin-top: 2px; letter-spacing: 1px; }
+.sim-section-lbl { font-size: 8px; letter-spacing: 2.5px; color: var(--text-dim); margin: 6px 0 4px; text-transform: uppercase; }
+
+.sim-wave {
+  background: rgba(255,102,0,0.06);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 5px;
+}
+.sim-wave-hdr { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.sim-wave-icon { font-size: 14px; }
+.sim-wave-label { font-size: 10px; font-weight: 600; flex: 1; }
+.sim-wave-time  { font-size: 8.5px; color: var(--text-dim); }
+.sim-wave-stats { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+.sim-stat-pill  { font-size: 8.5px; border: 1px solid; border-radius: 3px; padding: 1px 5px; }
+.sim-wave-note  { font-size: 8px; color: var(--text-dim); line-height: 1.4; }
+.sim-bar-wrap   { height: 3px; background: rgba(255,255,255,0.08); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+.sim-bar-fill   { height: 100%; border-radius: 2px; transition: width 1s; }
+
+.sim-summary { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; margin: 6px 0; }
+.sim-sum-row { display: flex; justify-content: space-between; font-size: 9.5px; padding: 2px 0; }
+
+.sim-interceptors { display: flex; flex-direction: column; gap: 3px; }
+.sim-irow { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 3px; font-size: 9px; background: rgba(0,0,0,0.2); }
+.sim-iname    { font-weight: 600; min-width: 100px; }
+.sim-icountry { color: var(--text-dim); min-width: 50px; }
+.sim-itarget  { color: var(--text); font-size: 8.5px; }
+
+.sim-oil-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px; }
+.sim-oil-cell { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 3px; padding: 5px 6px; text-align: center; }
+.sim-oil-lbl  { font-size: 8px; color: var(--text-dim); margin-bottom: 2px; }
+.sim-oil-val  { font-size: 13px; font-weight: 700; font-family: var(--font-ui); }
+
+.sim-oil-event { padding: 4px 6px; margin-bottom: 3px; background: rgba(0,0,0,0.2); border-radius: 3px; }
+.sim-oe-date   { font-size: 8px; color: var(--text-dim); display: block; }
+.sim-oe-delta  { font-size: 9.5px; font-weight: 700; float: right; }
+.sim-oe-text   { font-size: 9px; color: var(--text); margin-top: 2px; clear: both; }
+
+.sim-choke     { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 3px; margin-bottom: 2px; background: rgba(0,0,0,0.2); font-size: 9px; }
+.sim-choke-name{ flex: 1; color: var(--text-hi); }
+.sim-choke-pct { color: var(--text-dim); font-size: 8px; }
+.sim-choke-risk{ font-size: 8px; font-weight: 700; }
+
+.sim-commodity  { display: flex; align-items: center; gap: 6px; padding: 4px 5px; border-bottom: 1px solid var(--border); }
+.sim-com-icon   { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
+.sim-com-body   { flex: 1; min-width: 0; }
+.sim-com-name   { font-size: 9px; color: var(--text-hi); margin-bottom: 2px; }
+.sim-com-vals   { display: flex; align-items: center; gap: 5px; font-size: 8.5px; }
+.sim-com-before { color: var(--text-dim); }
+.sim-com-arrow  { color: var(--text-dim); }
+.sim-com-current{ font-weight: 600; }
+.sim-com-change { font-size: 8px; }
+.sim-com-risk   { font-size: 7.5px; border: 1px solid; border-radius: 3px; padding: 1px 4px; text-align: center; flex-shrink: 0; white-space: nowrap; }
+
+/* ── Cables tooltip ──────────────────────────────────────── */
+.cables-tooltip .leaflet-tooltip {
+  background: rgba(4,6,8,0.92);
+  color: #00d4ff;
+  border: 1px solid rgba(0,212,255,0.4);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 3px 7px;
+}
