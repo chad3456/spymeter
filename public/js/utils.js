@@ -84,5 +84,55 @@ const UTILS = (() => {
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
   }
 
-  return { countryColor, countryFlag, fmtUTC, fmtTime, haversine, parseTLE, throttle, debounce };
+  // ── Relative time (e.g. "5m ago", "2h ago") ──────────────
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    // GDELT dates come as "YYYYMMDDTHHmmssZ" or ISO
+    let d;
+    if (typeof dateStr === 'number') {
+      d = new Date(dateStr);
+    } else if (/^\d{8}T/.test(dateStr)) {
+      // Parse GDELT format 20260303T142300Z
+      const s = dateStr.replace('T','').replace('Z','');
+      d = new Date(`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}T${s.slice(8,10)}:${s.slice(10,12)}:${s.slice(12,14)}Z`);
+    } else {
+      d = new Date(dateStr);
+    }
+    if (isNaN(d)) return '';
+    const secs = Math.floor((Date.now() - d) / 1000);
+    if (secs < 0)    return 'just now';
+    if (secs < 60)   return `${secs}s ago`;
+    if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+    if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+    const days = Math.floor(secs / 86400);
+    return days === 1 ? '1d ago' : `${days}d ago`;
+  }
+
+  // ── Groq TTS narration ────────────────────────────────────
+  let _audioCtx = null;
+  let _currentAudio = null;
+  async function narrate(text) {
+    try {
+      if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
+      const r = await fetch('/api/narrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.slice(0, 500) }),
+      });
+      if (!r.ok) throw new Error(`TTS HTTP ${r.status}`);
+      const blob = await r.blob();
+      const url  = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      _currentAudio = audio;
+      audio.play().catch(() => {});
+      audio.onended = () => URL.revokeObjectURL(url);
+    } catch (e) {
+      console.warn('[NARRATE]', e.message);
+    }
+  }
+  function stopNarration() {
+    if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
+  }
+
+  return { countryColor, countryFlag, fmtUTC, fmtTime, haversine, parseTLE, throttle, debounce, timeAgo, narrate, stopNarration };
 })();

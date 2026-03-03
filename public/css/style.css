@@ -1561,3 +1561,100 @@ body.crt-active #ws-status.connected { color: #00ff41; }
   margin-right: 3px;
   vertical-align: middle;
 }
+
+/* ── Country Search Tab ──────────────────────────────────── */
+.csearch-wrap {
+  display: flex; gap: 6px; margin-bottom: 6px;
+}
+.csearch-input {
+  flex: 1;
+  background: rgba(0,212,255,0.06);
+  border: 1px solid var(--border-hi);
+  color: var(--text-hi);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 5px 8px;
+  border-radius: 3px;
+  outline: none;
+  user-select: text;
+}
+.csearch-input:focus { border-color: var(--accent); }
+.csearch-input::placeholder { color: var(--text-dim); }
+.csearch-btn {
+  background: rgba(0,212,255,0.12);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+.csearch-btn:hover { background: rgba(0,212,255,0.25); }
+.csearch-suggestions { margin-bottom: 4px; }
+.csearch-sug {
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 11px;
+  border-left: 2px solid transparent;
+  transition: var(--transition);
+}
+.csearch-sug:hover {
+  background: rgba(0,212,255,0.08);
+  border-left-color: var(--accent);
+  color: var(--text-hi);
+}
+.csearch-flag-name {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+}
+.csearch-stats-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 8px 0;
+}
+.csg-cell {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 3px; padding: 4px 6px;
+}
+.csg-val { font-size: 12px; color: var(--text-hi); font-weight: 600; }
+.csg-lbl {
+  font-size: 8px; color: var(--text-dim);
+  letter-spacing: 0.5px; text-transform: uppercase;
+}
+.csearch-pill {
+  display: inline-block;
+  padding: 2px 8px; border: 1px solid;
+  border-radius: 10px; font-size: 9px;
+  letter-spacing: 1px; font-weight: 600; margin-bottom: 3px;
+}
+.csearch-detail { font-size: 9px; color: var(--text); line-height: 1.4; }
+.csearch-status-box {
+  padding: 6px 8px; margin: 4px 0;
+  background: rgba(0,0,0,0.2);
+  border-left: 3px solid var(--border-hi);
+  border-radius: 0 3px 3px 0;
+}
+
+/* ── Narrate (TTS) buttons ───────────────────────────────── */
+.narrate-btn {
+  background: rgba(0,212,255,0.08);
+  border: 1px solid rgba(0,212,255,0.25);
+  color: var(--accent); border-radius: 3px;
+  padding: 1px 5px; cursor: pointer;
+  font-size: 10px; margin-left: 4px;
+  vertical-align: middle; line-height: 1;
+}
+.narrate-btn:hover { background: rgba(0,212,255,0.2); }
+.narrate-btn-sm {
+  background: none; border: none;
+  cursor: pointer; font-size: 10px;
+  padding: 0 2px; opacity: 0.6;
+  vertical-align: middle; line-height: 1;
+}
+.narrate-btn-sm:hover { opacity: 1; }
+
+/* ── Relative timestamp label ───────────────────────────── */
+.news-ts {
+  color: var(--text-dim); font-size: 9px; margin-left: 3px;
+}

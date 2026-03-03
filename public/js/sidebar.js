@@ -158,16 +158,20 @@ const SIDEBAR = (() => {
     }
     feed.innerHTML = articles.map(a => {
       const tc   = toneClass(a.tone);
-      const date = fmtNewsDate(a.date);
+      const rel  = UTILS.timeAgo(a.date);
+      const date = rel || fmtNewsDate(a.date);
       const src  = a.source ? `<span class="news-src">${a.source}</span>` : '';
       const flag = a.country ? `<span class="news-country">${a.country}</span>` : '';
+      const title = a.title || 'Untitled';
+      const safeTitle = title.replace(/'/g, '&#39;');
       return `
         <a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
-          <div class="news-title">${a.title || 'Untitled'}</div>
+          <div class="news-title">${title}</div>
           <div class="news-meta">
             ${src}${flag}
-            <span class="news-date">${date}</span>
+            <span class="news-ts">${date}</span>
             <span class="news-tone ${tc}">${parseFloat(a.tone||0) > 0 ? '+' : ''}${parseFloat(a.tone||0).toFixed(1)}</span>
+            <button class="narrate-btn-sm" onclick="event.preventDefault();UTILS.narrate('${safeTitle}')">🔊</button>
           </div>
         </a>`;
     }).join('');

@@ -109,20 +109,16 @@ const POLLS = (() => {
       const arts = d.articles || [];
       if (!arts.length) { el.innerHTML = '<div class="news-loading">RSS unavailable</div>'; return; }
       el.innerHTML = arts.map(a => {
-        const dt = a.date ? (() => {
-          try {
-            const ms = Date.now() - new Date(a.date).getTime();
-            const min = Math.round(ms / 60000);
-            return min < 60 ? `${min}m ago` : `${Math.round(min/60)}h ago`;
-          } catch (_) { return ''; }
-        })() : '';
+        const dt = UTILS.timeAgo(a.date) || '';
+        const safeTitle = (a.title || '').replace(/'/g, '&#39;');
         return `
           <a class="news-item rss-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
             <div class="news-title">${a.title}</div>
             <div class="news-meta">
               <span class="news-src rss-src">${a.source}</span>
-              <span class="news-date">${dt}</span>
+              <span class="news-ts">${dt}</span>
               <span class="badge-rss">RSS</span>
+              <button class="narrate-btn-sm" onclick="event.preventDefault();UTILS.narrate('${safeTitle}')">🔊</button>
             </div>
           </a>`;
       }).join('');

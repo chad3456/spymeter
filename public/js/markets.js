@@ -103,13 +103,15 @@ const MARKETS = (() => {
       if (!arts.length) { el.innerHTML = '<div class="news-loading">No recent market news</div>'; return; }
       el.innerHTML = arts.map(a => {
         const tc = parseFloat(a.tone||0) < -2 ? 'tone-neg' : parseFloat(a.tone||0) > 2 ? 'tone-pos' : 'tone-neu';
-        const dt = relTime(a.date);
+        const dt = UTILS.timeAgo(a.date) || relTime(a.date);
+        const safeTitle = (a.title||'').replace(/'/g,'&#39;');
         return `<a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
           <div class="news-title">${a.title}</div>
           <div class="news-meta">
             <span class="news-src">${a.source}</span>
-            <span class="news-date">${dt}</span>
+            <span class="news-ts">${dt}</span>
             <span class="news-tone ${tc}">${parseFloat(a.tone||0) > 0 ? '+' : ''}${parseFloat(a.tone||0).toFixed(1)}</span>
+            <button class="narrate-btn-sm" onclick="event.preventDefault();UTILS.narrate('${safeTitle}')">🔊</button>
           </div>
         </a>`;
       }).join('');
@@ -128,6 +130,17 @@ const MARKETS = (() => {
         renderTicker(quotes);
         renderMarketPanel(quotes);
         updateTickerTimestamp(d.ts);
+        // Show data source note in panel header
+        const hdr = document.querySelector('#rptab-markets .panel-card .card-hdr span');
+        if (hdr && d.source) {
+          const live = (d.source || '').includes('Yahoo');
+          const badge = hdr.querySelector('.badge-mkt-src') || document.createElement('span');
+          badge.className = 'badge-mkt-src badge-static';
+          badge.style.marginLeft = '4px';
+          badge.textContent = live ? '● LIVE' : '≈ EST';
+          badge.style.color = live ? '#00ff88' : '#ffaa00';
+          if (!hdr.querySelector('.badge-mkt-src')) hdr.appendChild(badge);
+        }
       }
     } catch (_) {}
   }

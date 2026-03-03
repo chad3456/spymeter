@@ -252,6 +252,7 @@
         <button class="rptab" data-rptab="polls">🗳 POLLS</button>
         <button class="rptab" data-rptab="sources">👤 SOURCES</button>
         <button class="rptab" data-rptab="intel">◈ INTEL</button>
+        <button class="rptab" data-rptab="search">🔍 SEARCH</button>
       </div>
 
       <!-- TAB: News (GDELT) -->
@@ -640,6 +641,50 @@
         </div>
       </div>
 
+      <!-- TAB: Country Search -->
+      <div class="rp-tab-body" id="rptab-search" style="display:none">
+        <div class="panel-card">
+          <div class="card-hdr">🔍 COUNTRY INTELLIGENCE SEARCH</div>
+          <div class="csearch-wrap">
+            <input id="csearch-input" type="text" class="csearch-input"
+              placeholder="Type country name (e.g. Iran, Pakistan, Israel…)" autocomplete="off"/>
+            <button class="csearch-btn" id="csearch-btn">GO</button>
+          </div>
+          <div class="csearch-suggestions" id="csearch-suggestions"></div>
+        </div>
+        <div id="csearch-result" style="display:none">
+          <!-- Country hero card -->
+          <div class="panel-card" id="csearch-hero">
+            <div class="csearch-flag-name">
+              <span id="csearch-flag" style="font-size:32px"></span>
+              <div>
+                <div id="csearch-name" style="font-size:16px;font-weight:700;color:#c8dff0"></div>
+                <div id="csearch-region" style="font-size:9px;color:var(--text-dim);letter-spacing:1px"></div>
+              </div>
+              <button class="im-btn" id="csearch-flyto" style="margin-left:auto">📍 FLY TO</button>
+            </div>
+            <div class="csearch-stats-grid" id="csearch-stats"></div>
+          </div>
+          <!-- Internet outage status -->
+          <div class="panel-card">
+            <div class="card-hdr">⚡ INTERNET STATUS</div>
+            <div id="csearch-outage" class="csearch-status-box"></div>
+          </div>
+          <!-- Conflict status -->
+          <div class="panel-card">
+            <div class="card-hdr">⚔ CONFLICT / THREAT STATUS</div>
+            <div id="csearch-conflict" class="csearch-status-box"></div>
+          </div>
+          <!-- Live news for country -->
+          <div class="panel-card">
+            <div class="card-hdr">📰 LIVE INTEL <span class="badge-live">● GDELT</span></div>
+            <div id="csearch-news" class="scroll-list" style="max-height:280px">
+              <div class="news-loading">⟳ Loading…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- TAB: Intel/Warheads -->
       <div class="rp-tab-body" id="rptab-intel" style="display:none">
         <div class="panel-card">
@@ -945,11 +990,15 @@
         if (!arts.length) { el.innerHTML = '<div class="news-loading">No recent articles</div>'; return; }
         el.innerHTML = arts.map(a => {
           const col = parseFloat(a.tone||0) < -3 ? '#ff4444' : parseFloat(a.tone||0) > 2 ? '#00ff88' : '#888';
+          const rel = UTILS.timeAgo(a.date);
+          const safeTitle = (a.title||'').replace(/'/g,'&#39;');
           return `<a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
             <div class="news-title">${a.title}</div>
             <div class="news-meta">
               <span class="news-src">${a.source}</span>
+              ${rel ? `<span class="news-ts">${rel}</span>` : ''}
               <span class="news-tone" style="color:${col}">${parseFloat(a.tone||0).toFixed(1)}</span>
+              <button class="narrate-btn-sm" onclick="event.preventDefault();UTILS.narrate('${safeTitle}')">🔊</button>
             </div>
           </a>`;
         }).join('');
@@ -1016,6 +1065,169 @@
       const card = document.getElementById('journalist-feed-card');
       if (card) card.style.display = 'none';
     }
+
+    // ── Narration helper (Groq TTS) ────────────────────────
+    function addNarrateBtn(el, text) {
+      const btn = document.createElement('button');
+      btn.className = 'narrate-btn';
+      btn.title = 'Listen (Groq TTS)';
+      btn.textContent = '🔊';
+      btn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        UTILS.narrate(text);
+        btn.textContent = '⏸';
+        setTimeout(() => { btn.textContent = '🔊'; }, 15000);
+      });
+      el.appendChild(btn);
+    }
+
+    // ── Country search ─────────────────────────────────────
+    const COUNTRY_QUICK = [
+      { name:'Iran', code:'IRN', lat:32.4, lng:53.7, flag:'🇮🇷' },
+      { name:'Israel', code:'ISR', lat:31.8, lng:35.2, flag:'🇮🇱' },
+      { name:'Russia', code:'RUS', lat:61.5, lng:105.3, flag:'🇷🇺' },
+      { name:'Ukraine', code:'UKR', lat:49.0, lng:31.0, flag:'🇺🇦' },
+      { name:'Pakistan', code:'PAK', lat:33.7, lng:73.1, flag:'🇵🇰' },
+      { name:'China', code:'CHN', lat:35.8, lng:104.2, flag:'🇨🇳' },
+      { name:'USA', code:'USA', lat:39.5, lng:-98.4, flag:'🇺🇸' },
+      { name:'India', code:'IND', lat:20.6, lng:78.9, flag:'🇮🇳' },
+      { name:'North Korea', code:'PRK', lat:40.3, lng:127.5, flag:'🇰🇵' },
+      { name:'Saudi Arabia', code:'SAU', lat:23.9, lng:45.1, flag:'🇸🇦' },
+      { name:'Gaza', code:'PSE', lat:31.4, lng:34.3, flag:'🇵🇸' },
+      { name:'Turkey', code:'TUR', lat:38.9, lng:35.2, flag:'🇹🇷' },
+      { name:'Germany', code:'DEU', lat:51.2, lng:10.4, flag:'🇩🇪' },
+      { name:'UK', code:'GBR', lat:54.4, lng:-2.0, flag:'🇬🇧' },
+      { name:'France', code:'FRA', lat:46.2, lng:2.2, flag:'🇫🇷' },
+      { name:'Lebanon', code:'LBN', lat:33.9, lng:35.5, flag:'🇱🇧' },
+      { name:'Yemen', code:'YEM', lat:15.5, lng:48.0, flag:'🇾🇪' },
+      { name:'Syria', code:'SYR', lat:34.8, lng:38.9, flag:'🇸🇾' },
+    ];
+
+    const OUTAGE_DATA = {
+      'Iran':{'severity':3,'note':'State throttling + social media blocking (IRGC)','color':'#ff4400'},
+      'Russia':{'severity':2,'note':'Runet isolation — VPN blocks, Twitter/Meta banned','color':'#ff9900'},
+      'North Korea':{'severity':4,'note':'Kwangmyong intranet only — no public internet','color':'#ff0000'},
+      'China':{'severity':2,'note':'Great Firewall — Google/WhatsApp/Twitter blocked','color':'#ff9900'},
+      'Gaza':{'severity':4,'note':'Near-total blackout — infrastructure destroyed','color':'#ff0000'},
+      'Ukraine':{'severity':2,'note':'Russian missile strikes on power grid — partial outages','color':'#ff9900'},
+      'Sudan':{'severity':3,'note':'Civil war infrastructure damage','color':'#ff4400'},
+      'Yemen':{'severity':3,'note':'War damage + Houthi blockade','color':'#ff4400'},
+      'Syria':{'severity':2,'note':'Conflict damage — intermittent connectivity','color':'#ff9900'},
+    };
+    const CONFLICT_STATUS = {
+      'Iran':{'status':'ACTIVE WAR','color':'#ff2200','detail':'Ongoing conflict with Israel since Feb 2026 — missile exchanges, sanctions, Hormuz tension'},
+      'Israel':{'status':'ACTIVE WAR','color':'#ff2200','detail':'War with Iran + Hezbollah — Iron Dome/Arrow active, reservists mobilized'},
+      'Gaza':{'status':'ACTIVE COMBAT','color':'#ff2200','detail':'Ongoing IDF operations — Hamas resistance, humanitarian crisis'},
+      'Russia':{'status':'ARMED CONFLICT','color':'#ff6600','detail':'Ukraine war — NATO weapons, front lines in Donbas/Zaporizhzhia'},
+      'Ukraine':{'status':'UNDER ATTACK','color':'#ff6600','detail':'Daily Russian drone/missile strikes — NATO Patriot/SAMP-T defense'},
+      'Lebanon':{'status':'ELEVATED','color':'#ffaa00','detail':'Hezbollah ceasefire — fragile, cross-border incidents ongoing'},
+      'Yemen':{'status':'CIVIL WAR','color':'#ff6600','detail':'Houthi control north, Saudi coalition — Red Sea attacks on shipping'},
+      'Pakistan':{'status':'MONITORING','color':'#ffaa00','detail':'Nuclear neighbor of India — Taliban border, internal insurgency'},
+      'Syria':{'status':'LOW CONFLICT','color':'#ffdd00','detail':'HTS government — US/Turkey forces present, Kurdish region tense'},
+      'North Korea':{'status':'STRATEGIC THREAT','color':'#ff9900','detail':'ICBM tests, nuclear arsenal, unpredictable Kim Jong-un'},
+    };
+
+    async function searchCountry(nameOrCode) {
+      const q = nameOrCode.trim().toLowerCase();
+      if (!q) return;
+      const match = COUNTRY_QUICK.find(c =>
+        c.name.toLowerCase().includes(q) || c.code.toLowerCase() === q
+      );
+      const code = match?.code || nameOrCode;
+      const lat  = match?.lat || 0;
+      const lng  = match?.lng || 0;
+      const flag = match?.flag || '🌍';
+
+      document.getElementById('csearch-result').style.display = 'block';
+      document.getElementById('csearch-flag').textContent = flag;
+      document.getElementById('csearch-name').textContent = match?.name || nameOrCode;
+      document.getElementById('csearch-news').innerHTML = '<div class="news-loading">⟳ Fetching intelligence…</div>';
+
+      // Fly to on map
+      document.getElementById('csearch-flyto').onclick = () => APP.flyTo(lat, lng, 5);
+
+      // Fill outage status
+      const outEl = document.getElementById('csearch-outage');
+      const od = OUTAGE_DATA[match?.name];
+      if (od) {
+        const sv = ['NORMAL','DEGRADED','DISRUPTED','MAJOR OUTAGE','BLACKOUT'][od.severity] || 'UNKNOWN';
+        outEl.innerHTML = `
+          <div class="csearch-pill" style="border-color:${od.color};color:${od.color}">
+            ⚡ ${sv} (Level ${od.severity}/4)
+          </div>
+          <div class="csearch-detail">${od.note}</div>`;
+      } else {
+        outEl.innerHTML = `<div class="csearch-detail" style="color:#00ff88">✓ NORMAL — No known disruptions</div>`;
+      }
+
+      // Fill conflict status
+      const conEl = document.getElementById('csearch-conflict');
+      const cs = CONFLICT_STATUS[match?.name];
+      if (cs) {
+        conEl.innerHTML = `
+          <div class="csearch-pill" style="border-color:${cs.color};color:${cs.color}">⚔ ${cs.status}</div>
+          <div class="csearch-detail">${cs.detail}</div>`;
+      } else {
+        conEl.innerHTML = `<div class="csearch-detail" style="color:#00ff88">✓ No active conflict reported</div>`;
+      }
+
+      // Fetch REST Countries info
+      const statsEl = document.getElementById('csearch-stats');
+      const regionEl = document.getElementById('csearch-region');
+      statsEl.innerHTML = '<div style="color:var(--text-dim);font-size:9px">Loading…</div>';
+      try {
+        const cr = await fetch(`/api/country/${code}`);
+        const cd = cr.ok ? await cr.json() : {};
+        const c  = cd.country || {};
+        const pop = c.population ? (c.population / 1e6).toFixed(1) + 'M' : '—';
+        const area = c.area ? (c.area / 1e6).toFixed(2) + 'M km²' : '—';
+        const gdp  = c.gdp || '—';
+        const cap  = c.capital?.[0] || '—';
+        regionEl.textContent = `${c.region || ''} ${c.subregion ? '· ' + c.subregion : ''}`;
+        statsEl.innerHTML = `
+          <div class="csg-cell"><div class="csg-val">${pop}</div><div class="csg-lbl">Population</div></div>
+          <div class="csg-cell"><div class="csg-val">${area}</div><div class="csg-lbl">Area</div></div>
+          <div class="csg-cell"><div class="csg-val">${cap}</div><div class="csg-lbl">Capital</div></div>
+          <div class="csg-cell"><div class="csg-val">${c.currencies ? Object.keys(c.currencies)[0] : '—'}</div><div class="csg-lbl">Currency</div></div>`;
+
+        // Render news articles
+        const articles = cd.articles || [];
+        const newsEl = document.getElementById('csearch-news');
+        if (!articles.length) {
+          newsEl.innerHTML = '<div class="news-loading">No recent intel found</div>';
+        } else {
+          newsEl.innerHTML = articles.map(a => `
+            <a class="news-item" href="${a.url}" target="_blank" rel="noopener">
+              <div class="news-title">${a.title}</div>
+              <div class="news-meta">
+                <span class="news-src">${a.source}</span>
+                <span class="news-ts">${UTILS.timeAgo(a.date)}</span>
+                <button class="narrate-btn-sm" onclick="event.preventDefault();UTILS.narrate(${JSON.stringify(a.title)})">🔊</button>
+              </div>
+            </a>`).join('');
+        }
+      } catch (_) {
+        statsEl.innerHTML = '<div class="csearch-detail">Data unavailable</div>';
+        document.getElementById('csearch-news').innerHTML = '<div class="news-loading">Intel unavailable</div>';
+      }
+    }
+
+    document.getElementById('csearch-btn')?.addEventListener('click', () => {
+      searchCountry(document.getElementById('csearch-input').value);
+    });
+    document.getElementById('csearch-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') searchCountry(e.target.value);
+    });
+    document.getElementById('csearch-input')?.addEventListener('input', function() {
+      const q = this.value.toLowerCase();
+      const sg = document.getElementById('csearch-suggestions');
+      if (!q || q.length < 2) { sg.innerHTML = ''; return; }
+      const matches = COUNTRY_QUICK.filter(c => c.name.toLowerCase().includes(q)).slice(0, 6);
+      sg.innerHTML = matches.map(c =>
+        `<div class="csearch-sug" onclick="document.getElementById('csearch-input').value='${c.name}';searchCountry('${c.name}');document.getElementById('csearch-suggestions').innerHTML=''">
+          ${c.flag} ${c.name}
+        </div>`).join('');
+    });
 
     // ── Journalist search / category filter ───────────────
     function filterJournalists(query) {
