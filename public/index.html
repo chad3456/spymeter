@@ -242,6 +242,9 @@
     <!-- RIGHT PANEL ─────────────────────────────────── -->
     <aside id="right-panel">
 
+      <!-- Drag handle -->
+      <div id="rp-drag-handle" title="Drag to reposition panel">⠿ INTEL PANEL</div>
+
       <!-- Right panel tab switcher -->
       <div class="rp-tabs">
         <button class="rptab active" data-rptab="news">📡 NEWS</button>
@@ -257,19 +260,36 @@
 
       <!-- TAB: News (GDELT) -->
       <div class="rp-tab-body" id="rptab-news">
+
+        <!-- ── Groq AI Headlines (last 1h) ── -->
+        <div class="panel-card" id="groq-headlines-card">
+          <div class="card-hdr">
+            <span>🤖 GROQ INTEL BRIEF <span class="badge-live">● 1h LIVE</span></span>
+            <button id="refresh-groq-btn" class="mini-btn" title="Refresh Groq headlines">↻</button>
+          </div>
+          <div id="groq-brief-list" class="groq-brief-list">
+            <div class="news-loading">⟳ Loading AI intelligence brief…</div>
+          </div>
+          <div id="groq-raw-articles" class="scroll-list" style="max-height:120px;display:none"></div>
+          <div class="groq-footer">
+            <button id="groq-toggle-src" class="mini-btn" style="font-size:8px">SOURCES ▾</button>
+            <span id="groq-source-lbl" class="badge-static" style="font-size:7px;margin-left:4px"></span>
+          </div>
+        </div>
+
         <div class="panel-card">
           <div class="card-hdr">
             <span>📡 INTEL NEWS <span class="badge-live">● GDELT</span></span>
             <button id="refresh-news-btn" class="mini-btn">↻</button>
           </div>
-          <div id="news-feed" class="scroll-list" style="max-height:calc(100vh - 260px)"></div>
+          <div id="news-feed" class="scroll-list" style="max-height:calc(100vh - 380px)"></div>
         </div>
         <div class="panel-card" id="activity-card">
           <div class="card-hdr">
             <span>⚡ EVENTS</span>
             <button id="clr-feed" class="mini-btn">CLR</button>
           </div>
-          <div id="activity-feed" class="scroll-list" style="max-height:140px"></div>
+          <div id="activity-feed" class="scroll-list" style="max-height:120px"></div>
         </div>
       </div>
 
@@ -1244,6 +1264,141 @@
         card.style.display = (cat === 'all' || card.dataset.cat === cat) ? '' : 'none';
       });
     }
+
+    // ── Groq AI Headlines ──────────────────────────────────
+    let _groqRawArticles = [];
+    async function loadGroqHeadlines() {
+      const listEl = document.getElementById('groq-brief-list');
+      const srcLbl = document.getElementById('groq-source-lbl');
+      if (!listEl) return;
+      listEl.innerHTML = '<div class="news-loading">⟳ Loading AI brief…</div>';
+      try {
+        const r = await fetch('/api/groq-headlines');
+        const d = r.ok ? await r.json() : { headlines: [], articles: [] };
+        _groqRawArticles = d.articles || [];
+
+        if (!d.headlines?.length) {
+          listEl.innerHTML = '<div class="news-loading">No headlines in last 1h</div>';
+          return;
+        }
+        listEl.innerHTML = d.headlines.map((h, i) => {
+          const safe = h.replace(/'/g, '&#39;');
+          return `<div class="groq-brief-item">
+            <span class="groq-idx">${i + 1}</span>
+            <span class="groq-text">${h}</span>
+            <button class="narrate-btn-sm" onclick="UTILS.narrate('${safe}')" title="Listen">🔊</button>
+          </div>`;
+        }).join('');
+
+        if (srcLbl) srcLbl.textContent = d.source || '';
+
+        // Show raw articles if any
+        const rawEl = document.getElementById('groq-raw-articles');
+        if (rawEl && _groqRawArticles.length) {
+          rawEl.innerHTML = _groqRawArticles.map(a => {
+            const rel = UTILS.timeAgo(a.date);
+            return `<a class="news-item" href="${a.url||'#'}" target="_blank" rel="noopener">
+              <div class="news-title" style="font-size:9px">${a.title}</div>
+              <div class="news-meta">
+                <span class="news-src">${a.source}</span>
+                ${rel ? `<span class="news-ts">${rel}</span>` : ''}
+              </div>
+            </a>`;
+          }).join('');
+        }
+      } catch (_) {
+        if (listEl) listEl.innerHTML = '<div class="news-loading">Groq unavailable</div>';
+      }
+    }
+
+    // Auto-load Groq headlines when news tab opens
+    document.querySelector('.rptab[data-rptab="news"]')?.addEventListener('click', function() {
+      if (!this._groqLoaded) { this._groqLoaded = true; loadGroqHeadlines(); }
+    });
+    // Refresh button
+    document.getElementById('refresh-groq-btn')?.addEventListener('click', loadGroqHeadlines);
+    // Toggle raw sources
+    document.getElementById('groq-toggle-src')?.addEventListener('click', () => {
+      const el = document.getElementById('groq-raw-articles');
+      const btn = document.getElementById('groq-toggle-src');
+      if (!el) return;
+      const show = el.style.display === 'none';
+      el.style.display = show ? 'block' : 'none';
+      btn.textContent = show ? 'SOURCES ▴' : 'SOURCES ▾';
+    });
+    // Load on boot (news tab is default active)
+    setTimeout(loadGroqHeadlines, 1500);
+    // Refresh every 3 minutes
+    setInterval(loadGroqHeadlines, 180_000);
+
+    // ── Draggable right panel ──────────────────────────────
+    (function() {
+      const panel = document.getElementById('right-panel');
+      const handle = document.getElementById('rp-drag-handle');
+      if (!panel || !handle) return;
+
+      let dragging = false, ox = 0, oy = 0;
+
+      // Restore saved position
+      const saved = localStorage.getItem('rp-pos');
+      if (saved) {
+        try {
+          const { right, top } = JSON.parse(saved);
+          panel.style.position = 'fixed';
+          panel.style.right = right + 'px';
+          panel.style.top  = top  + 'px';
+          panel.style.height = 'calc(100vh - ' + top + 'px)';
+          panel.style.zIndex = '900';
+        } catch (_) {}
+      }
+
+      handle.addEventListener('mousedown', e => {
+        e.preventDefault();
+        // Switch to fixed positioning
+        const rect = panel.getBoundingClientRect();
+        panel.style.position = 'fixed';
+        panel.style.left   = rect.left + 'px';
+        panel.style.top    = rect.top  + 'px';
+        panel.style.right  = 'auto';
+        panel.style.height = 'calc(100vh - ' + rect.top + 'px)';
+        panel.style.zIndex = '900';
+        ox = e.clientX - rect.left;
+        oy = e.clientY - rect.top;
+        dragging = true;
+        document.body.style.userSelect = 'none';
+      });
+
+      document.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        let nx = e.clientX - ox;
+        let ny = e.clientY - oy;
+        nx = Math.max(0, Math.min(nx, window.innerWidth - panel.offsetWidth));
+        ny = Math.max(0, Math.min(ny, window.innerHeight - 100));
+        panel.style.left = nx + 'px';
+        panel.style.top  = ny + 'px';
+        panel.style.height = 'calc(100vh - ' + ny + 'px)';
+      });
+
+      document.addEventListener('mouseup', e => {
+        if (!dragging) return;
+        dragging = false;
+        document.body.style.userSelect = '';
+        const rect = panel.getBoundingClientRect();
+        const right = window.innerWidth - rect.right;
+        localStorage.setItem('rp-pos', JSON.stringify({ right: Math.round(right), top: Math.round(rect.top) }));
+      });
+
+      // Double-click handle to snap back to default
+      handle.addEventListener('dblclick', () => {
+        panel.style.position = '';
+        panel.style.left   = '';
+        panel.style.top    = '';
+        panel.style.right  = '';
+        panel.style.height = '';
+        panel.style.zIndex = '';
+        localStorage.removeItem('rp-pos');
+      });
+    })();
   </script>
 
 </body>

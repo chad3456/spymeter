@@ -1658,3 +1658,89 @@ body.crt-active #ws-status.connected { color: #00ff41; }
 .news-ts {
   color: var(--text-dim); font-size: 9px; margin-left: 3px;
 }
+
+/* ── Groq AI Headlines card ─────────────────────────────── */
+.groq-brief-list {
+  padding: 4px 0;
+}
+.groq-brief-item {
+  display: flex; align-items: flex-start; gap: 5px;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(0,212,255,0.06);
+  transition: background var(--transition);
+}
+.groq-brief-item:hover { background: rgba(0,212,255,0.05); }
+.groq-idx {
+  min-width: 14px; height: 14px; line-height: 14px;
+  background: rgba(0,212,255,0.15); color: var(--accent);
+  font-size: 8px; text-align: center; border-radius: 2px;
+  font-weight: 700; flex-shrink: 0; margin-top: 1px;
+}
+.groq-text {
+  flex: 1; font-size: 10px; color: var(--text-hi);
+  line-height: 1.45; user-select: text;
+}
+.groq-footer {
+  display: flex; align-items: center;
+  padding: 3px 6px 4px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Drag handle for right panel ────────────────────────── */
+#rp-drag-handle {
+  display: flex; align-items: center; justify-content: center;
+  height: 18px;
+  background: linear-gradient(90deg, rgba(0,212,255,0.06), rgba(0,212,255,0.12), rgba(0,212,255,0.06));
+  border-bottom: 1px solid var(--border-hi);
+  color: var(--text-dim); font-size: 8px; letter-spacing: 2px;
+  cursor: grab; user-select: none;
+  text-transform: uppercase;
+  transition: background var(--transition);
+}
+#rp-drag-handle:hover {
+  background: rgba(0,212,255,0.18); color: var(--accent);
+}
+#rp-drag-handle:active { cursor: grabbing; }
+
+/* ── Globe controls bar ─────────────────────────────────── */
+#globe-ctrl-bar {
+  position: absolute; bottom: 32px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(4,6,8,0.82);
+  border: 1px solid var(--border-hi);
+  border-radius: 20px;
+  padding: 5px 12px;
+  backdrop-filter: blur(8px);
+  z-index: 100; pointer-events: all;
+}
+.globe-ctrl-btn {
+  background: rgba(0,212,255,0.08);
+  border: 1px solid rgba(0,212,255,0.25);
+  color: var(--text);
+  font-family: var(--font-mono); font-size: 9px;
+  padding: 3px 9px; border-radius: 12px;
+  cursor: pointer; letter-spacing: 0.5px;
+  transition: var(--transition);
+}
+.globe-ctrl-btn:hover { background: rgba(0,212,255,0.2); color: var(--accent); }
+.globe-ctrl-btn.active {
+  background: rgba(0,212,255,0.22);
+  border-color: var(--accent); color: var(--accent);
+  box-shadow: 0 0 8px rgba(0,212,255,0.3);
+}
+#globe-god-eye.active {
+  background: rgba(255,50,50,0.2);
+  border-color: #ff3344; color: #ff3344;
+  box-shadow: 0 0 10px rgba(255,50,50,0.4);
+  animation: godEyePulse 1.2s ease-in-out infinite;
+}
+@keyframes godEyePulse {
+  0%,100% { box-shadow: 0 0 8px rgba(255,50,50,0.4); }
+  50%      { box-shadow: 0 0 18px rgba(255,50,50,0.7); }
+}
+.globe-ac-badge {
+  font-size: 8px; color: var(--accent);
+  font-family: var(--font-mono); letter-spacing: 1px;
+  padding-left: 6px; border-left: 1px solid var(--border);
+}

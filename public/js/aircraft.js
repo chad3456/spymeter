@@ -7,6 +7,7 @@ const AIRCRAFT = (() => {
   let enabled      = true;
   let markers      = {};
   let data         = [];
+  let dataTs       = 0;     // timestamp of last successful fetch
   let activeCountries = new Set();
   let selectedIcao = null;
 
@@ -205,6 +206,7 @@ const AIRCRAFT = (() => {
   function processStates(states) {
     if (!states || !Array.isArray(states)) return;
     data = states;
+    dataTs = Date.now();
     const icaos = [];
     let milCount = 0, droneCount = 0;
     const countryCounts = {};
@@ -274,11 +276,12 @@ const AIRCRAFT = (() => {
   }
 
   function getData()        { return data; }
+  function getTs()          { return dataTs; }
   function getMarkers()     { return markers; }
 
   return {
     init, setEnabled, setCountryFilter, handleWSUpdate,
-    getData, getMarkers, isMilitary, detectType,
+    getData, getTs, getMarkers, isMilitary, detectType,
     refresh: fetchData,
   };
 })();

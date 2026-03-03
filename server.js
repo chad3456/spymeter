@@ -635,6 +635,90 @@ app.get('/api/india-citizens', async (req, res) => {
   res.json(result);
 });
 
+// ─── Groq AI Headlines — last 1h GDELT + Groq llama summary ─
+const TASK_NARRATION = /^(we need to|i need to|let me|i'll |i should|i will |the task is|the instructions|according to the rules|so we need to|okay[,.]\s*(i'll|let me|so|we need|the task|i should|i will)|sure[,.]\s*(i'll|let me|so|we need|the task|i should|i will|here)|first[, ]+(i|we|let)|to summarize (the headlines|the task|this)|my task (is|was|:)|step \d)/i;
+const PROMPT_ECHO    = /^(summarize the top story|summarize the key|rules:|here are the rules|the top story is likely)/i;
+
+const groqHeadlinesCache = { data: null, ts: 0 };
+app.get('/api/groq-headlines', async (req, res) => {
+  const now = Date.now();
+  if (groqHeadlinesCache.data && now - groqHeadlinesCache.ts < 180_000) return res.json(groqHeadlinesCache.data);
+
+  // Fetch last-1h GDELT articles across key conflict queries
+  const gQueries = [
+    'Iran Israel war military strike attack 2026',
+    'Russia Ukraine NATO military conflict frontline',
+    'China Taiwan military US geopolitics tension',
+    'global terror attack missile drone strike news',
+  ];
+  let articles = [];
+  for (const q of gQueries) {
+    try {
+      const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+        params: { query: q, mode: 'artlist', maxrecords: 5, format: 'json', sort: 'datedesc', timespan: '1h' },
+        timeout: 6_000,
+      });
+      if (r.data?.articles) articles.push(...r.data.articles.slice(0, 5));
+    } catch (_) {}
+  }
+  // Also try Reuters RSS
+  try {
+    const reutersR = await axios.get('https://feeds.reuters.com/reuters/topNews', {
+      timeout: 6_000,
+      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/rss+xml,application/xml' },
+    });
+    const rTitles = [...(reutersR.data.matchAll(/<title><!\[CDATA\[([^\]]+)\]\]><\/title>/g))].slice(0, 8);
+    rTitles.forEach(m => articles.push({ title: m[1], url: '', source: 'Reuters', seendate: '' }));
+  } catch (_) {}
+
+  // Deduplicate
+  const seen = new Set();
+  articles = articles.filter(a => {
+    if (!a.title || seen.has(a.title)) return false;
+    seen.add(a.title); return true;
+  }).slice(0, 15);
+
+  if (!articles.length) {
+    return res.json({ headlines: [], articles: [], ts: now, source: 'No articles in last 1h' });
+  }
+
+  // Prepare prompt for Groq
+  const numbered = articles.map((a, i) => `${i+1}. ${a.title}`).join('\n');
+  let briefLines = [];
+
+  try {
+    const groqR = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+      model: 'llama-3.1-8b-instant',
+      messages: [
+        { role: 'system', content: 'You are a concise military intelligence analyst. Given news headlines, write exactly 5 one-line briefing points. Start each line directly with a fact — no numbering, no preamble, no meta-commentary. Maximum 20 words per line. Be specific, factual, and urgent.' },
+        { role: 'user',   content: `HEADLINES (last 1 hour):\n${numbered}\n\nProvide 5 intelligence briefing points:` },
+      ],
+      max_tokens: 350,
+      temperature: 0.15,
+    }, {
+      headers: { Authorization: `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+      timeout: 15_000,
+    });
+    const raw = groqR.data?.choices?.[0]?.message?.content || '';
+    briefLines = raw.split('\n')
+      .map(l => l.replace(/^[\d\.\-\*\s]+/, '').trim())
+      .filter(l => l.length > 15 && !TASK_NARRATION.test(l) && !PROMPT_ECHO.test(l))
+      .slice(0, 5);
+  } catch (_) {
+    // Fallback: use raw titles as briefing
+    briefLines = articles.slice(0, 5).map(a => a.title);
+  }
+
+  const result = {
+    headlines: briefLines,
+    articles:  articles.slice(0, 8).map(a => ({ title: a.title, url: a.url||'', source: a.domain||a.source||'GDELT', date: a.seendate||'' })),
+    ts: now,
+    source: briefLines.length > 0 ? 'Groq llama-3.1-8b + GDELT/Reuters' : 'GDELT (Groq unavailable)',
+  };
+  groqHeadlinesCache.data = result; groqHeadlinesCache.ts = now;
+  res.json(result);
+});
+
 // ─── Oil Geopolitical News (GDELT) ────────────────────────
 const oilNewsCache = { data: null, ts: 0 };
 app.get('/api/oil-news', async (req, res) => {

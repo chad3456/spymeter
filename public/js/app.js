@@ -156,7 +156,20 @@ const APP = (() => {
   }
 
   /* ── 3D Globe – Globe.gl ──────────────────────────────── */
-  let globeRetryTimer = null;
+  let globeRetryTimer  = null;
+  let globeAnimTimer   = null;   // dead-reckoning interval
+  let godEyeActive     = false;
+  let godEyeRegion     = 0;     // cycles through hotspots
+
+  // Conflict hotspots for God Eye sweep
+  const GOD_EYE_HOTSPOTS = [
+    { label:'IRAN/ISRAEL',  lat: 32.5,  lng: 36.0,  alt: 0.9 },
+    { label:'UKRAINE',      lat: 49.2,  lng: 32.0,  alt: 0.8 },
+    { label:'RED SEA',      lat: 15.5,  lng: 43.0,  alt: 0.9 },
+    { label:'TAIWAN STRAIT',lat: 24.5,  lng: 122.0, alt: 0.9 },
+    { label:'KOREAN PENINSULA', lat: 38.0, lng: 127.5, alt: 0.9 },
+    { label:'SOUTH CHINA SEA',  lat: 12.0, lng: 114.0, alt: 1.1 },
+  ];
 
   function initGlobe() {
     const container = document.getElementById('globe-container');
@@ -179,13 +192,20 @@ const APP = (() => {
       globe.controls().autoRotateSpeed = 0.35;
       globe.controls().enableDamping   = true;
 
-      container.addEventListener('mousedown', () => { globe.controls().autoRotate = false; });
+      container.addEventListener('mousedown', () => {
+        globe.controls().autoRotate = false;
+        if (godEyeActive) { godEyeActive = false; _updateGodEyeBtn(false); }
+      });
+
+      // Inject globe controls UI
+      _injectGlobeControls(container);
     }
 
     globe.width(container.offsetWidth).height(container.offsetHeight);
 
-    // Force a fresh aircraft fetch when globe opens, then update points
-    AIRCRAFT.refresh().then(() => updateGlobePoints()).catch(() => updateGlobePoints());
+    // Force a fresh aircraft fetch when globe opens, then start animation
+    AIRCRAFT.refresh().then(() => { updateGlobePoints(); startGlobeAnimation(); })
+                      .catch(() => { updateGlobePoints(); startGlobeAnimation(); });
 
     if (arcsEnabled) applyGlobeArcs();
 
@@ -193,6 +213,112 @@ const APP = (() => {
     globeTimer = setInterval(() => {
       if (document.getElementById('globe-container').style.display !== 'none') updateGlobePoints();
     }, 15_000);
+  }
+
+  function _injectGlobeControls(container) {
+    if (document.getElementById('globe-ctrl-bar')) return;
+    const bar = document.createElement('div');
+    bar.id = 'globe-ctrl-bar';
+    bar.innerHTML = `
+      <button id="globe-god-eye" class="globe-ctrl-btn" title="God Eye — Lock on conflict hotspot">👁 GOD EYE</button>
+      <button id="globe-rotate"  class="globe-ctrl-btn active" title="Toggle auto-rotate">⟳ ROTATE</button>
+      <button id="globe-reset"   class="globe-ctrl-btn" title="Reset to global view">⊙ RESET</button>
+      <span   id="globe-ac-count" class="globe-ac-badge">— AC</span>
+    `;
+    container.appendChild(bar);
+
+    document.getElementById('globe-god-eye')?.addEventListener('click', toggleGodEye);
+    document.getElementById('globe-rotate')?.addEventListener('click', () => {
+      if (!globe) return;
+      const c = globe.controls();
+      c.autoRotate = !c.autoRotate;
+      document.getElementById('globe-rotate')?.classList.toggle('active', c.autoRotate);
+    });
+    document.getElementById('globe-reset')?.addEventListener('click', () => {
+      if (!globe) return;
+      globe.controls().autoRotate = false;
+      globe.pointOfView({ lat: 20, lng: 0, altitude: 2.5 }, 1500);
+      setTimeout(() => { if (globe) globe.controls().autoRotate = true; }, 2000);
+    });
+  }
+
+  function _updateGodEyeBtn(on) {
+    const btn = document.getElementById('globe-god-eye');
+    if (!btn) return;
+    btn.classList.toggle('active', on);
+    btn.textContent = on ? '👁 GOD EYE ●' : '👁 GOD EYE';
+  }
+
+  function toggleGodEye() {
+    if (!globe) return;
+    godEyeActive = !godEyeActive;
+    _updateGodEyeBtn(godEyeActive);
+
+    if (godEyeActive) {
+      globe.controls().autoRotate = false;
+      _sweepGodEye();
+    }
+  }
+
+  function _sweepGodEye() {
+    if (!godEyeActive || !globe) return;
+    const h = GOD_EYE_HOTSPOTS[godEyeRegion % GOD_EYE_HOTSPOTS.length];
+    godEyeRegion++;
+
+    // Show label
+    const badge = document.getElementById('globe-ac-count');
+    if (badge) badge.textContent = `👁 ${h.label}`;
+
+    globe.pointOfView({ lat: h.lat, lng: h.lng, altitude: h.alt }, 2000);
+    setTimeout(() => { if (godEyeActive) _sweepGodEye(); }, 6000);
+  }
+
+  // ── Dead-reckoning animation (smooth aircraft movement) ──
+  function startGlobeAnimation() {
+    if (globeAnimTimer) return;
+    globeAnimTimer = setInterval(() => {
+      if (!globe || document.getElementById('globe-container').style.display === 'none') return;
+      const states = AIRCRAFT.getData();
+      if (!states?.length) return;
+      const fetchTs = AIRCRAFT.getTs() || Date.now();
+      const dt      = Math.min((Date.now() - fetchTs) / 1000, 30); // cap at 30s
+
+      const pts = states.filter(s => s[6] && s[5]).map(s => {
+        let lat = s[6], lng = s[5];
+        const vel = s[9] || 0;   // m/s
+        const hdg = s[10] || 0;  // degrees
+        // Project forward: dead reckoning (only for airborne aircraft)
+        if (vel > 5 && !s[8]) {
+          const h = hdg * Math.PI / 180;
+          lat += (vel * Math.cos(h) / 111111) * dt;
+          lng += (vel * Math.sin(h) / (111111 * Math.cos(lat * Math.PI / 180))) * dt;
+        }
+        const cs  = (s[1]||'').trim();
+        const mil = AIRCRAFT.isMilitary(cs);
+        const t   = AIRCRAFT.detectType(cs, s[8]);
+        return {
+          lat, lng,
+          alt:   s[8] ? 0 : Math.min((s[7]||0)/600_000, 0.12),
+          color: t==='drone' ? '#ff2200' : mil ? '#ff9900' : UTILS.countryColor(s[2]||''),
+          label: `${cs||s[0]} [${s[2]||'?'}] ${s[7] ? Math.round(s[7]*3.281).toLocaleString() : '?'}ft`,
+          size:  t==='drone' ? 1.0 : mil ? 0.85 : 0.55,
+          mil,
+        };
+      });
+
+      if (pts.length > 0) {
+        globe.pointsData(pts)
+          .pointLat(d => d.lat).pointLng(d => d.lng)
+          .pointAltitude(d => d.alt)
+          .pointColor(d => d.color)
+          .pointRadius(d => d.size)
+          .pointLabel(d => d.label)
+          .pointsMerge(false).pointResolution(6);
+
+        const acBadge = document.getElementById('globe-ac-count');
+        if (acBadge && !godEyeActive) acBadge.textContent = `${pts.length} AC`;
+      }
+    }, 2000);   // update interpolated positions every 2s
   }
 
   function updateGlobePoints() {
@@ -209,30 +335,11 @@ const APP = (() => {
       return;
     }
 
-    const pts = states.filter(s => s[6] && s[5]).map(s => {
-      const cs  = (s[1]||'').trim();
-      const mil = AIRCRAFT.isMilitary(cs);
-      const t   = AIRCRAFT.detectType(cs, s[8]);
-      return {
-        lat:   s[6], lng: s[5],
-        alt:   Math.min((s[7]||0)/600_000, 0.12),
-        color: t==='drone' ? '#ff2200' : mil ? '#ff9900' : UTILS.countryColor(s[2]||''),
-        label: `${cs||s[0]} [${s[2]||'?'}] ${s[7] ? Math.round(s[7]*3.281).toLocaleString() : '?'}ft`,
-        size:  t==='drone' ? 1.0 : mil ? 0.85 : 0.55,
-        mil,
-      };
-    });
-
-    globe.pointsData(pts)
-      .pointLat(d => d.lat).pointLng(d => d.lng)
-      .pointAltitude(d => d.alt)
-      .pointColor(d => d.color)
-      .pointRadius(d => d.size)
-      .pointLabel(d => d.label)
-      .pointsMerge(false)
-      .pointResolution(6);
-
     // Hexbin density layer — orange towers showing traffic concentration
+    const pts = states.filter(s => s[6] && s[5]).map(s => ({
+      lat: s[6], lng: s[5],
+      mil: AIRCRAFT.isMilitary((s[1]||'').trim()),
+    }));
     globe.hexBinPointsData(pts)
       .hexBinPointLat(d => d.lat)
       .hexBinPointLng(d => d.lng)
