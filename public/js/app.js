@@ -127,6 +127,10 @@ const APP = (() => {
               DC_LAYER.setEnabled(on);
               SIDEBAR.addFeedItem('satellite', on ? '🖥 Data Centers ON — Cloudscene/DCByte 2024 density' : 'Data center layer OFF');
               break;
+            case 'submarine':
+              SUBMARINE.setEnabled(on);
+              SIDEBAR.addFeedItem('satellite', on ? '🌊 Submarine OSINT ON — SSBN/SSN patrol zones visible' : 'Submarine layer OFF');
+              break;
           }
         }, 120);
       });
@@ -553,6 +557,7 @@ const APP = (() => {
     HAPI_LAYER.init(map);
     CYBER_LAYER.init(map);
     DC_LAYER.init(map);
+    SUBMARINE.init(map);
     // Register overlays with the MAP CTRL panel toggles
     OVERLAYS.registerOverlay('leaders', LEADERS);
     OVERLAYS.registerOverlay('cables',  CABLES);
