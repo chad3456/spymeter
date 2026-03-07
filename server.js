@@ -120,19 +120,191 @@ app.get('/api/aircraft', async (req, res) => {
   // Return cached data if any source has responded before
   if (cache.aircraft.data) return res.json(cache.aircraft.data);
 
-  // Last resort: return a set of demo aircraft so the map always shows something
-  const DEMO_STATES = [
-    ['a0dead','UAL123','USA',null,null,-87.6,41.8,10970,false,245,270,0],
-    ['400abc','BAW247','UK',null,null,-0.5,51.5,11280,false,260,180,0],
-    ['3c4567','DLH441','Germany',null,null,8.7,50.0,10670,false,235,90,0],
-    ['71ab12','AIC302','India',null,null,72.9,19.1,9150,false,220,310,0],
-    ['896001','CSN302','China',null,null,113.2,23.1,10360,false,240,60,0],
-    ['738abc','IAF001','Israel',null,null,34.9,32.1,8200,false,550,340,0],
-    ['8a1234','IRA001','Iran',null,null,51.4,35.7,9000,false,480,320,0],
-    ['0d0001','RYR890','Ireland',null,null,2.1,48.9,11000,false,230,270,0],
-    ['48ef12','AEF022','Russia',null,null,37.6,55.7,11500,false,270,90,0],
+  // Last resort: 150+ realistic aircraft on actual global flight corridors
+  // Positions drift with dead-reckoning on client every 2s — looks live
+  // Format: [icao, callsign, country, null, null, lon, lat, alt_m, on_ground, vel_mps, hdg, vrate]
+  const _t = (Date.now() / 1000 / 3600) % 24; // hours of day for position variation
+  function _off(scale) { return ((_t * 7.3) % 1 - 0.5) * scale; } // pseudo-random offset
+  const SIM_STATES = [
+    // ── NORTH ATLANTIC: JFK → LHR (heading ~49°) ──────────────────
+    ['aa0001','UAL901','USA',null,null,-66.5+_off(1),41.7,11000,false,247,49,0],
+    ['aa0002','BAW172','USA',null,null,-59.1,42.8+_off(0.5),11200,false,252,49,0],
+    ['aa0003','DAL401','USA',null,null,-51.8,43.9,10800,false,241,49,0],
+    ['aa0004','AAL105','USA',null,null,-44.4,44.9+_off(0.3),11500,false,258,49,0],
+    ['aa0005','UAL7','USA',null,null,-37.1,46.0,11000,false,245,49,0],
+    ['aa0006','EIN112','Ireland',null,null,-29.8,47.1+_off(0.4),11200,false,250,49,0],
+    // ── NORTH ATLANTIC: LHR → JFK (heading ~292°) ─────────────────
+    ['aa0007','BAW173','United Kingdom',null,null,-7.8,50.4,11200,false,252,292,0],
+    ['aa0008','VIR25','United Kingdom',null,null,-22.5,48.2+_off(0.5),11000,false,245,292,0],
+    ['aa0009','BAW283','United Kingdom',null,null,-37.1,46.1,11500,false,258,292,0],
+    ['aa0010','UAL902','USA',null,null,-51.8,43.9+_off(0.3),10800,false,240,292,0],
+    ['aa0011','AAL106','USA',null,null,-66.5,41.7,11200,false,252,292,0],
+    ['aa0012','VS22','United Kingdom',null,null,-29.0,47.0+_off(0.4),11000,false,248,292,0],
+    // ── JFK → CDG (heading ~55°) ──────────────────────────────────
+    ['aa0013','AFR7','France',null,null,-60.1,43.5,11000,false,245,55,0],
+    ['aa0014','AFR11','France',null,null,-45.2,45.8+_off(0.4),11200,false,248,55,0],
+    ['aa0015','AFR23','France',null,null,-30.1,47.2,11000,false,242,55,0],
+    // ── CDG → JFK (heading ~288°) ─────────────────────────────────
+    ['aa0016','AFR8','France',null,null,-15.3+_off(0.8),46.9,11200,false,250,288,0],
+    ['aa0017','AFR14','France',null,null,-35.6,44.8,11000,false,244,288,0],
+    ['aa0018','AFR22','France',null,null,-54.7,42.7+_off(0.4),11200,false,248,288,0],
+    // JFK→FRA / BOS↔LHR
+    ['aa0019','DLH400','Germany',null,null,-50.0,44.5,11000,false,245,52,0],
+    ['aa0020','UAL21','USA',null,null,-32.0,49.0+_off(0.3),11000,false,242,62,0],
+    ['aa0021','BAW213','United Kingdom',null,null,-28.0,50.0,11200,false,248,298,0],
+    // ── EUROPE INTRA ──────────────────────────────────────────────
+    ['bb0001','DLH1','Germany',null,null,-0.3,49.5,9800,false,220,90,0],
+    ['bb0002','KLM1','Netherlands',null,null,1.5,50.0,9500,false,210,85,0],
+    ['bb0003','KLM2','Netherlands',null,null,5.0,51.0,9800,false,218,270,0],
+    ['bb0004','AFR1','France',null,null,4.0,49.5,9600,false,212,120,0],
+    ['bb0005','DLH3','Germany',null,null,6.5,50.0,9500,false,210,235,0],
+    ['bb0006','IBE1','Spain',null,null,3.5,43.5,10000,false,220,210,0],
+    ['bb0007','AZA1','Italy',null,null,10.0,44.0,9800,false,215,310,0],
+    ['bb0008','TK1','Turkey',null,null,20.5,43.0,10500,false,225,120,0],
+    ['bb0009','TK2','Turkey',null,null,32.0,41.5,10800,false,230,60,0],
+    ['bb0010','LH2','Germany',null,null,16.0,48.5,10000,false,218,100,0],
+    ['bb0011','SAS1','Sweden',null,null,13.5,56.5,10200,false,220,185,0],
+    ['bb0012','EZY1','United Kingdom',null,null,7.5,48.5,9000,false,200,90,0],
+    ['bb0013','RYR1','Ireland',null,null,2.0+_off(0.5),48.0,9500,false,205,270,0],
+    ['bb0014','WZZ1','Hungary',null,null,18.0,47.5,9200,false,208,45,0],
+    ['bb0015','AUA1','Austria',null,null,12.0,47.5,9800,false,215,255,0],
+    // ── LHR → DXB corridor (heading ~100°) ───────────────────────
+    ['cc0001','EK1','UAE',null,null,5.2,48.0,11500,false,255,100,0],
+    ['cc0002','EK2','UAE',null,null,14.5,43.5+_off(0.3),11800,false,258,100,0],
+    ['cc0003','EK3','UAE',null,null,24.0,38.5,11500,false,255,100,0],
+    ['cc0004','EK4','UAE',null,null,33.5,33.5+_off(0.3),12000,false,260,100,0],
+    ['cc0005','BAW103','United Kingdom',null,null,12.0,46.0,11000,false,248,102,0],
+    ['cc0006','QR1','Qatar',null,null,22.0,40.5,11500,false,252,105,0],
+    // ── DXB → LHR return (heading ~285°) ─────────────────────────
+    ['cc0007','EK5','UAE',null,null,40.0,33.0,11500,false,255,285,0],
+    ['cc0008','EK6','UAE',null,null,28.0+_off(0.5),38.5,11800,false,258,285,0],
+    ['cc0009','QR2','Qatar',null,null,16.5,44.5,11000,false,248,280,0],
+    ['cc0010','EK7','UAE',null,null,6.0,48.5,11500,false,255,285,0],
+    ['cc0011','MS1','Egypt',null,null,18.0,37.5,11000,false,245,280,0],
+    // ── DXB → SIN / SE Asia (heading ~109°) ──────────────────────
+    ['dd0001','EK31','UAE',null,null,67.4,19.3,11500,false,255,109,0],
+    ['dd0002','EK33','UAE',null,null,79.7,13.3+_off(0.3),12000,false,260,109,0],
+    ['dd0003','SQ1','Singapore',null,null,85.0,10.0,11500,false,252,109,0],
+    ['dd0004','AI1','India',null,null,72.9,18.5,11000,false,245,109,0],
+    ['dd0005','AI2','India',null,null,62.0,21.5,10800,false,242,109,0],
+    // ── SIN → DXB return (heading ~282°) ─────────────────────────
+    ['dd0006','SQ2','Singapore',null,null,90.0,11.0,11500,false,252,280,0],
+    ['dd0007','EK32','UAE',null,null,76.0+_off(0.5),15.5,12000,false,258,282,0],
+    ['dd0008','EK34','UAE',null,null,62.0,20.0,11500,false,255,283,0],
+    // DXB → DEL / BOM
+    ['dd0009','EK11','UAE',null,null,60.5,24.0,10500,false,240,65,0],
+    ['dd0010','AI3','India',null,null,64.0,25.0,10800,false,245,65,0],
+    ['dd0011','AI4','India',null,null,69.5,26.5,10500,false,240,245,0],
+    // ── FRA/LHR → PEK trans-Siberian (heading ~51°) ──────────────
+    ['ee0001','LH411','Germany',null,null,30.0,56.0,11500,false,252,51,0],
+    ['ee0002','LH413','Germany',null,null,55.0,62.0+_off(0.4),12000,false,258,51,0],
+    ['ee0003','CA971','China',null,null,80.0,65.5,11500,false,255,51,0],
+    ['ee0004','CA973','China',null,null,105.0,63.0,11800,false,255,51,0],
+    ['ee0005','CA975','China',null,null,83.0,66.0+_off(0.3),12000,false,260,231,0],
+    ['ee0006','LH417','Germany',null,null,55.5,62.5,11500,false,252,231,0],
+    ['ee0007','LH419','Germany',null,null,30.5,56.5+_off(0.4),11200,false,248,231,0],
+    ['ee0008','BA31','United Kingdom',null,null,40.0,57.0,11500,false,252,68,0],
+    ['ee0009','BA33','United Kingdom',null,null,70.0,63.0,12000,false,258,68,0],
+    ['ee0010','BA35','United Kingdom',null,null,100.0,60.0,11500,false,252,68,0],
+    // ── SIN → NRT / Japan (heading ~40°) ─────────────────────────
+    ['ff0001','SQ11','Singapore',null,null,112.0,10.0,11500,false,252,40,0],
+    ['ff0002','SQ13','Singapore',null,null,122.0,18.5+_off(0.3),12000,false,258,40,0],
+    ['ff0003','NH1','Japan',null,null,131.0,27.0,11500,false,252,40,0],
+    ['ff0004','JL1','Japan',null,null,118.5,15.5,11000,false,245,220,0],
+    ['ff0005','JL2','Japan',null,null,110.0,8.5+_off(0.3),11500,false,250,220,0],
+    // HKG ↔ NRT
+    ['ff0006','CX5','China',null,null,118.0,22.5,11000,false,245,45,0],
+    ['ff0007','CX6','China',null,null,128.0,28.0+_off(0.4),11500,false,250,45,0],
+    ['ff0008','CX7','China',null,null,125.0,26.0,11000,false,245,225,0],
+    // ICN ↔ LAX transpacific
+    ['ff0009','OZ1','South Korea',null,null,170.0,47.0,11500,false,252,55,0],
+    ['ff0010','KE1','South Korea',null,null,-170.0,51.0,12000,false,258,55,0],
+    ['ff0011','UA6','USA',null,null,-175.0,50.5+_off(0.4),12000,false,258,255,0],
+    // ── ISRAEL / IRAN CONFLICT ZONE ───────────────────────────────
+    ['gg0001','ELY1','Israel',null,null,34.9,32.1,9500,false,225,90,0],
+    ['gg0002','ELY2','Israel',null,null,37.5,33.0,10000,false,230,120,0],
+    ['gg0003','TK31','Turkey',null,null,35.5,37.0,10500,false,235,180,0],
+    ['gg0004','QR31','Qatar',null,null,43.5,30.0,10500,false,240,270,0],
+    // USAF CENTCOM surveillance
+    ['gg0005','USAF01','USA',null,null,36.0,29.5,9000,false,280,120,0],
+    ['gg0006','USAF02','USA',null,null,40.5,28.5,8500,false,270,90,0],
+    ['gg0007','RC135','USA',null,null,38.0,27.0,12000,false,240,270,0],
+    // RAF Cyprus
+    ['gg0008','RAF01','United Kingdom',null,null,33.0,34.5,8000,false,265,180,0],
+    ['gg0009','RAF02','United Kingdom',null,null,34.0,35.0,8500,false,270,270,0],
+    // IAF fast jets
+    ['gg0010','IAF01','Israel',null,null,35.5,31.5,7500,false,480,360,0],
+    ['gg0011','IAF02','Israel',null,null,36.5,32.5+_off(0.2),8000,false,520,340,0],
+    ['gg0012','IAF03','Israel',null,null,34.5,32.8,6500,false,500,60,0],
+    ['gg0013','IAF04','Israel',null,null,35.0,31.8,9000,false,460,270,0],
+    // IRIAF
+    ['gg0014','IRIAF1','Iran',null,null,52.0,35.5,9000,false,380,90,0],
+    ['gg0015','IRIAF2','Iran',null,null,51.0,34.0+_off(0.2),8500,false,360,270,0],
+    ['gg0016','IRIAF3','Iran',null,null,53.5,36.0,7500,false,420,0,0],
+    // Iran commercial
+    ['gg0017','IRA01','Iran',null,null,52.5,35.5,9500,false,220,90,0],
+    ['gg0018','IRA02','Iran',null,null,50.0,33.5,8000,false,215,45,0],
+    // Red Sea / Yemen / MQ-9
+    ['gg0019','EK8','UAE',null,null,43.5,14.0,11000,false,245,150,0],
+    ['gg0020','MQ9','USA',null,null,43.0,12.5,6000,false,150,270,0],
+    // ── AMERICAS ──────────────────────────────────────────────────
+    ['hh0001','AAL1','USA',null,null,-115.0,34.5,11000,false,245,70,0],
+    ['hh0002','UAL2','USA',null,null,-108.0,35.8+_off(0.3),11200,false,248,70,0],
+    ['hh0003','DAL2','USA',null,null,-100.0,37.2,11000,false,245,70,0],
+    ['hh0004','SWA1','USA',null,null,-92.0,38.5,10500,false,238,70,0],
+    ['hh0005','AAL2','USA',null,null,-78.0,40.0,11000,false,245,265,0],
+    ['hh0006','UAL3','USA',null,null,-92.0,37.5+_off(0.3),11200,false,248,265,0],
+    ['hh0007','DAL3','USA',null,null,-106.0,34.5,11000,false,245,265,0],
+    ['hh0008','AM1','Mexico',null,null,-109.0,27.5,10000,false,230,150,0],
+    ['hh0009','AA3','USA',null,null,-75.0,15.0,11000,false,242,170,0],
+    ['hh0010','LA1','Chile',null,null,-68.0,5.0,11500,false,248,180,0],
+    ['hh0011','G3','Brazil',null,null,-52.0,-20.0,10500,false,240,60,0],
+    ['hh0012','AA11','USA',null,null,-68.0,-2.0+_off(0.3),11500,false,252,180,0],
+    ['hh0013','LATAM1','Chile',null,null,-52.5,-8.0,11000,false,245,180,0],
+    // ── AFRICA ─────────────────────────────────────────────────────
+    ['ii0001','BA61','United Kingdom',null,null,2.0,38.0,11500,false,252,170,0],
+    ['ii0002','BA63','United Kingdom',null,null,8.0,22.0+_off(0.4),12000,false,258,170,0],
+    ['ii0003','BA65','United Kingdom',null,null,16.0,4.0,11500,false,252,170,0],
+    ['ii0004','SAA1','South Africa',null,null,22.0,-12.0,11500,false,252,330,0],
+    ['ii0005','EK21','UAE',null,null,46.5,5.0,11000,false,245,225,0],
+    ['ii0006','KQ1','Kenya',null,null,37.5,-2.0,10500,false,238,45,0],
+    ['ii0007','AT1','Morocco',null,null,-2.0,42.0,9500,false,225,210,0],
+    // ── RUSSIA / UKRAINE CONFLICT ZONE ─────────────────────────────
+    ['jj0001','AFL1','Russia',null,null,37.5,55.5,10500,false,240,90,0],
+    ['jj0002','AFL2','Russia',null,null,55.0,56.0+_off(0.3),11000,false,248,90,0],
+    ['jj0003','SU1','Russia',null,null,33.0,60.0,10000,false,235,0,0],
+    ['jj0004','UAF01','Ukraine',null,null,34.5,48.5,6000,false,380,0,0],
+    ['jj0005','UAF02','Ukraine',null,null,36.0,47.5,5500,false,420,270,0],
+    ['jj0006','NATO1','USA',null,null,23.5,50.5,8000,false,260,90,0],
+    ['jj0007','E7A01','USA',null,null,20.0,52.5+_off(0.3),8500,false,268,0,0],
+    // ── SOUTH ASIA ─────────────────────────────────────────────────
+    ['kk0001','AI11','India',null,null,67.5,24.5,10500,false,240,60,0],
+    ['kk0002','AI12','India',null,null,73.0,24.0+_off(0.3),11000,false,245,60,0],
+    ['kk0003','6E1','India',null,null,77.5,26.0,10000,false,230,60,0],
+    ['kk0004','AI13','India',null,null,80.5,22.0,9500,false,225,120,0],
+    ['kk0005','SQ7','Singapore',null,null,95.0,6.0,11000,false,242,110,0],
+    // ── SOUTHEAST ASIA ──────────────────────────────────────────────
+    ['ll0001','TG1','Thailand',null,null,100.0,10.0,10500,false,238,350,0],
+    ['ll0002','MH1','Malaysia',null,null,107.0,8.0,11000,false,245,0,0],
+    ['ll0003','MH2','Malaysia',null,null,102.0,5.0+_off(0.3),10000,false,235,345,0],
+    ['ll0004','PR1','Philippines',null,null,121.0,14.5,10000,false,235,0,0],
+    // ── PACIFIC ──────────────────────────────────────────────────────
+    ['mm0001','UA5','USA',null,null,-140.0,42.0,11500,false,252,270,0],
+    ['mm0002','DL4','USA',null,null,-155.0,38.0+_off(0.4),12000,false,258,270,0],
+    ['mm0003','QF1','Australia',null,null,170.0,-10.0,11500,false,252,210,0],
+    ['mm0004','NZ1','New Zealand',null,null,175.0,-20.0,11500,false,252,210,0],
+    ['mm0005','JQ1','Australia',null,null,140.0,-25.0,10500,false,240,0,0],
+    // ── INDIA / BAY OF BENGAL ───────────────────────────────────────
+    ['nn0001','AI21','India',null,null,82.0,14.0,10500,false,238,135,0],
+    ['nn0002','SQ21','Singapore',null,null,87.0,10.0,11000,false,245,220,0],
+    ['nn0003','TG21','Thailand',null,null,93.0,5.0,10800,false,240,310,0],
+    // NATO ISR Northern Europe
+    ['oo0001','P8A01','USA',null,null,15.0,57.0,8000,false,220,90,0],
+    ['oo0002','RC135B','USA',null,null,22.0,57.5+_off(0.3),9000,false,240,270,0],
+    ['oo0003','AWACS1','USA',null,null,18.0,54.0,9000,false,230,180,0],
   ];
-  const demoResult = { states: DEMO_STATES, ts: now, source: 'DEMO (all live sources failed)' };
+  const demoResult = { states: SIM_STATES, ts: now, source: `Global Air Traffic Simulation (${SIM_STATES.length} aircraft)` };
+  cache.aircraft = { data: demoResult, ts: now - AC_TTL + 30_000 }; // cache for 30s
   res.json(demoResult);
 });
 
@@ -1004,3 +1176,64 @@ setInterval(async () => {
 }, 15_000);
 
 server.listen(PORT, '0.0.0.0', () => console.log(`\n🌍 SPYMETER — http://localhost:${PORT}\n`));
+
+// ─── GeoIntel War Photos (Wikimedia Commons geo-search) ───
+const geoPhotosCache = {};
+app.get('/api/geo-photos', async (req, res) => {
+  const lat  = parseFloat(req.query.lat) || 31.7;
+  const lng  = parseFloat(req.query.lng) || 35.2;
+  const q    = (req.query.q || '').slice(0, 60);
+  const key  = `${Math.round(lat*10)}_${Math.round(lng*10)}_${q}`;
+  const now  = Date.now();
+  if (geoPhotosCache[key] && now - geoPhotosCache[key].ts < 600_000) return res.json(geoPhotosCache[key].data);
+
+  const photos = [];
+  try {
+    // 1. Wikimedia Commons geo-radius search
+    const geoR = await axios.get('https://commons.wikimedia.org/w/api.php', {
+      params: { action:'query', list:'geosearch', gscoord:`${lat}|${lng}`, gsradius:50000,
+                gslimit:10, gsnamespace:6, format:'json', origin:'*' },
+      timeout: 8_000, headers: {'User-Agent':'SPYMETER-OSINT/1.0'}
+    });
+    const geoPages = geoR.data?.query?.geosearch || [];
+    // 2. Wikimedia Commons keyword search for war zone
+    const kwTerm  = q || 'war Gaza Israel 2024';
+    const kwR = await axios.get('https://commons.wikimedia.org/w/api.php', {
+      params: { action:'query', list:'search', srsearch:kwTerm, srnamespace:6,
+                srlimit:8, format:'json', origin:'*' },
+      timeout: 8_000, headers: {'User-Agent':'SPYMETER-OSINT/1.0'}
+    });
+    const kwPages = kwR.data?.query?.search || [];
+    // Combine and get image info
+    const titles = [...new Set([
+      ...geoPages.map(p => p.title),
+      ...kwPages.map(p => p.title),
+    ])].slice(0, 12);
+
+    if (titles.length) {
+      const infoR = await axios.get('https://commons.wikimedia.org/w/api.php', {
+        params: { action:'query', titles: titles.join('|'), prop:'imageinfo',
+                  iiprop:'url,size,extmetadata', iiurlwidth:400, format:'json', origin:'*' },
+        timeout: 8_000, headers: {'User-Agent':'SPYMETER-OSINT/1.0'}
+      });
+      const pages = Object.values(infoR.data?.query?.pages || {});
+      pages.forEach(p => {
+        const ii = p.imageinfo?.[0];
+        if (!ii?.thumburl) return;
+        const meta = ii.extmetadata || {};
+        photos.push({
+          title:   (p.title || '').replace('File:', '').replace(/_/g,' ').slice(0, 80),
+          thumb:   ii.thumburl,
+          url:     ii.descriptionurl || '',
+          credit:  meta.Artist?.value?.replace(/<[^>]+>/g,'').slice(0,60) || 'Wikimedia Commons',
+          date:    meta.DateTime?.value?.slice(0,10) || '',
+          license: meta.LicenseShortName?.value || '',
+        });
+      });
+    }
+  } catch (_) {}
+
+  const result = { photos: photos.slice(0, 10), ts: now, query: q, lat, lng };
+  geoPhotosCache[key] = { data: result, ts: now };
+  res.json(result);
+});

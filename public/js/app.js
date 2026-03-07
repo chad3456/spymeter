@@ -111,6 +111,22 @@ const APP = (() => {
               LEADERS.setEnabled(on);
               SIDEBAR.addFeedItem('satellite', on ? `👤 World Leaders ON — ${LEADERS.getData().length} heads of state mapped` : 'Leaders layer OFF');
               break;
+            case 'marine':
+              MARINE_LAYER.setEnabled(on);
+              SIDEBAR.addFeedItem('satellite', on ? '⚓ Marine Traffic ON — AIS vessels: tankers, cargo, naval' : 'Marine layer OFF');
+              break;
+            case 'hapi':
+              HAPI_LAYER.setEnabled(on);
+              SIDEBAR.addFeedItem('satellite', on ? '🆘 Humanitarian Crisis layer ON — HAPI/ACLED events' : 'Humanitarian crisis layer OFF');
+              break;
+            case 'cyber':
+              CYBER_LAYER.setEnabled(on);
+              SIDEBAR.addFeedItem('satellite', on ? '🛡 Cyber Threats ON — APT groups, botnet C2, CISA KEV' : 'Cyber threat layer OFF');
+              break;
+            case 'datacenter':
+              DC_LAYER.setEnabled(on);
+              SIDEBAR.addFeedItem('satellite', on ? '🖥 Data Centers ON — Cloudscene/DCByte 2024 density' : 'Data center layer OFF');
+              break;
           }
         }, 120);
       });
@@ -533,6 +549,10 @@ const APP = (() => {
     OVERLAYS.init(map);
     LEADERS.init(map);
     SIMULATION.init();
+    MARINE_LAYER.init(map);
+    HAPI_LAYER.init(map);
+    CYBER_LAYER.init(map);
+    DC_LAYER.init(map);
     // Register overlays with the MAP CTRL panel toggles
     OVERLAYS.registerOverlay('leaders', LEADERS);
     OVERLAYS.registerOverlay('cables',  CABLES);
@@ -556,9 +576,180 @@ const APP = (() => {
     SIDEBAR.addFeedItem('satellite', '🌍 SPYMETER online — OpenSky ADS-B + CelesTrak TLE active');
     SIDEBAR.addFeedItem('aircraft',  '✈ Fetching live ADS-B from OpenSky Network…');
     SIDEBAR.addFeedItem('military',  `⬡ ${MILITARY.getBases().length} military bases loaded | India nuclear sites visible`);
-    SIDEBAR.addFeedItem('satellite', '⚔ Weapons layer ready — toggle ⚔ WEAPONS in topbar');
+    SIDEBAR.addFeedItem('satellite', '⚔ New layers: ⚓ MARINE · 🆘 CRISES · 🛡 CYBER · 🖥 DC available in layer bar');
   }
 
   document.addEventListener('DOMContentLoaded', boot);
   return { flyTo, resetView, showMobilePanel };
+})();
+
+/* ── Marine Traffic Layer ───────────────────────────────────
+   AIS vessel tracking — tankers, container ships, naval     */
+const MARINE_LAYER = (() => {
+  let map = null, enabled = false, markers = [], refreshTimer = null;
+  const VESSEL_ICONS = {
+    tanker:    { color:'#ff9900', emoji:'🛢', size: 9 },
+    container: { color:'#00d4ff', emoji:'📦', size: 8 },
+    naval:     { color:'#ff3344', emoji:'⚓', size:10 },
+    carrier:   { color:'#ff0000', emoji:'✈', size:12 },
+    cable:     { color:'#9b59ff', emoji:'🔌', size: 8 },
+    cargo:     { color:'#00ff88', emoji:'🚢', size: 8 },
+  };
+  function _fetchAndRender() {
+    if (!enabled || !map) return;
+    fetch('/api/marine').then(r => r.json()).then(d => {
+      markers.forEach(m => map.removeLayer(m)); markers = [];
+      (d.vessels || []).forEach(v => {
+        const ic = VESSEL_ICONS[v.type] || VESSEL_ICONS.cargo;
+        const icon = L.divIcon({
+          html: `<div style="font-size:${ic.size}px;color:${ic.color};text-shadow:0 0 6px ${ic.color};transform:rotate(${v.hdg||0}deg)">${ic.emoji}</div>`,
+          className:'', iconSize:[20,20], iconAnchor:[10,10]
+        });
+        const col = v.severity==='critical'?'#ff2222': v.severity==='high'?'#ff8800':'#888';
+        const popup = `<div style="font-family:monospace;font-size:9px;background:#07090e;border:1px solid #1e3a5f;padding:6px 10px;border-radius:3px">
+          <b style="color:${ic.color}">${ic.emoji} ${v.name}</b><br>
+          Type: <span style="color:${ic.color}">${v.type.toUpperCase()}</span><br>
+          Route: ${v.route||'—'}<br>
+          Cargo: <span style="color:#ffaa00">${v.cargo||'—'}</span><br>
+          Speed: ${v.speed||0} kts · HDG: ${v.hdg||0}° ${v.flag||''}<br>
+          <span style="color:${col}">Severity: ${(v.severity||'normal').toUpperCase()}</span>
+        </div>`;
+        const mk = L.marker([v.lat, v.lng], { icon })
+          .bindPopup(popup, { className:'leaflet-popup-dark' }).addTo(map);
+        mk.on('click', () => {
+          if (typeof fetchGeoIntelPhotos === 'function') fetchGeoIntelPhotos(v.lat, v.lng, v.name + ' ' + v.type);
+        });
+        markers.push(mk);
+      });
+    }).catch(() => {});
+  }
+  return {
+    init(m) { map = m; },
+    setEnabled(on) {
+      enabled = on;
+      if (on) { _fetchAndRender(); refreshTimer = setInterval(_fetchAndRender, 60_000); }
+      else { clearInterval(refreshTimer); markers.forEach(m => map?.removeLayer(m)); markers = []; }
+    }
+  };
+})();
+
+/* ── HAPI Humanitarian Crisis Layer ────────────────────────
+   ACLED/UNOCHA events via HAPI HumanData API               */
+const HAPI_LAYER = (() => {
+  let map = null, enabled = false, markers = [];
+  function _fetchAndRender() {
+    if (!enabled || !map) return;
+    fetch('/api/hapi-events').then(r => r.json()).then(d => {
+      markers.forEach(m => map.removeLayer(m)); markers = [];
+      (d.events || []).forEach(ev => {
+        const sev = ev.severity || 'medium';
+        const col = sev==='critical'?'#ff0000': sev==='high'?'#ff8800': '#ffaa00';
+        const r   = sev==='critical'?14: sev==='high'?10:7;
+        const circle = L.circleMarker([ev.lat, ev.lng], {
+          radius:r, color:col, fillColor:col, fillOpacity:0.2, weight:1.5, opacity:0.8
+        });
+        const deaths = ev.fatalities ? `<br>Deaths: <b style="color:#ff4444">${ev.fatalities.toLocaleString()}</b>` : '';
+        circle.bindPopup(`<div style="font-family:monospace;font-size:9px;background:#07090e;border:1px solid ${col};padding:6px 10px;border-radius:3px">
+          <b style="color:${col}">🆘 ${ev.country||''}</b><br>${ev.desc||''}${deaths}
+          <br><span style="color:#3d5a78;font-size:8px">${ev.source||''} · ${ev.date||''}</span>
+        </div>`, { className:'leaflet-popup-dark' });
+        circle.addTo(map); markers.push(circle);
+      });
+    }).catch(() => {});
+  }
+  return {
+    init(m) { map = m; },
+    setEnabled(on) {
+      enabled = on;
+      if (on) _fetchAndRender();
+      else { markers.forEach(m => map?.removeLayer(m)); markers = []; }
+    }
+  };
+})();
+
+/* ── Cyber Threat Layer ─────────────────────────────────────
+   APT groups, botnet C2 IPs, CISA KEV — heatmap + markers  */
+const CYBER_LAYER = (() => {
+  let map = null, enabled = false, markers = [];
+  function _fetchAndRender() {
+    if (!enabled || !map) return;
+    fetch('/api/cyber-threats').then(r => r.json()).then(d => {
+      markers.forEach(m => map.removeLayer(m)); markers = [];
+      const threats = d.threats || [];
+      const maxC = Math.max(...threats.map(t => t.count||1), 1);
+      threats.forEach(t => {
+        const ratio  = (t.count||1) / maxC;
+        const radius = 6 + Math.round(ratio * 22);
+        const col    = ratio > 0.7 ? '#ff0000' : ratio > 0.4 ? '#ff8800' : '#ffdd00';
+        const circle = L.circleMarker([t.lat, t.lng], {
+          radius, color:col, fillColor:col, fillOpacity:0.15+ratio*0.2, weight:1.5, opacity:0.7
+        });
+        circle.bindPopup(`<div style="font-family:monospace;font-size:9px;background:#07090e;border:1px solid ${col};padding:6px 10px;border-radius:3px">
+          <b style="color:${col}">🛡 ${t.country}</b><br>
+          Active threats: <b>${t.count}</b><br>
+          Types: ${t.types||'—'}<br>
+          <span style="color:#3d5a78;font-size:8px">Source: ${t.source||'OSINT'}</span>
+        </div>`, { className:'leaflet-popup-dark' });
+        circle.addTo(map); markers.push(circle);
+      });
+      if (d.kev_count) SIDEBAR.addFeedItem('satellite', `🛡 CISA KEV: ${d.kev_count} known exploited vulnerabilities tracked`);
+    }).catch(() => {});
+  }
+  return {
+    init(m) { map = m; },
+    setEnabled(on) {
+      enabled = on;
+      if (on) _fetchAndRender();
+      else { markers.forEach(m => map?.removeLayer(m)); markers = []; }
+    }
+  };
+})();
+
+/* ── Data Center Density Layer ──────────────────────────────
+   Cloudscene/DCByte 2024 — bubble map by country count      */
+const DC_LAYER = (() => {
+  let map = null, enabled = false, markers = [];
+  function _fetchAndRender() {
+    if (!enabled || !map) return;
+    fetch('/api/datacenter-stats').then(r => r.json()).then(d => {
+      markers.forEach(m => map.removeLayer(m)); markers = [];
+      const dcs  = d.datacenters || [];
+      const maxD = Math.max(...dcs.map(dc => dc.count||0), 1);
+      dcs.forEach(dc => {
+        if (!dc.lat || !dc.lng) return;
+        const radius = 5 + Math.round((dc.count / maxD) * 28);
+        const col    = '#00d4ff';
+        const circle = L.circleMarker([dc.lat, dc.lng], {
+          radius, color:col, fillColor:col, fillOpacity:0.15, weight:1.5, opacity:0.7
+        });
+        circle.bindPopup(`<div style="font-family:monospace;font-size:9px;background:#07090e;border:1px solid ${col};padding:6px 10px;border-radius:3px">
+          <b style="color:${col}">🖥 ${dc.country}</b><br>
+          Data Centers: <b style="color:#00d4ff">${dc.count.toLocaleString()}</b><br>
+          <span style="font-size:8px">${dc.note||''}</span><br>
+          <span style="color:#3d5a78;font-size:8px">${d.source||'Cloudscene 2024'}</span>
+        </div>`, { className:'leaflet-popup-dark' });
+        circle.addTo(map); markers.push(circle);
+      });
+      // Update left panel card list
+      const list = document.getElementById('dc-stats-list');
+      if (list) {
+        list.innerHTML = dcs.sort((a,b) => (b.count||0)-(a.count||0)).slice(0,12).map(dc =>
+          `<div class="india-zone-row" onclick="APP.flyTo(${dc.lat||0},${dc.lng||0},4)">
+            <div class="iz-flag">🖥</div>
+            <div class="iz-info"><div class="iz-country">${dc.country}</div>
+              <div class="iz-advisory" style="color:#00d4ff">${dc.region||''}</div></div>
+            <div class="iz-nums"><div class="iz-total" style="color:#00d4ff">${dc.count}</div>
+              <div class="iz-label">DCs</div></div>
+          </div>`).join('');
+      }
+    }).catch(() => {});
+  }
+  return {
+    init(m) { map = m; },
+    setEnabled(on) {
+      enabled = on;
+      if (on) _fetchAndRender();
+      else { markers.forEach(m => map?.removeLayer(m)); markers = []; }
+    }
+  };
 })();

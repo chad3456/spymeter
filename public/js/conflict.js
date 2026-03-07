@@ -105,13 +105,12 @@ const CONFLICT = (() => {
   // fallbackId = hardcoded ID used if server scraping fails.
   // Server caches live IDs for 10 min, so each channel always shows the current live stream.
   const VIDEO_CHANNELS = [
-    { id:'aljaz',   label:'Al Jazeera',  flag:'🌍', handle:'aljazeeraenglish', fallbackId:'jNQXAC9IVRw', color:'#ff9900' },
+    { id:'cnn',     label:'CNN Int\'l',  flag:'🇺🇸', handle:'cnn',              fallbackId:'aO3JgPUJ6vQ', color:'#CC0000' },
+    { id:'aljaz',   label:'Al Jazeera',  flag:'🌍', handle:'aljazeeraenglish',  fallbackId:'jNQXAC9IVRw', color:'#ff9900' },
+    { id:'i24',     label:'i24 News',    flag:'🇮🇱', handle:'i24news',          fallbackId:'MLpupuAbWRc', color:'#004B9B' },
+    { id:'pressTV', label:'Press TV',    flag:'🇮🇷', handle:'presstv',          fallbackId:'gfmUBme05WI', color:'#009900' },
     { id:'bbc',     label:'BBC News',    flag:'🇬🇧', handle:'BBCNews',          fallbackId:'w_Ma4oQLyh0', color:'#BB1919' },
     { id:'france24',label:'France 24',   flag:'🇫🇷', handle:'FRANCE24',         fallbackId:'l8PMl7tUDIE', color:'#0055A4' },
-    { id:'dw',      label:'DW News',     flag:'🇩🇪', handle:'dwnews',           fallbackId:'mGFSSBqXqWU', color:'#CC0000' },
-    { id:'wion',    label:'WION',        flag:'🇮🇳', handle:'wionlive',         fallbackId:'GtO7fBzRQPI', color:'#E63946' },
-    { id:'trt',     label:'TRT World',   flag:'🇹🇷', handle:'trtworld',         fallbackId:'naxpSC4E9ZY', color:'#E30A17' },
-    { id:'ndtv',    label:'NDTV 24x7',   flag:'🇮🇳', handle:'ndtv',             fallbackId:'Gx9SzuTGMEw', color:'#ff8800' },
   ];
 
   // ── Tab switching ────────────────────────────────────────
@@ -129,7 +128,6 @@ const CONFLICT = (() => {
     if (tab === 'global')  loadUnrestNews();
     if (tab === 'video')      initVideoTab();
     if (tab === 'simulation') SIMULATION.init();
-    if (window.twttr?.widgets) window.twttr.widgets.load();
   }
 
   // ── GDELT loaders ────────────────────────────────────────
@@ -222,6 +220,8 @@ const CONFLICT = (() => {
       });
     }
     switchVideo(activeVideo);
+    // Load GDELT news feeds for the video tab news columns
+    if (typeof initVideoTabFeeds === 'function') initVideoTabFeeds();
   }
 
   async function switchVideo(chanId) {
@@ -324,7 +324,6 @@ const CONFLICT = (() => {
       btn.addEventListener('click', fetchIran2026News);
     }
     fetchIran2026News();
-    if (window.twttr?.widgets) window.twttr.widgets.load();
   }
 
   async function fetchIran2026News() {
@@ -364,9 +363,11 @@ const CONFLICT = (() => {
     renderGlobalEvents();
   }
 
+  function loadIranIsrNews() { loadGDELT('/api/conflict-news', 'iranisr-news-feed', STATIC_IRAN); }
+
   return {
     show, hide, toggle, getArcs, loadConflictNews, loadUkraineNews, loadUnrestNews,
-    switchTab, initTimelines, loadIran2026,
+    switchTab, initTimelines, loadIran2026, loadIranIsrNews,
   };
 })();
 

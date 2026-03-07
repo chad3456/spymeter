@@ -14,8 +14,6 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
-  <script async src="https://platform.twitter.com/widgets.js"></script>
-
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -174,6 +172,12 @@
         <div id="usbase-stats-list" class="scroll-list" style="max-height:220px"></div>
       </div>
 
+      <!-- ── 🖥 Datacenter Stats ── -->
+      <div class="panel-card" id="dc-stats-card">
+        <div class="card-hdr">🖥 DATA CENTERS <span class="badge-static">Cloudscene 2024</span></div>
+        <div id="dc-stats-list" class="scroll-list" style="max-height:200px"></div>
+      </div>
+
       <!-- ── Weapons filter ── -->
       <div class="panel-card" id="weapons-filter-card" style="display:none">
         <div class="card-hdr">⚔ WEAPON TYPE FILTER <span class="badge-static">SIPRI DB</span></div>
@@ -190,7 +194,7 @@
           <div class="src-row"><span class="badge-live">LIVE</span><span>Fires — NASA FIRMS (24h)</span></div>
           <div class="src-row"><span class="badge-live">LIVE</span><span>News — GDELT Project (3m)</span></div>
           <div class="src-row"><span class="badge-live">LIVE</span><span>Reddit — r/worldnews/ukraine/geo (2m)</span></div>
-          <div class="src-row"><span class="badge-live">LIVE</span><span>Tweets — X public search embed</span></div>
+          <div class="src-row"><span class="badge-live">LIVE</span><span>GeoIntel — Wikimedia Commons geo-search</span></div>
           <div class="src-row"><span class="badge-live">LIVE</span><span>Video — YouTube 24/7 streams</span></div>
           <div class="src-row"><span class="badge-static">DB</span><span>Weapons — SIPRI/IISS Military Balance</span></div>
           <div class="src-row"><span class="badge-static">DB</span><span>Mil Bases — OSINT/IISS 2024</span></div>
@@ -311,29 +315,16 @@
       <!-- TAB: Iran-Israel War 2026 -->
       <div class="rp-tab-body" id="rptab-iranisr" style="display:none">
         <div class="panel-card">
-          <div class="card-hdr">🔥 IRAN INTERNATIONAL <span class="badge-live">● LIVE X</span></div>
-          <!-- Account timeline loads faster than search; @IranIntl_En for Iran/Israel coverage -->
-          <div class="twitter-wrap" style="min-height:240px">
-            <a class="twitter-timeline" data-theme="dark"
-               data-chrome="noheader nofooter noborders transparent"
-               data-tweet-limit="6" data-width="280" data-height="240"
-               href="https://twitter.com/IranIntl_En">Loading @IranIntl_En…</a>
-          </div>
-        </div>
-        <div class="panel-card">
-          <div class="card-hdr">🔍 OSINT DEFENDER <span class="badge-live">● LIVE X</span></div>
-          <div class="twitter-wrap" style="min-height:200px">
-            <a class="twitter-timeline" data-theme="dark"
-               data-chrome="noheader nofooter noborders transparent"
-               data-tweet-limit="5" data-width="280" data-height="200"
-               href="https://twitter.com/OSINTdefender">Loading @OSINTdefender…</a>
-          </div>
-        </div>
-        <div class="panel-card">
-          <div class="card-hdr">📰 IRN/ISR INTEL NEWS <span class="badge-live">● GDELT</span></div>
-          <div id="iranisr-news-feed" class="scroll-list" style="max-height:220px">
+          <div class="card-hdr">📰 IRN/ISR INTEL NEWS <span class="badge-live">● GDELT 1h</span></div>
+          <div id="iranisr-news-feed" class="scroll-list" style="max-height:calc(100vh - 320px)">
             <div class="news-loading">⟳ Loading…</div>
           </div>
+        </div>
+        <div class="panel-card">
+          <div class="card-hdr">📡 i24 NEWS (ISRAEL) <span class="badge-live">● LIVE</span></div>
+          <iframe src="https://www.youtube.com/embed/MLpupuAbWRc?autoplay=1&mute=1&controls=1"
+            frameborder="0" allow="autoplay;encrypted-media" allowfullscreen
+            style="width:100%;height:180px;border-radius:3px"></iframe>
         </div>
       </div>
 
@@ -754,12 +745,11 @@
         <div id="iran-timeline" class="conflict-scroll"></div>
       </div>
       <div class="conflict-col">
-        <div class="conflict-section-hdr">🐦 X — IRAN INTERNATIONAL <span class="badge-live">● LIVE</span></div>
-        <div class="twitter-wrap">
-          <a class="twitter-timeline" data-theme="dark"
-             data-chrome="noheader nofooter noborders transparent"
-             data-tweet-limit="6" data-width="310" data-height="280"
-             href="https://twitter.com/IranIntl_En">Loading @IranIntl_En…</a>
+        <div class="conflict-section-hdr">📰 IRAN INTERNATIONAL — LIVE <span class="badge-live">● GDELT</span>
+          <button class="mini-btn" onclick="CONFLICT.loadIranIsrNews()" style="margin-left:auto">↻</button>
+        </div>
+        <div id="iraninternational-feed" class="conflict-scroll" style="max-height:280px">
+          <div class="conflict-loading">⟳ Loading…</div>
         </div>
         <div class="conflict-section-hdr" style="margin-top:4px">⚔ ACTIVE FRONTS <span class="badge-static">CURATED</span></div>
         <div class="fronts-grid">
@@ -830,21 +820,15 @@
         <!-- War timeline 2026 -->
         <div class="conflict-section-hdr">📅 WAR TIMELINE — 2026 <span class="badge-static">VERIFIED</span></div>
         <div id="iran2026-timeline" class="conflict-scroll" style="max-height:280px"></div>
-        <!-- Live X feeds -->
-        <div class="conflict-section-hdr" style="margin-top:6px">🐦 X — IRAN INTERNATIONAL <span class="badge-live">● LIVE</span></div>
-        <div class="twitter-wrap" style="max-height:220px">
-          <a class="twitter-timeline" data-theme="dark"
-             data-chrome="noheader nofooter noborders transparent"
-             data-tweet-limit="5" data-width="310" data-height="220"
-             href="https://twitter.com/IranIntl_En">Loading @IranIntl_En…</a>
-        </div>
-        <div class="conflict-section-hdr" style="margin-top:4px">🐦 @OSINTdefender <span class="badge-live">● LIVE</span></div>
-        <div class="twitter-wrap" style="max-height:180px">
-          <a class="twitter-timeline" data-theme="dark"
-             data-chrome="noheader nofooter noborders transparent"
-             data-tweet-limit="4" data-width="310" data-height="180"
-             href="https://twitter.com/OSINTdefender">Loading @OSINTdefender…</a>
-        </div>
+        <!-- i24 live embed -->
+        <div class="conflict-section-hdr" style="margin-top:6px">📺 i24 NEWS — ISRAEL LIVE <span class="badge-live">● LIVE</span></div>
+        <iframe src="https://www.youtube.com/embed/MLpupuAbWRc?autoplay=1&mute=1&controls=1"
+          frameborder="0" allow="autoplay;encrypted-media" allowfullscreen
+          style="width:100%;height:180px;border-radius:3px;margin-bottom:4px"></iframe>
+        <div class="conflict-section-hdr" style="margin-top:4px">📺 PRESS TV — IRAN/TEHRAN <span class="badge-live">● LIVE</span></div>
+        <iframe src="https://www.youtube.com/embed/gfmUBme05WI?autoplay=1&mute=1&controls=1"
+          frameborder="0" allow="autoplay;encrypted-media" allowfullscreen
+          style="width:100%;height:160px;border-radius:3px"></iframe>
       </div>
     </div>
 
@@ -858,13 +842,10 @@
         <div id="ukraine-timeline" class="conflict-scroll"></div>
       </div>
       <div class="conflict-col">
-        <div class="conflict-section-hdr">🐦 X — KYIV INDEPENDENT <span class="badge-live">● LIVE</span></div>
-        <div class="twitter-wrap">
-          <a class="twitter-timeline" data-theme="dark"
-             data-chrome="noheader nofooter noborders transparent"
-             data-tweet-limit="6" data-width="310" data-height="280"
-             href="https://twitter.com/KyivIndependent">Loading @KyivIndependent…</a>
+        <div class="conflict-section-hdr">📰 UKRAINE LIVE NEWS <span class="badge-live">● GDELT</span>
+          <button class="mini-btn" onclick="CONFLICT.loadUkraineNews()" style="margin-left:auto">↻</button>
         </div>
+        <div id="ukraine-news-list-2" class="conflict-scroll" style="max-height:200px"></div>
         <div class="conflict-section-hdr" style="margin-top:4px">⚔ FRONTLINES <span class="badge-static">STATUS</span></div>
         <div class="fronts-grid">
           <div class="front-card" onclick="APP.flyTo(50.4,30.5,7)"><div class="front-flag">🇺🇦</div><div class="front-name">KYIV</div><div class="front-status" style="color:#00ff88">DEFENDED</div><div class="front-detail">Patriot/SAMP-T active</div></div>
@@ -885,13 +866,8 @@
         <div id="global-news-list" class="conflict-scroll" style="max-height:55%"></div>
       </div>
       <div class="conflict-col">
-        <div class="conflict-section-hdr">🐦 X — DISCLOSE.TV <span class="badge-live">● BREAKING</span></div>
-        <div class="twitter-wrap" style="max-height:300px">
-          <a class="twitter-timeline" data-theme="dark"
-             data-chrome="noheader nofooter noborders transparent"
-             data-tweet-limit="7" data-width="310" data-height="280"
-             href="https://twitter.com/disclosetv">Loading @disclosetv…</a>
-        </div>
+        <div class="conflict-section-hdr">📰 GLOBAL BREAKING NEWS <span class="badge-live">● GDELT</span></div>
+        <div id="global-breaking-feed" class="conflict-scroll" style="max-height:280px"><div class="conflict-loading">⟳ Loading…</div></div>
         <div class="conflict-section-hdr" style="margin-top:4px">🌍 ACTIVE CRISES <span class="badge-static">OSINT</span></div>
         <div id="global-events-list" class="conflict-scroll" style="max-height:200px"></div>
       </div>
@@ -912,27 +888,18 @@
           allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
       </div>
       <div class="video-secondary-bar">
-        <div class="video-twitter-row">
-          <div class="video-twitter-col">
-            <div class="vtw-hdr">📡 @Reuters</div>
-            <a class="twitter-timeline" data-theme="dark"
-               data-chrome="noheader nofooter noborders transparent"
-               data-tweet-limit="4" data-width="200" data-height="155"
-               href="https://twitter.com/Reuters">Loading @Reuters…</a>
+        <div class="video-news-row">
+          <div class="video-news-col">
+            <div class="vtw-hdr">📰 REUTERS LIVE</div>
+            <div id="video-reuters-feed" class="scroll-list" style="max-height:140px"><div class="news-loading">⟳</div></div>
           </div>
-          <div class="video-twitter-col">
-            <div class="vtw-hdr">📡 @BBCBreaking</div>
-            <a class="twitter-timeline" data-theme="dark"
-               data-chrome="noheader nofooter noborders transparent"
-               data-tweet-limit="4" data-width="200" data-height="155"
-               href="https://twitter.com/BBCBreaking">Loading @BBCBreaking…</a>
+          <div class="video-news-col">
+            <div class="vtw-hdr">📰 ISRAEL INTEL</div>
+            <div id="video-israel-feed" class="scroll-list" style="max-height:140px"><div class="news-loading">⟳</div></div>
           </div>
-          <div class="video-twitter-col">
-            <div class="vtw-hdr">📡 @AJEnglish</div>
-            <a class="twitter-timeline" data-theme="dark"
-               data-chrome="noheader nofooter noborders transparent"
-               data-tweet-limit="4" data-width="200" data-height="155"
-               href="https://twitter.com/AJEnglish">Loading @AJEnglish…</a>
+          <div class="video-news-col">
+            <div class="vtw-hdr">📰 IRAN / TEHRAN</div>
+            <div id="video-iran-feed" class="scroll-list" style="max-height:140px"><div class="news-loading">⟳</div></div>
           </div>
         </div>
       </div>
@@ -1064,22 +1031,29 @@
     // ── RSS refresh button ─────────────────────────────────
     document.getElementById('refresh-rss-btn')?.addEventListener('click', () => POLLS.loadRSSNews());
 
-    // ── Journalist profile embed ───────────────────────────
-    function showJournalistFeed(handle, beat, flag) {
+    // ── Journalist profile — GDELT news search ────────────
+    async function showJournalistFeed(handle, beat, flag) {
       const card  = document.getElementById('journalist-feed-card');
       const title = document.getElementById('journalist-feed-title');
       const embed = document.getElementById('journalist-tweet-embed');
       if (!card) return;
       card.style.display = 'block';
-      title.textContent = `${flag} @${handle} — ${beat}`;
-      embed.innerHTML = `
-        <a class="twitter-timeline" data-theme="dark"
-           data-chrome="noheader nofooter noborders transparent"
-           data-tweet-limit="8" data-width="250" data-height="320"
-           href="https://twitter.com/${handle}">Loading @${handle}…</a>`;
-      if (window.twttr?.widgets) window.twttr.widgets.load(embed);
-      // Scroll to embed
+      title.textContent = `${flag} ${beat} — LATEST INTEL`;
+      embed.innerHTML = '<div class="news-loading">⟳ Loading…</div>';
       card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      try {
+        const r = await fetch(`/api/news?q=${encodeURIComponent(beat)}&limit=12`);
+        const j = await r.json();
+        const items = j.articles || j.items || [];
+        if (!items.length) { embed.innerHTML = '<div class="news-loading">No results.</div>'; return; }
+        embed.innerHTML = items.map(a => `
+          <div class="news-item" onclick="window.open('${a.url||'#'}','_blank')">
+            <div class="news-title">${a.title||'(no title)'}</div>
+            <div class="news-meta">${(a.source||'').toUpperCase()} · ${a.published||''}</div>
+          </div>`).join('');
+      } catch(e) {
+        embed.innerHTML = `<div class="news-loading">⟳ ${beat} — GDELT feed unavailable</div>`;
+      }
     }
     function hideJournalistFeed() {
       const card = document.getElementById('journalist-feed-card');
