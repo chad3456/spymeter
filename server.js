@@ -1504,7 +1504,23 @@ app.get('/api/datacenter-stats', async (req, res) => {
 
 // ─── Polymarket — Geopolitical Prediction Markets ─────────
 const polymarketCache = { data: null, ts: 0 };
-const POLY_KEYWORDS = ['war','nuclear','attack','strike','missile','iran','israel','ukraine','russia','china','taiwan','korea','military','coup','invasion','ceasefire','conflict','president','election','nato','troops'];
+const POLY_KEYWORDS = [
+  // Conflict & war
+  'war','attack','strike','invasion','ceasefire','coup','troops','military',
+  // Geopolitics core
+  'nuclear','missile','conflict','sanctions','nato','occupation',
+  // Countries / actors
+  'iran','israel','ukraine','russia','china','taiwan','korea','pakistan','india',
+  'hamas','hezbollah','houthi','isis','taliban','kremlin',
+  // Events / categories
+  'president','election','impeach','assassination','referendum',
+  // Epstein / classified files
+  'epstein','classified','declassified','cia','fbi','jfk',
+  // Geopolitical specifics
+  'world war','hypersonic','arms race','treaty','geopolit',
+  // Tech / defence
+  'drone','cyber attack','space weapon',
+];
 const STATIC_POLYMARKET = [
   {id:'pm001',question:'Will Iran conduct a direct military strike on Israel in 2026?',probability:0.38,volume:2100000,liquidity:450000,endDate:'2026-12-31',url:'https://polymarket.com',category:'war',country:'Iran',lat:32.4,lng:53.7},
   {id:'pm002',question:'Will there be a ceasefire in Gaza by June 2026?',probability:0.54,volume:3200000,liquidity:720000,endDate:'2026-06-30',url:'https://polymarket.com',category:'ceasefire',country:'Gaza',lat:31.4,lng:34.4},
@@ -1671,4 +1687,123 @@ app.get('/api/status', (req, res) => {
       NODE_ENV:      process.env.NODE_ENV || 'development',
     }
   });
+});
+
+// ─── Defence Feed — parallel swarm from OSINT RSS + GDELT + Drones-of-India ──
+const defCache = { data: null, ts: 0 };
+const DEFENCE_KEYWORDS = /drone|UAV|UAS|UCAV|loitering|kamikaze|stealth|hypersonic|cruise.?missile|submarine|frigate|destroyer|aircraft.?carrier|Brahmos|BrahMos|HIMARS|F-35|Su-57|J-20|AMCA|DRDO|Lockheed|Northrop|BAE|Dassault|Saab|radar|electronic.?warfare|cyber|laser|directed.?energy|autonomous.?weapon|satellite|SIGINT|AWACS|procurement|defence.?deal|defense.?deal|military.?contract|combat.?aircraft|stealth.?drone|loitering.?munition|UCAV|kamikaze.?drone|armed.?drone|tank|armour|artillery|missile.?defense|anti-drone|counter-UAS/i;
+
+const DEFENCE_RSS = [
+  'https://breakingdefense.com/feed/',
+  'https://www.thedrive.com/the-war-zone/feed',
+  'https://www.navalnews.com/feed/',
+  'https://www.naval-technology.com/feed/',
+  'https://www.airforce-technology.com/feed/',
+  'https://www.army-technology.com/feed/',
+  'https://www.defenseworld.net/rss',
+  'https://www.indiandefencereview.com/feed/',
+];
+
+// Drones of India — GitHub Pages data
+async function fetchDronesOfIndia() {
+  try {
+    const r = await axios.get('https://raw.githubusercontent.com/duorope/Drones-of-India/main/README.md', {
+      timeout: 8_000, headers: { Accept: 'text/plain' }
+    });
+    const md = r.data || '';
+    // Parse markdown table rows: | Name | Type | ... |
+    const rows = md.split('\n').filter(l => l.startsWith('|') && !l.includes('---') && !l.includes('Name'));
+    return rows.slice(0,20).map(row => {
+      const cols = row.split('|').map(c => c.trim()).filter(Boolean);
+      return {
+        title: cols[0] || 'Indian Drone System',
+        category: cols[1] || 'UAV',
+        status: cols[2] || '',
+        developer: cols[3] || 'DRDO/India',
+        source: 'Drones of India (GitHub OSINT)',
+        url: 'https://duorope.github.io/Drones-of-India/',
+        isIndia: true,
+        ts: new Date().toISOString(),
+      };
+    }).filter(d => d.title && d.title.length > 2);
+  } catch (_) { return []; }
+}
+
+// Parse RSS XML quickly
+function parseRSSItems(xml, feedUrl) {
+  const items = [];
+  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+  let m;
+  while ((m = itemRegex.exec(xml)) !== null && items.length < 8) {
+    const block = m[1];
+    const get = tag => { const r = new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>|<${tag}[^>]*>([\\s\\S]*?)</${tag}>`); const mm = r.exec(block); return mm ? (mm[1]||mm[2]||'').trim() : ''; };
+    const title = get('title').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+    const link  = get('link') || get('guid');
+    const desc  = get('description').replace(/<[^>]+>/g,'').slice(0,200);
+    const pub   = get('pubDate') || get('dc:date') || '';
+    if (title && DEFENCE_KEYWORDS.test(title + ' ' + desc)) {
+      items.push({ title, url: link, desc, pub, source: new URL(feedUrl).hostname.replace('www.',''), ts: pub });
+    }
+  }
+  return items;
+}
+
+app.get('/api/defence-feed', async (req, res) => {
+  const now = Date.now();
+  if (defCache.data && now - defCache.ts < 600_000) return res.json(defCache.data);
+
+  // Swarm: fetch all sources in parallel
+  const [rssResults, gdeltResult, dronesResult] = await Promise.allSettled([
+    // RSS swarm
+    Promise.allSettled(DEFENCE_RSS.map(url =>
+      axios.get(url, { timeout: 8_000, headers: { Accept:'application/rss+xml,text/xml', 'User-Agent':'SpymeterOSINT/1.0' } })
+        .then(r => parseRSSItems(r.data, url))
+        .catch(() => [])
+    )),
+    // GDELT swarm: defence-specific queries
+    (async () => {
+      const queries = ['drone UAV military technology 2026','hypersonic missile defence deal procurement','DRDO India defence technology 2026','autonomous weapon AI military'];
+      const articles = [];
+      for (const q of queries) {
+        try {
+          const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+            params: { query: q, mode: 'artlist', maxrecords: 8, format: 'json', sort: 'datedesc', timespan: '24h' },
+            timeout: 7_000
+          });
+          if (r.data?.articles) articles.push(...r.data.articles.map(a => ({
+            title: a.title, url: a.url, source: a.domain, ts: a.seendate,
+            category: q.includes('drone') ? 'drone' : q.includes('hyper') ? 'missile' : q.includes('DRDO') ? 'india' : 'ai',
+          })));
+        } catch (_) {}
+      }
+      return articles;
+    })(),
+    // Drones of India
+    fetchDronesOfIndia(),
+  ]);
+
+  // Collect RSS items
+  const rssItems = [];
+  if (rssResults.status === 'fulfilled') {
+    rssResults.value.forEach(r => { if (r.status === 'fulfilled') rssItems.push(...r.value); });
+  }
+
+  // Deduplicate by title
+  const seen = new Set();
+  const allItems = [...rssItems].filter(i => { if (!i.title || seen.has(i.title)) return false; seen.add(i.title); return true; });
+  allItems.sort((a,b) => new Date(b.ts||0) - new Date(a.ts||0));
+
+  const gdeltItems = gdeltResult.status === 'fulfilled' ? gdeltResult.value : [];
+  const drones = dronesResult.status === 'fulfilled' ? dronesResult.value : [];
+
+  const out = {
+    feed: allItems.slice(0,40),
+    gdelt: gdeltItems.slice(0,20),
+    drones: drones,
+    ts: now,
+    sources: DEFENCE_RSS.length + 2,
+    count: allItems.length + gdeltItems.length + drones.length,
+  };
+  defCache.data = out; defCache.ts = now;
+  res.json(out);
 });

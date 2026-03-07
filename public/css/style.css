@@ -1993,3 +1993,144 @@ body.crt-active #ws-status.connected { color: #00ff41; }
 .api-name { color: var(--text-hi); min-width: 120px; }
 .api-note { color: var(--text-dim); flex: 1; }
 .api-src  { color: var(--accent); font-size: 7px; }
+
+/* ── Polymarket Card Redesign — horizontal bar layout ───── */
+.pm-sort-bar {
+  display:flex; align-items:center; gap:3px;
+  padding:5px 8px; border-bottom:1px solid rgba(255,255,255,0.06);
+  background:rgba(0,0,0,0.2);
+}
+.pm-sort-lbl { font-size:7px; color:#3d5a78; letter-spacing:0.5px; margin-right:2px; }
+.pm-sort-btn {
+  font-size:8px; padding:2px 6px; border-radius:2px;
+  background:rgba(255,255,255,0.04); border:1px solid var(--border);
+  color:var(--text-dim); cursor:pointer; font-family:var(--font-mono);
+  transition:all 0.15s;
+}
+.pm-sort-btn.active { background:rgba(255,51,68,0.15); border-color:#ff3344; color:#ff3344; }
+.pm-sort-btn:hover  { border-color:var(--accent); color:var(--accent); }
+
+/* Redesigned pm-card — horizontal split */
+.pm-card {
+  display:flex; align-items:stretch;
+  background:rgba(255,255,255,0.025);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:3px; margin-bottom:4px;
+  cursor:pointer; text-decoration:none;
+  transition:background 0.15s, border-color 0.15s;
+  min-height:70px; overflow:hidden;
+}
+.pm-card:hover { background:rgba(255,51,68,0.07); border-color:rgba(255,51,68,0.3); }
+.pm-card-left {
+  flex:1; padding:6px 8px;
+  border-left:3px solid transparent;
+  display:flex; flex-direction:column; gap:3px;
+}
+.pm-card-right {
+  width:54px; flex-shrink:0;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  border-left:1px solid rgba(255,255,255,0.06);
+  gap:4px; padding:4px;
+}
+.pm-cat-pill {
+  font-size:7px; font-weight:700; letter-spacing:0.5px;
+  text-transform:uppercase;
+}
+.pm-question {
+  font-size:9px; color:var(--text-hi); line-height:1.4;
+  flex:1;
+}
+.pm-meta {
+  display:flex; gap:6px; font-size:7px; color:var(--text-dim);
+}
+.pm-vol  { color:#888; }
+.pm-exp  { color:#555; }
+.pm-pct-big {
+  font-size:20px; font-weight:700; line-height:1;
+  font-family:var(--font-ui);
+}
+.pm-pct-sign { font-size:11px; }
+.pm-bar-v {
+  width:8px; height:36px;
+  background:rgba(255,255,255,0.06);
+  border-radius:4px; overflow:hidden;
+  display:flex; flex-direction:column; justify-content:flex-end;
+}
+.pm-bar-fill-v { width:100%; border-radius:4px 4px 0 0; transition:height 0.4s ease; }
+
+/* ── Defence Dashboard ──────────────────────────────────── */
+.def-filter-bar {
+  display:flex; flex-wrap:wrap; gap:3px;
+  padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.06);
+  background:rgba(0,0,0,0.2);
+}
+.def-pill {
+  font-size:8px; padding:2px 6px; border-radius:10px;
+  background:rgba(255,255,255,0.04); border:1px solid var(--border);
+  color:var(--text-dim); cursor:pointer; font-family:var(--font-mono);
+  transition:all 0.15s; white-space:nowrap;
+}
+.def-pill.active { background:rgba(0,212,255,0.15); border-color:var(--accent); color:var(--accent); }
+.def-pill:hover  { border-color:var(--accent); color:var(--accent); }
+.def-section-hdr {
+  display:flex; align-items:center; gap:5px;
+  font-size:8px; font-weight:700; letter-spacing:0.8px;
+  color:var(--text-dim); padding:5px 8px 3px;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+  background:rgba(0,0,0,0.15);
+}
+.def-item {
+  display:block; padding:6px 8px;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  text-decoration:none; transition:background 0.12s;
+}
+.def-item:hover { background:rgba(0,212,255,0.04); }
+.def-item-cat {
+  display:inline-block; font-size:7px; font-weight:700;
+  padding:1px 5px; border-radius:2px; margin-bottom:3px;
+}
+.def-item-title { font-size:9px; color:var(--text-hi); line-height:1.4; margin-bottom:3px; }
+.def-item-desc  { font-size:7.5px; color:var(--text-dim); line-height:1.4; margin-bottom:3px; }
+.def-item-meta  { display:flex; gap:6px; font-size:7px; }
+.def-src        { color:#3d5a78; }
+.def-ts         { color:#555; }
+/* Indian drone cards */
+.def-drone-card {
+  display:flex; align-items:center; flex-wrap:wrap; gap:4px;
+  padding:4px 8px; border-bottom:1px solid rgba(255,136,0,0.1);
+  text-decoration:none; transition:background 0.12s;
+}
+.def-drone-card:hover { background:rgba(255,136,0,0.05); }
+.def-drone-name  { font-size:9px; color:var(--text-hi); font-weight:600; flex:1; }
+.def-drone-type  { font-size:7px; color:#ff8800; background:rgba(255,136,0,0.1); padding:1px 5px; border-radius:2px; }
+.def-drone-status{ font-size:7px; color:#00ff88; }
+.def-drone-dev   { font-size:7px; color:#3d5a78; margin-left:auto; }
+
+/* ── Collapsible left panel cards ───────────────────────── */
+.card-collapse-arrow {
+  font-size:9px; color:var(--text-dim); margin-left:auto; flex-shrink:0;
+  transition:transform 0.2s;
+}
+.collapsible-card .card-hdr { user-select:none; }
+
+/* ── Lego Map Mode ───────────────────────────────────────── */
+body.lego-mode .leaflet-tile {
+  image-rendering: pixelated;
+  filter: saturate(2.5) contrast(1.4) brightness(1.15) hue-rotate(5deg);
+}
+/* Lego stud overlay — repeating dot grid */
+body.lego-mode #map::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.12) 2px, transparent 2px);
+  background-size: 18px 18px;
+  pointer-events: none;
+  z-index: 390;
+}
+/* Bright borders on tiles for LEGO block effect */
+body.lego-mode .leaflet-tile {
+  outline: 0.5px solid rgba(0,0,0,0.08);
+}
+/* Lego mode label on map-ctrl */
+body.lego-mode #overlay-panel { border-color:#ffcc00; }

@@ -85,6 +85,27 @@ const OVERLAYS = (() => {
         }
       ],
       label: null
+    },
+    LEGO: {
+      base: [
+        {
+          // CartoDB Voyager — bright, cartoon-flat colors — best base for Lego effect
+          url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png',
+          options: {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 18
+          }
+        }
+      ],
+      label: {
+        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png',
+        options: {
+          subdomains: 'abcd',
+          maxZoom: 18,
+          pane: 'overlayPane'
+        }
+      }
     }
   };
 
@@ -110,6 +131,7 @@ const OVERLAYS = (() => {
         <button class="ovp-style-btn" data-style="LIGHT">LIGHT</button>
         <button class="ovp-style-btn" data-style="SATELLITE">SAT</button>
         <button class="ovp-style-btn" data-style="TERRAIN">TERRAIN</button>
+        <button class="ovp-style-btn" data-style="LEGO" style="color:#ffcc00;border-color:#ffcc0044">🟨 LEGO</button>
       </div>
     </div>
 
@@ -547,6 +569,8 @@ const OVERLAYS = (() => {
     }
 
     _currentStyle = styleName;
+    // Toggle Lego mode CSS class on body for stud/pixel effect
+    document.body.classList.toggle('lego-mode', styleName === 'LEGO');
   }
 
   // ─── Overlay Opacity ──────────────────────────────────────────────────────────

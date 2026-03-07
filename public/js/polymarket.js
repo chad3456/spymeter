@@ -26,30 +26,36 @@ const POLYMARKET = (() => {
     return '#00ff88';
   }
 
-  function renderCard(m) {
-    const pct     = Math.round((m.probability || 0.5) * 100);
-    const col     = probColor(m.probability || 0.5);
-    const catCol  = CAT_COLORS[m.category] || CAT_COLORS.default;
-    const vol     = m.volume >= 1_000_000
-      ? `$${(m.volume/1_000_000).toFixed(1)}M`
-      : m.volume >= 1_000 ? `$${(m.volume/1_000).toFixed(0)}K` : `$${Math.round(m.volume||0)}`;
-    const expiry  = m.endDate ? m.endDate.slice(0,10) : '—';
-    const safeQ   = (m.question||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function fmtVol(v) {
+    if (!v) return '$0';
+    if (v >= 1e6) return `$${(v/1e6).toFixed(1)}M`;
+    if (v >= 1e3) return `$${(v/1e3).toFixed(0)}K`;
+    return `$${Math.round(v)}`;
+  }
 
-    return `<div class="pm-card" onclick="window.open('${m.url||'https://polymarket.com'}','_blank')">
-      <div class="pm-cat-tag" style="background:${catCol}22;color:${catCol};border-color:${catCol}44">${(m.category||'conflict').toUpperCase()}</div>
-      <div class="pm-question">${safeQ}</div>
-      <div class="pm-bar-row">
-        <div class="pm-bar-bg">
-          <div class="pm-bar-fill" style="width:${pct}%;background:${col};box-shadow:0 0 8px ${col}55"></div>
+  function renderCard(m) {
+    const pct    = Math.round((m.probability || 0.5) * 100);
+    const col    = probColor(m.probability || 0.5);
+    const catCol = CAT_COLORS[m.category] || CAT_COLORS.default;
+    const vol    = fmtVol(m.volume);
+    const expiry = m.endDate ? m.endDate.slice(0,7) : '—';
+    const safeQ  = (m.question||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const url    = m.url || 'https://polymarket.com';
+    const q60    = safeQ.length > 80 ? safeQ.slice(0,77) + '…' : safeQ;
+
+    return `<a class="pm-card" href="${url}" target="_blank" rel="noopener noreferrer">
+      <div class="pm-card-left" style="border-left-color:${catCol}">
+        <div class="pm-cat-pill" style="color:${catCol}">${(m.category||'conflict').toUpperCase()}</div>
+        <div class="pm-question">${q60}</div>
+        <div class="pm-meta"><span class="pm-vol">${vol}</span><span class="pm-exp">exp ${expiry}</span></div>
+      </div>
+      <div class="pm-card-right">
+        <div class="pm-pct-big" style="color:${col}">${pct}<span class="pm-pct-sign">%</span></div>
+        <div class="pm-bar-v">
+          <div class="pm-bar-fill-v" style="height:${pct}%;background:${col};box-shadow:0 0 6px ${col}66"></div>
         </div>
-        <span class="pm-pct" style="color:${col}">${pct}%</span>
       </div>
-      <div class="pm-meta">
-        <span class="pm-vol">📊 ${vol} vol</span>
-        <span class="pm-exp">⏱ exp: ${expiry}</span>
-      </div>
-    </div>`;
+    </a>`;
   }
 
   // ── Globe arcs for active high-probability markets ────
@@ -71,6 +77,22 @@ const POLYMARKET = (() => {
   }
 
   // ── Fetch and render ─────────────────────────────────
+  let _sort = 'risk';
+  function setSort(s) {
+    _sort = s;
+    document.querySelectorAll('.pm-sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === s));
+    _applySort();
+  }
+  function _applySort() {
+    const container = document.getElementById('pm-list');
+    if (!container || !markets.length) return;
+    let sorted = [...markets];
+    if (_sort === 'risk')   sorted.sort((a,b) => (b.probability||0) - (a.probability||0));
+    if (_sort === 'volume') sorted.sort((a,b) => (b.volume||0) - (a.volume||0));
+    if (_sort === 'expiry') sorted.sort((a,b) => (a.endDate||'').localeCompare(b.endDate||''));
+    container.innerHTML = sorted.map(renderCard).join('');
+  }
+
   async function fetchAndRender() {
     const container = document.getElementById('pm-list');
     const badge     = document.getElementById('pm-live-badge');
@@ -109,7 +131,7 @@ const POLYMARKET = (() => {
         badge.style.color = d.source === 'Polymarket API' ? '#00ff88' : '#ffaa00';
       }
 
-      container.innerHTML = markets.map(renderCard).join('');
+      _applySort();
       updateGlobeArcs();
     } catch (e) {
       container.innerHTML = '<div class="news-loading">Polymarket feed unavailable</div>';
@@ -195,5 +217,5 @@ const POLYMARKET = (() => {
     }, 300_000);
   }
 
-  return { init, fetchAndRender, refreshTicker, getMarkets: () => markets };
+  return { init, fetchAndRender, refreshTicker, setSort, getMarkets: () => markets };
 })();

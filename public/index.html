@@ -65,7 +65,6 @@
         <button class="lbtn"        data-layer="hapi"       title="Humanitarian Crises — HAPI/ACLED/UNOCHA">🆘 CRISES</button>
         <button class="lbtn"        data-layer="cyber"      title="Cyber Threats — APT, Botnet C2, CISA KEV">🛡 CYBER</button>
         <button class="lbtn"        data-layer="datacenter" title="Data Centers — Cloudscene 2024 density">🖥 DC</button>
-        <button class="lbtn conflict-btn" data-layer="conflict" title="Global Unrest Tracker">🌍 UNREST</button>
         <button class="lbtn"        data-layer="arcs"       title="Missile Strike Arc Trails">🚀 STRIKES</button>
         <button class="lbtn"        data-layer="usbases"    title="US Overseas Airbases — IISS 2024 OSINT">🦅 USBASE</button>
         <button class="lbtn"        data-layer="internet"   title="Internet Speed Choropleth — Ookla 2024">🌐 NET</button>
@@ -118,34 +117,44 @@
         </div>
       </div>
 
-      <!-- Satellite -->
-      <div class="panel-card">
-        <div class="card-hdr">
+      <!-- Satellite — collapsible -->
+      <div class="panel-card collapsible-card" id="card-sats">
+        <div class="card-hdr" onclick="toggleCard('card-sats')" style="cursor:pointer">
           <span>◉ SATELLITES <span class="badge-live">● LIVE</span></span>
-          <div class="tab-group">
+          <div class="tab-group" onclick="event.stopPropagation()">
             <button class="tab active" data-sat="active">ALL</button>
             <button class="tab" data-sat="military">MIL</button>
             <button class="tab" data-sat="starlink">LINK</button>
-            <button class="tab" data-sat="visual">VIS</button>
           </div>
+          <span class="card-collapse-arrow">▾</span>
         </div>
-        <div id="sat-list" class="scroll-list" style="max-height:155px"></div>
+        <div class="card-body" id="card-sats-body">
+          <div id="sat-list" class="scroll-list" style="max-height:120px"></div>
+        </div>
       </div>
 
-      <!-- Aircraft -->
-      <div class="panel-card">
-        <div class="card-hdr">
-          <span>✈ LIVE AIRSPACE <span class="badge-live">● ADS-B</span></span>
-          <span id="mil-count" class="badge-mil">0 MIL</span>
+      <!-- Aircraft — collapsible -->
+      <div class="panel-card collapsible-card" id="card-ac">
+        <div class="card-hdr" onclick="toggleCard('card-ac')" style="cursor:pointer">
+          <span>✈ AIRSPACE <span class="badge-live">● ADS-B</span></span>
+          <span id="mil-count" class="badge-mil" onclick="event.stopPropagation()">0 MIL</span>
+          <span class="card-collapse-arrow">▾</span>
         </div>
-        <div id="ac-country-bars"></div>
-        <div id="ac-list" class="scroll-list" style="max-height:155px"></div>
+        <div class="card-body" id="card-ac-body" style="display:none">
+          <div id="ac-country-bars"></div>
+          <div id="ac-list" class="scroll-list" style="max-height:120px"></div>
+        </div>
       </div>
 
-      <!-- Country filter -->
-      <div class="panel-card">
-        <div class="card-hdr">⬡ COUNTRY / FLY-TO</div>
-        <div id="country-filter" class="scroll-list" style="max-height:120px"></div>
+      <!-- Country filter — collapsed by default -->
+      <div class="panel-card collapsible-card" id="card-country">
+        <div class="card-hdr" onclick="toggleCard('card-country')" style="cursor:pointer">
+          <span>⬡ COUNTRY / FLY-TO</span>
+          <span class="card-collapse-arrow">▴</span>
+        </div>
+        <div class="card-body" id="card-country-body" style="display:none">
+          <div id="country-filter" class="scroll-list" style="max-height:100px"></div>
+        </div>
       </div>
 
       <!-- ── 🇮🇳 Indians in War Zones ── -->
@@ -296,6 +305,7 @@
         <button class="rptab" data-rptab="intel">◈ INTEL</button>
         <button class="rptab" data-rptab="search">🔍 SEARCH</button>
         <button class="rptab" data-rptab="polymarket">🎲 ODDS</button>
+        <button class="rptab" data-rptab="defence">🛡 DEFENCE</button>
       </div>
 
       <!-- TAB: News (GDELT) -->
@@ -749,16 +759,51 @@
       </div>
 
       <!-- TAB: Polymarket — War Odds -->
-      <div class="rp-tab-body" id="rptab-polymarket" style="display:none">
-        <div class="panel-card">
-          <div class="card-hdr">
-            <span>🎲 WAR ODDS <span id="pm-live-badge" class="badge-live">● LIVE</span></span>
-            <button class="mini-btn" onclick="POLYMARKET.fetchAndRender()">↻</button>
-          </div>
-          <div id="pm-stats-bar" class="pm-stats-bar"></div>
-          <div id="pm-list" class="scroll-list" style="max-height:calc(100vh - 240px)">
-            <div class="news-loading">⟳ Loading prediction markets…</div>
-          </div>
+      <div class="rp-tab-body" id="rptab-polymarket" style="display:none;padding:0">
+        <!-- Stats bar -->
+        <div id="pm-stats-bar" class="pm-stats-bar" style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06)"></div>
+        <!-- Sort controls -->
+        <div class="pm-sort-bar">
+          <span class="pm-sort-lbl">SORT:</span>
+          <button class="pm-sort-btn active" data-sort="risk" onclick="POLYMARKET.setSort('risk')">⚠ RISK</button>
+          <button class="pm-sort-btn" data-sort="volume" onclick="POLYMARKET.setSort('volume')">💰 VOL</button>
+          <button class="pm-sort-btn" data-sort="expiry" onclick="POLYMARKET.setSort('expiry')">⏱ EXP</button>
+          <span id="pm-live-badge" class="badge-live" style="margin-left:auto">● LIVE</span>
+          <button class="mini-btn" onclick="POLYMARKET.fetchAndRender()" style="margin-left:4px">↻</button>
+        </div>
+        <!-- Card grid — scrollable -->
+        <div id="pm-list" style="overflow-y:auto;height:calc(100vh - 200px);padding:6px">
+          <div class="news-loading">⟳ Loading prediction markets…</div>
+        </div>
+      </div>
+
+      <!-- TAB: Defence Dashboard -->
+      <div class="rp-tab-body" id="rptab-defence" style="display:none;padding:0">
+        <!-- Category filter pills -->
+        <div class="def-filter-bar">
+          <button class="def-pill active" data-cat="all" onclick="DEFENCE.setFilter('all')">ALL</button>
+          <button class="def-pill" data-cat="drone" onclick="DEFENCE.setFilter('drone')">🚁 DRONE</button>
+          <button class="def-pill" data-cat="missile" onclick="DEFENCE.setFilter('missile')">🚀 MISSILE</button>
+          <button class="def-pill" data-cat="india" onclick="DEFENCE.setFilter('india')">🇮🇳 INDIA</button>
+          <button class="def-pill" data-cat="ai" onclick="DEFENCE.setFilter('ai')">🤖 AI/AUTO</button>
+          <button class="def-pill" data-cat="naval" onclick="DEFENCE.setFilter('naval')">⚓ NAVAL</button>
+        </div>
+        <!-- Drones of India compact card -->
+        <div class="def-section-hdr">🇮🇳 DRONES OF INDIA <span class="badge-static">OSINT</span>
+          <button class="mini-btn" onclick="DEFENCE.refresh()" style="margin-left:auto">↻</button>
+        </div>
+        <div id="def-india-drones" class="scroll-list" style="max-height:140px;padding:0 6px">
+          <div class="news-loading">⟳ Fetching Indian drone data…</div>
+        </div>
+        <!-- Live feed -->
+        <div class="def-section-hdr">📡 LIVE DEFENCE INTEL <span class="badge-live">● 8 SOURCES</span></div>
+        <div id="def-feed" style="overflow-y:auto;height:calc(100vh - 380px);padding:0 4px">
+          <div class="news-loading">⟳ Fetching defence feeds…</div>
+        </div>
+        <!-- GDELT defence news -->
+        <div class="def-section-hdr">🌐 DEFENCE GDELT <span class="badge-live">● 24H</span></div>
+        <div id="def-gdelt" class="scroll-list" style="max-height:140px;padding:0 4px">
+          <div class="news-loading">⟳ Loading…</div>
         </div>
       </div>
 
@@ -1007,6 +1052,7 @@
   <script src="js/simulation.js"></script>
   <script src="js/polymarket.js"></script>
   <script src="js/submarine.js"></script>
+  <script src="js/defence.js"></script>
   <script src="js/app.js"></script>
 
   <script>
@@ -1025,6 +1071,7 @@
         if (tab === 'markets'    && !btn._mktInited)     { btn._mktInited    = true; MARKETS.init(); }
         if (tab === 'iranisr'    && !btn._irnInited)     { btn._irnInited    = true; loadIranIsrNews(); if (window.twttr?.widgets) window.twttr.widgets.load(); }
         if (tab === 'polymarket' && !btn._pmInited)      { btn._pmInited     = true; POLYMARKET.init(); }
+        if (tab === 'defence'   && !btn._defInited)     { btn._defInited    = true; DEFENCE.init(); }
       });
     });
 
@@ -1057,6 +1104,20 @@
         }).join('');
       } catch (_) { el.innerHTML = '<div class="news-loading">Unavailable</div>'; }
     }
+
+    // ── Collapsible left panel cards ──────────────────────
+    function toggleCard(id) {
+      const card = document.getElementById(id);
+      if (!card) return;
+      const body  = document.getElementById(id + '-body');
+      const arrow = card.querySelector('.card-collapse-arrow');
+      if (!body) return;
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      if (arrow) arrow.textContent = open ? '▴' : '▾';
+    }
+    // Expose globally for onclick
+    window.toggleCard = toggleCard;
 
     // ── API Status Panel ───────────────────────────────────
     async function loadAPIStatus() {
