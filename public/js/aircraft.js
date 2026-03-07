@@ -292,9 +292,24 @@ const AIRCRAFT = (() => {
   async function fetchData() {
     try {
       const resp = await window.fetch('/api/aircraft');
-      if (!resp.ok) throw new Error(resp.status);
       const json = await resp.json();
+
+      if (!resp.ok || json.error) {
+        // Show status in the aircraft count widget
+        const sv = document.getElementById('sv-aircraft');
+        if (sv) sv.textContent = '–';
+        const milEl = document.getElementById('mil-count');
+        if (milEl) milEl.textContent = json.error || 'No live feed';
+        console.warn('[Aircraft] API error:', json.error || resp.status);
+        return;
+      }
+
+      if (json.stale) console.info('[Aircraft] serving stale cache');
       processStates(json.states || []);
+
+      // Show data source
+      const srcEl = document.getElementById('ac-source-tag');
+      if (srcEl) srcEl.textContent = json.source + (json.stale ? ' ⚠ stale' : '');
     } catch (e) {
       console.warn('[Aircraft] fetch error:', e.message);
     }
