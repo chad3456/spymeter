@@ -578,10 +578,13 @@ const APP = (() => {
 
     initWebSocket();
 
+    // Init Polymarket ticker bar on boot (auto-loads war odds)
+    if (typeof POLYMARKET !== 'undefined') POLYMARKET.init();
+
     SIDEBAR.addFeedItem('satellite', '🌍 SPYMETER online — OpenSky ADS-B + CelesTrak TLE active');
     SIDEBAR.addFeedItem('aircraft',  '✈ Fetching live ADS-B from OpenSky Network…');
     SIDEBAR.addFeedItem('military',  `⬡ ${MILITARY.getBases().length} military bases loaded | India nuclear sites visible`);
-    SIDEBAR.addFeedItem('satellite', '⚔ New layers: ⚓ MARINE · 🆘 CRISES · 🛡 CYBER · 🖥 DC available in layer bar');
+    SIDEBAR.addFeedItem('satellite', '⚔ New layers: ⚓ MARINE · 🆘 CRISES · 🛡 CYBER · 🖥 DC · 🌊 SUB available');
   }
 
   document.addEventListener('DOMContentLoaded', boot);

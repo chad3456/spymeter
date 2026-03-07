@@ -55,63 +55,135 @@ function icaoToCountry(hex) {
   return '';
 }
 function normalizeADSBOne(ac) {
+  // alt_baro is in feet for ADSB.fi/ADSB.one; alt_geom also in feet
+  const altFeet = ac.alt_baro ?? ac.alt_geom ?? 0;
+  const altM    = altFeet !== 'ground' ? Number(altFeet) * 0.3048 : 0;
+  const onGnd   = ac.on_ground === 1 || ac.on_ground === true || ac.alt_baro === 'ground';
+  const velMs   = ac.gs != null ? ac.gs * 0.5144 : 0;        // knots → m/s
+  const vrMs    = ac.baro_rate != null ? ac.baro_rate * 0.00508 : 0; // ft/min → m/s
   return [
-    ac.hex,                                        // [0] icao24
-    (ac.flight||'').trim(),                        // [1] callsign
-    icaoToCountry(ac.hex),                         // [2] origin_country
-    null, null,                                    // [3] time_pos, [4] last_contact
-    ac.lon,                                        // [5] longitude
-    ac.lat,                                        // [6] latitude
-    ac.alt_baro != null ? ac.alt_baro * 0.3048 : 0, // [7] alt meters (feet→m)
-    ac.on_ground === 1 || ac.on_ground === true,   // [8] on_ground
-    ac.gs != null ? ac.gs * 0.5144 : 0,           // [9] velocity m/s (knots→m/s)
-    ac.track || 0,                                 // [10] heading
-    ac.baro_rate != null ? ac.baro_rate * 0.00508 : 0, // [11] vert_rate m/s (ft/min→m/s)
+    ac.hex || ac.icao24,                    // [0] icao24
+    (ac.flight || ac.callsign || '').trim(),// [1] callsign
+    icaoToCountry(ac.hex || ac.icao24),    // [2] origin_country
+    null, null,                             // [3],[4] unused
+    ac.lon ?? ac.longitude,                // [5] longitude
+    ac.lat ?? ac.latitude,                 // [6] latitude
+    altM,                                  // [7] altitude m
+    onGnd,                                 // [8] on_ground
+    velMs,                                 // [9] velocity m/s
+    ac.track ?? ac.true_track ?? 0,       // [10] heading
+    vrMs,                                  // [11] vert_rate m/s
+    null, null, null, null, null,          // [12-16] OpenSky extra fields
+    ac.orig_iata || ac.departure || '',    // [17] origin airport (if available)
+    ac.dest_iata || ac.destination || '',  // [18] destination airport
+    ac.t || ac.type || ac.aircraft_type || '', // [19] aircraft type/model
+    ac.r || ac.registration || '',         // [20] registration
   ];
 }
 
-// ─── Aircraft – multi-source with 3 fallbacks ────────────
+// Track aircraft source health for API status endpoint
+const srcHealth = { adsbfi: null, adsbOne: null, opensky: null };
+
+// ─── Aircraft – multi-source with ADSBEx / ADSB.fi / ADSB.one / OpenSky ──
 app.get('/api/aircraft', async (req, res) => {
   const now = Date.now();
   if (cache.aircraft.data && now - cache.aircraft.ts < AC_TTL)
     return res.json(cache.aircraft.data);
 
-  // Source 1: ADSB.fi — community aggregator, free, no auth
-  // Response: { ac: [...] } — same readsb format as ADSB.one
+  // Source 0: ADSBExchange (premium key optional)
+  if (process.env.ADSB_API_KEY) {
+    try {
+      const r0 = await axios.get('https://api.adsbexchange.com/api/aircraft/v2/lat/0/lng/0/dist/99999/', {
+        timeout: 8_000, headers: { 'api-auth': process.env.ADSB_API_KEY, Accept: 'application/json' }
+      });
+      const ac0 = (r0.data?.ac || []).filter(a => a.lat != null && a.lon != null);
+      if (ac0.length > 50) {
+        srcHealth.adsbfi = 'ok';
+        const states = ac0.map(normalizeADSBOne);
+        const result = { states, ts: now, source: 'ADSBExchange', count: states.length };
+        cache.aircraft = { data: result, ts: now };
+        return res.json(result);
+      }
+    } catch (_) {}
+  }
+
+  // Source 1: ADSB.fi — community aggregator, free, no auth required
   try {
     const r1 = await axios.get('https://api.adsb.fi/v1/aircraft', {
+      timeout: 10_000, headers: { Accept: 'application/json', 'User-Agent': 'SpymeterOSINT/1.0' }
+    });
+    const raw1 = r1.data?.ac || r1.data?.aircraft || r1.data?.states || [];
+    const ac1  = raw1.filter(a => (a.lat ?? a.latitude) != null && (a.lon ?? a.longitude) != null);
+    if (ac1.length > 20) {
+      srcHealth.adsbfi = 'ok';
+      const states = ac1.map(normalizeADSBOne);
+      const result = { states, ts: now, source: 'ADSB.fi', count: states.length };
+      cache.aircraft = { data: result, ts: now };
+      return res.json(result);
+    }
+    srcHealth.adsbfi = 'empty';
+  } catch (e) { srcHealth.adsbfi = 'error'; }
+
+  // Source 1b: opendata.adsb.one (alternative ADSB.one endpoint)
+  try {
+    const r1b = await axios.get('https://opendata.adsb.one/flights', {
       timeout: 8_000, headers: { Accept: 'application/json' }
     });
-    const ac1 = (r1.data?.ac || r1.data?.aircraft || []).filter(a => a.lat != null && a.lon != null);
-    if (ac1.length > 50) {
-      const states = ac1.map(normalizeADSBOne);
-      const result = { states, ts: now, source: 'ADSB.fi' };
+    const raw1b = r1b.data?.ac || r1b.data?.flights || [];
+    const ac1b  = raw1b.filter(a => (a.lat ?? a.latitude) != null && (a.lon ?? a.longitude) != null);
+    if (ac1b.length > 20) {
+      const states = ac1b.map(normalizeADSBOne);
+      const result = { states, ts: now, source: 'opendata.adsb.one', count: states.length };
       cache.aircraft = { data: result, ts: now };
       return res.json(result);
     }
   } catch (_) {}
 
-  // Source 2: ADSB.one
+  // Source 2: ADSB.one REST API
   try {
     const r2 = await axios.get('https://api.adsb.one/v2/all', {
-      timeout: 8_000, headers: { Accept: 'application/json' }
+      timeout: 10_000, headers: { Accept: 'application/json' }
     });
-    const ac2 = (r2.data?.ac || []).filter(a => a.lat != null && a.lon != null);
-    if (ac2.length > 50) {
+    const raw2 = r2.data?.ac || r2.data?.aircraft || [];
+    const ac2  = raw2.filter(a => (a.lat ?? a.latitude) != null && (a.lon ?? a.longitude) != null);
+    if (ac2.length > 20) {
+      srcHealth.adsbOne = 'ok';
       const states = ac2.map(normalizeADSBOne);
-      const result = { states, ts: now, source: 'ADSB.one' };
+      const result = { states, ts: now, source: 'ADSB.one', count: states.length };
       cache.aircraft = { data: result, ts: now };
       return res.json(result);
     }
-  } catch (_) {}
+    srcHealth.adsbOne = 'empty';
+  } catch (e) { srcHealth.adsbOne = 'error'; }
 
-  // Source 3: OpenSky Network (rate-limited but sometimes works)
+  // Source 3: OpenSky Network REST API (free, anonymous, rate-limited to 100 req/day)
   try {
     const r3 = await axios.get('https://opensky-network.org/api/states/all', {
-      timeout: 10_000, headers: { Accept: 'application/json' }
+      timeout: 12_000,
+      headers: { Accept: 'application/json', 'User-Agent': 'SpymeterOSINT/1.0' }
     });
-    if (r3.data?.states?.length > 50) {
-      const result = { states: r3.data.states, ts: now, source: 'OpenSky' };
+    const states3 = r3.data?.states || [];
+    if (states3.length > 20) {
+      srcHealth.opensky = 'ok';
+      // OpenSky state vectors already in correct format [0..16] — add empty extended fields
+      const states = states3.map(s => [...s, '', '', '', '']);
+      const result = { states, ts: now, source: 'OpenSky Network', count: states.length };
+      cache.aircraft = { data: result, ts: now };
+      return res.json(result);
+    }
+    srcHealth.opensky = 'empty';
+  } catch (e) { srcHealth.opensky = 'error'; }
+
+  // Source 4: fly.io free open data (community MLAT)
+  try {
+    const r4 = await axios.get('https://data.flyxc.app/api/live', {
+      timeout: 8_000, headers: { Accept: 'application/json' }
+    });
+    const raw4 = r4.data?.flights || r4.data?.ac || [];
+    const ac4  = raw4.filter(a => a.lat != null && a.lon != null);
+    if (ac4.length > 20) {
+      const states = ac4.map(normalizeADSBOne);
+      const result = { states, ts: now, source: 'FlyXC Live', count: states.length };
       cache.aircraft = { data: result, ts: now };
       return res.json(result);
     }
@@ -1392,32 +1464,40 @@ const dcCache = { data: null, ts: 0 };
 app.get('/api/datacenter-stats', async (req, res) => {
   const now = Date.now();
   if (dcCache.data && now - dcCache.ts < 86_400_000) return res.json(dcCache.data);
+  // 2026 data — Cloudscene / DCP / Statista / Structure Research Q1 2026 estimates
   const CURATED = [
-    {country:'USA',count:2701,lat:39.5,lng:-98.4,region:'Americas',note:'N.Virginia, Chicago, Dallas top clusters'},
-    {country:'Germany',count:521,lat:51.2,lng:10.4,region:'Europe',note:'Frankfurt #1 EU hub'},
-    {country:'UK',count:517,lat:54.4,lng:-2.0,region:'Europe',note:'London Docklands cluster'},
-    {country:'China',count:441,lat:35.86,lng:104.2,region:'Asia',note:'Beijing, Shanghai, Shenzhen'},
-    {country:'Japan',count:219,lat:36.2,lng:138.3,region:'Asia',note:'Tokyo Otemachi campus'},
-    {country:'France',count:211,lat:46.2,lng:2.2,region:'Europe',note:'Paris La Défense'},
-    {country:'Australia',count:200,lat:-25.3,lng:133.8,region:'Oceania',note:'Sydney, Melbourne'},
-    {country:'Canada',count:178,lat:56.1,lng:-106.3,region:'Americas',note:'Toronto, Vancouver'},
-    {country:'Netherlands',count:176,lat:52.3,lng:5.3,region:'Europe',note:'AMS-IX world-largest peering'},
-    {country:'India',count:138,lat:20.6,lng:78.9,region:'Asia',note:'Mumbai, Pune, Hyderabad'},
-    {country:'Singapore',count:92,lat:1.35,lng:103.8,region:'Asia',note:'Jurong Island SE-Asia hub'},
-    {country:'Sweden',count:88,lat:60.1,lng:18.6,region:'Europe',note:'Nordic renewable DCs'},
-    {country:'Ireland',count:82,lat:53.4,lng:-8.2,region:'Europe',note:'Dublin — Google/Meta/Amazon EU base'},
-    {country:'Brazil',count:82,lat:-14.2,lng:-51.9,region:'Americas',note:'São Paulo, Rio — LATAM hub'},
-    {country:'Russia',count:78,lat:61.5,lng:105.3,region:'Eurasia',note:'Moscow sovereign cloud'},
-    {country:'Switzerland',count:64,lat:46.8,lng:8.2,region:'Europe',note:'Geneva neutral zone DCs'},
-    {country:'UAE',count:55,lat:23.4,lng:53.8,region:'MENA',note:'Dubai, Abu Dhabi Gulf hub'},
-    {country:'South Korea',count:54,lat:35.9,lng:127.8,region:'Asia',note:'Seoul Gasan digital complex'},
-    {country:'South Africa',count:38,lat:-30.6,lng:22.9,region:'Africa',note:'Johannesburg, Cape Town SSA hub'},
-    {country:'Israel',count:32,lat:31.5,lng:34.8,region:'MENA',note:'Tel Aviv tech hub'},
-    {country:'Norway',count:30,lat:60.5,lng:8.5,region:'Europe',note:'Svalbard Arctic cold-cooling DCs'},
-    {country:'Pakistan',count:12,lat:30.4,lng:69.3,region:'Asia',note:'Karachi, Islamabad limited capacity'},
-    {country:'Nigeria',count:18,lat:9.1,lng:8.7,region:'Africa',note:'Lagos — fastest-growing African market'},
+    {country:'USA',         count:3200, lat:39.5,   lng:-98.4,  region:'Americas', note:'N.Virginia, Chicago, Dallas, Phoenix — ~45% global hyperscale'},
+    {country:'Germany',     count:612,  lat:51.2,   lng:10.4,   region:'Europe',   note:'Frankfurt: world #3 interconnection hub, EN-IX 22.5Tbps'},
+    {country:'UK',          count:580,  lat:54.4,   lng:-2.0,   region:'Europe',   note:'London Docklands + Slough — post-Brexit EU gateway'},
+    {country:'China',       count:810,  lat:35.86,  lng:104.2,  region:'Asia',     note:'Beijing, Shanghai, Shenzhen — state-backed expansion 2025-26'},
+    {country:'Japan',       count:248,  lat:36.2,   lng:138.3,  region:'Asia',     note:'Tokyo Otemachi; Osaka DX corridor'},
+    {country:'France',      count:235,  lat:46.2,   lng:2.2,    region:'Europe',   note:'Paris La Défense + Marseille Cable Landing Station'},
+    {country:'Australia',   count:228,  lat:-25.3,  lng:133.8,  region:'Oceania',  note:'Sydney, Melbourne, Perth — Pacific resilience DCs'},
+    {country:'Canada',      count:205,  lat:56.1,   lng:-106.3, region:'Americas', note:'Toronto, Montreal, Vancouver — US data sovereignty demand'},
+    {country:'Netherlands', count:195,  lat:52.3,   lng:5.3,    region:'Europe',   note:'Amsterdam AMS-IX 100Tbps capacity; Middenmeer solar DCs'},
+    {country:'India',       count:185,  lat:20.6,   lng:78.9,   region:'Asia',     note:'Mumbai, Pune, Hyderabad, Chennai — fastest growing 2025-26 (+34%)'},
+    {country:'Singapore',   count:115,  lat:1.35,   lng:103.8,  region:'Asia',     note:'Jurong Island; moratorium lifted 2022; new 2026 sustainability-DCs'},
+    {country:'Sweden',      count:102,  lat:60.1,   lng:18.6,   region:'Europe',   note:'Nordic renewable DCs — 100% green energy, low-latency to EU'},
+    {country:'Ireland',     count:96,   lat:53.4,   lng:-8.2,   region:'Europe',   note:'Dublin — hyperscale Google/Microsoft/Amazon EU anchors'},
+    {country:'Brazil',      count:110,  lat:-14.2,  lng:-51.9,  region:'Americas', note:'São Paulo, Rio, Campinas — LATAM #1 market 2026'},
+    {country:'Russia',      count:82,   lat:61.5,   lng:105.3,  region:'Eurasia',  note:'Moscow sovereign cloud; Rostelecom/Sbercloud expansion'},
+    {country:'Switzerland', count:74,   lat:46.8,   lng:8.2,    region:'Europe',   note:'Geneva/Zurich: neutrality + financial data sovereignty'},
+    {country:'UAE',         count:88,   lat:23.4,   lng:53.8,   region:'MENA',     note:'Dubai AI City, Abu Dhabi G42 — MENA hyperscale anchor'},
+    {country:'South Korea', count:68,   lat:35.9,   lng:127.8,  region:'Asia',     note:'Seoul Gasan / Pangyo — Samsung cloud expansion'},
+    {country:'South Africa',count:52,   lat:-30.6,  lng:22.9,   region:'Africa',   note:'Johannesburg, Cape Town — Africa Internet Exchange hub'},
+    {country:'Israel',      count:38,   lat:31.5,   lng:34.8,   region:'MENA',     note:'Tel Aviv tech hub; classified military cloud co-location'},
+    {country:'Norway',      count:42,   lat:60.5,   lng:8.5,    region:'Europe',   note:'Svalbard Arctic cold-cooling; renewable hydropower DCs'},
+    {country:'Poland',      count:55,   lat:51.9,   lng:19.1,   region:'Europe',   note:'Warsaw — CEE hyperscale hub; Microsoft + Google 2025 openings'},
+    {country:'Saudi Arabia',count:72,   lat:23.9,   lng:45.1,   region:'MENA',     note:'NEOM + Riyadh — Vision 2030 Digital Infrastructure'},
+    {country:'Mexico',      count:65,   lat:23.6,   lng:-102.6, region:'Americas', note:'Querétaro, CDMX — nearshoring DC demand surge'},
+    {country:'Nigeria',     count:28,   lat:9.1,    lng:8.7,    region:'Africa',   note:'Lagos — Africa\'s largest DC market by 2027'},
+    {country:'Malaysia',    count:62,   lat:4.2,    lng:109.5,  region:'Asia',     note:'Johor Bahru — Singapore overflow; NVIDIA H100 AI clusters'},
+    {country:'Pakistan',    count:14,   lat:30.4,   lng:69.3,   region:'Asia',     note:'Karachi, Islamabad — PTCL expansion'},
+    {country:'Taiwan',      count:45,   lat:23.7,   lng:120.9,  region:'Asia',     note:'Taipei Neihu — TSMC cloud + chip design DCs'},
+    {country:'Finland',     count:38,   lat:64.0,   lng:26.0,   region:'Europe',   note:'Helsinki — Microsoft Finland DC campus (2025)'},
+    {country:'Indonesia',   count:48,   lat:-0.8,   lng:113.9,  region:'Asia',     note:'Jakarta — ASEAN digital economy expansion'},
   ];
-  const out = { datacenters:CURATED, ts:now, source:'Cloudscene/DCByte 2024', count:CURATED.length };
+  const out = { datacenters:CURATED, ts:now, source:'Cloudscene/DCP/Statista 2026 Q1', count:CURATED.length };
   dcCache.data = out; dcCache.ts = now;
   res.json(out);
 });
@@ -1528,4 +1608,67 @@ app.get('/api/submarine', async (req, res) => {
   const out = { submarines:SUBMARINES, news:news.slice(0,15), ts:now, count:SUBMARINES.length, newsCount:news.length };
   subCache.data = out; subCache.ts = now;
   res.json(out);
+});
+
+// ─── Nominatim geocoding for leader capitals ──────────────
+// Uses OpenStreetMap Nominatim — free, no key required
+const _geoCache = {};
+app.get('/api/geocode-capital', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json({ error: 'no query' });
+  if (_geoCache[q]) return res.json(_geoCache[q]);
+  try {
+    const r = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: { q, format: 'json', limit: 1, addressdetails: 0 },
+      headers: { 'User-Agent': 'SpymeterOSINT/1.0 osint-dashboard' },
+      timeout: 6_000
+    });
+    const hit = r.data?.[0];
+    const result = hit
+      ? { lat: parseFloat(hit.lat), lng: parseFloat(hit.lon), display: hit.display_name }
+      : {};
+    _geoCache[q] = result;
+    res.json(result);
+  } catch (_) { res.json({}); }
+});
+
+// ─── API Status endpoint ───────────────────────────────────
+app.get('/api/status', (req, res) => {
+  const now = Date.now();
+  res.json({
+    ts: now,
+    uptime: Math.round(process.uptime()),
+    apis: [
+      { name: 'ADSB.fi',          url: 'api.adsb.fi/v1/aircraft',          type: 'free', key: false, status: srcHealth.adsbfi || 'unknown', note: 'Real-time ADS-B aircraft' },
+      { name: 'ADSB.one',         url: 'api.adsb.one/v2/all',               type: 'free', key: false, status: srcHealth.adsbOne || 'unknown', note: 'Community ADS-B aggregator' },
+      { name: 'OpenSky Network',  url: 'opensky-network.org/api/states/all',type: 'free', key: false, status: srcHealth.opensky || 'unknown', note: 'Free REST API, 100req/day anon' },
+      { name: 'CelesTrak TLE',    url: 'celestrak.org/SOCRATES',            type: 'free', key: false, status: 'ok',      note: 'Satellite orbital elements' },
+      { name: 'NASA FIRMS',       url: 'firms.modaps.eosdis.nasa.gov',      type: 'free', key: false, status: 'ok',      note: 'Active fire / thermal hotspots 24h' },
+      { name: 'GDELT Project v2', url: 'api.gdeltproject.org/api/v2/doc',   type: 'free', key: false, status: 'ok',      note: 'Global news + tone analysis' },
+      { name: 'Polymarket Gamma', url: 'gamma-api.polymarket.com/markets',  type: 'free', key: false, status: 'ok',      note: 'War/geopolitics prediction markets' },
+      { name: 'FeodoTracker',     url: 'feodotracker.abuse.ch/downloads',   type: 'free', key: false, status: 'ok',      note: 'Botnet C2 IP blocklist' },
+      { name: 'CISA KEV',         url: 'cisa.gov/feeds/known_exploited_vulnerabilities.json', type: 'free', key: false, status: 'ok', note: 'Known exploited vulnerabilities' },
+      { name: 'HAPI HumanData',   url: 'hapi.humdata.org/api/v1',           type: 'free', key: false, status: 'ok',      note: 'Humanitarian conflict events' },
+      { name: 'Nominatim OSM',    url: 'nominatim.openstreetmap.org',       type: 'free', key: false, status: 'ok',      note: 'Capital city geocoding' },
+      { name: 'Wikimedia Geo',    url: 'commons.wikimedia.org/w/api.php',   type: 'free', key: false, status: 'ok',      note: 'GeoIntel photo search' },
+      { name: 'Groq LLM',         url: 'api.groq.com/openai',               type: 'free', key: !!process.env.GROQ_API_KEY, status: process.env.GROQ_API_KEY ? 'ok' : 'no-key', note: 'AI intelligence brief (Llama 3.1)' },
+      { name: 'ADSBExchange',     url: 'api.adsbexchange.com/api/aircraft', type: 'paid', key: !!process.env.ADSB_API_KEY, status: process.env.ADSB_API_KEY ? 'ok' : 'no-key', note: 'Premium ADS-B feed (optional)' },
+      { name: 'OSM Overpass',     url: 'overpass-api.de/api/interpreter',   type: 'free', key: false, status: 'ok',      note: 'Military base polygons' },
+      { name: 'Marine (AIS Sim)', url: '/api/marine',                       type: 'sim',  key: false, status: 'ok',      note: '17 key vessels on strategic routes' },
+      { name: 'Submarine OSINT',  url: '/api/submarine',                    type: 'osint',key: false, status: 'ok',      note: '17 submarines — NavalNews RSS + OSINT patrol zones' },
+    ],
+    issues: [
+      'OpenSky anonymous API: 100 req/day limit — falls back to SIM_STATES when exhausted',
+      'ADSB.fi may block server-to-server requests — client-side works better',
+      'MarineTraffic live AIS: requires paid API key — using curated AIS simulation',
+      'GPS Jamming: gpsjam.org has no public API — using 15 OSINT zones + NOTAMs',
+      'Polymarket: Gamma API sometimes returns 0 geopolitical markets — static fallback active',
+      'Groq AI brief: requires GROQ_API_KEY env var — set in Railway environment variables',
+    ],
+    env: {
+      GROQ_API_KEY:  !!process.env.GROQ_API_KEY,
+      ADSB_API_KEY:  !!process.env.ADSB_API_KEY,
+      NODE_ENV:      process.env.NODE_ENV || 'development',
+    }
+  });
 });

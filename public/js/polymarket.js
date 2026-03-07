@@ -135,13 +135,65 @@ const POLYMARKET = (() => {
       }).join('');
   }
 
+  // ── Ticker bar renderer ───────────────────────────────
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr.slice(0,10);
+    const secs = (Date.now() - d) / 1000;
+    if (secs < 3600)  return Math.round(secs/60)  + 'm ago';
+    if (secs < 86400) return Math.round(secs/3600) + 'h ago';
+    return Math.round(secs/86400) + 'd ago';
+  }
+
+  function renderTickerBar(mktList) {
+    const inner = document.getElementById('pm-ticker-inner');
+    if (!inner) return;
+    if (!mktList || !mktList.length) {
+      inner.innerHTML = '<span class="pm-tc-loading">No war markets found — retrying…</span>';
+      return;
+    }
+    // Sort by probability descending (highest war-risk first)
+    const sorted = [...mktList].sort((a,b) => (b.probability||0) - (a.probability||0));
+    inner.innerHTML = sorted.map(m => {
+      const pct    = Math.round((m.probability||0.5) * 100);
+      const col    = probColor(m.probability||0.5);
+      const q      = (m.question||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const qShort = q.length > 55 ? q.slice(0,52) + '…' : q;
+      const t      = timeAgo(m.createdAt || m.endDate);
+      const url    = m.url || 'https://polymarket.com';
+      return `<a class="pm-tc-card" href="${url}" target="_blank" rel="noopener noreferrer" title="${q}">
+        <span class="pm-tc-q">${qShort}</span>
+        <span class="pm-tc-pct" style="color:${col}">${pct}%</span>
+        ${t ? `<span class="pm-tc-time">🕐 ${t}</span>` : ''}
+      </a><div class="pm-tc-divider"></div>`;
+    }).join('');
+  }
+
+  async function refreshTicker() {
+    const inner = document.getElementById('pm-ticker-inner');
+    if (inner) inner.innerHTML = '<span class="pm-tc-loading">⟳ Refreshing…</span>';
+    try {
+      const r = await fetch('/api/polymarket');
+      const d = r.ok ? await r.json() : { markets: [] };
+      markets = d.markets || [];
+      renderTickerBar(markets);
+    } catch (_) {
+      if (inner) inner.innerHTML = '<span class="pm-tc-loading">Feed unavailable</span>';
+    }
+  }
+
   function init() {
     fetchAndRender();
+    // Init ticker bar independently (auto-runs on page load, no tab click needed)
+    setTimeout(refreshTicker, 800);
+    document.getElementById('pm-ticker-refresh-btn')?.addEventListener('click', refreshTicker);
     refreshTimer = setInterval(() => {
       if (document.getElementById('rptab-polymarket')?.style.display !== 'none') fetchAndRender();
       renderSummaryWidget();
+      refreshTicker();
     }, 300_000);
   }
 
-  return { init, fetchAndRender, getMarkets: () => markets };
+  return { init, fetchAndRender, refreshTicker, getMarkets: () => markets };
 })();

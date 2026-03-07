@@ -813,11 +813,53 @@ const LEADERS = (() => {
    * init(map) — Build the layer group. Does NOT add it to the map.
    * @param {L.Map} map - Leaflet map instance
    */
+  // ─── Nominatim geocoding — fetch capital city coords from OSM ──────────────────
+  async function _geocodeCapitals() {
+    // Get unique capitals to geocode
+    const capitals = [...new Set(LEADER_DATA.map(l => l.capital))];
+    const coordMap = {};
+    // Batch geocode with 300ms delay to respect Nominatim 1 req/sec limit
+    for (const cap of capitals) {
+      try {
+        const r = await fetch('/api/geocode-capital?q=' + encodeURIComponent(cap));
+        const d = r.ok ? await r.json() : {};
+        if (d.lat && d.lng) coordMap[cap] = { lat: d.lat, lng: d.lng };
+      } catch (_) {}
+      await new Promise(res => setTimeout(res, 320)); // rate-limit: 1 req/320ms
+    }
+    return coordMap;
+  }
+
   function init(map) {
     _map = map;
     _injectStyles();
+    // First render with hardcoded fallback coords (immediate)
     _layerGroup = _buildLayerGroup();
-    console.log('[LEADERS] Initialized. ' + LEADER_DATA.length + ' leaders loaded.');
+    console.log('[LEADERS] Initialized with ' + LEADER_DATA.length + ' leaders (hardcoded coords).');
+    // Then asynchronously update coords from Nominatim OSM API
+    _geocodeCapitals().then(coordMap => {
+      let updated = 0;
+      LEADER_DATA.forEach(l => {
+        if (coordMap[l.capital]) {
+          l.lat = coordMap[l.capital].lat;
+          l.lng = coordMap[l.capital].lng;
+          updated++;
+        }
+      });
+      if (updated > 0) {
+        // Rebuild layer group with fresh OSM coordinates
+        if (_map && _map.hasLayer(_layerGroup)) {
+          _map.removeLayer(_layerGroup);
+          _layerGroup = _buildLayerGroup();
+          _layerGroup.addTo(_map);
+        } else {
+          _layerGroup = _buildLayerGroup();
+        }
+        console.log('[LEADERS] Geocoded ' + updated + ' capitals via Nominatim OSM.');
+      }
+    }).catch(() => {
+      console.warn('[LEADERS] Nominatim geocoding failed — using hardcoded coords.');
+    });
   }
 
   /**

@@ -1,6 +1,44 @@
-/* ── Live Aircraft – OpenSky Network ──────────────────────
-   ADS-B data with type-specific SVG icons and improved
-   military / drone / cargo / helicopter detection.         */
+/* ── Live Aircraft – OpenSky Network / ADSB.fi ─────────────
+   ADS-B data with type-specific SVG icons, airline names,
+   military / drone / cargo / helicopter detection.          */
+
+// ── ICAO airline prefix → airline name ────────────────────
+const AIRLINE_CODES = {
+  UAL:'United Airlines',  BAW:'British Airways', DAL:'Delta Air Lines',
+  AAL:'American Airlines',EIN:'Aer Lingus',      VIR:'Virgin Atlantic',
+  AFR:'Air France',       DLH:'Lufthansa',        KLM:'KLM Royal Dutch',
+  IBE:'Iberia',           TK :'Turkish Airlines', LH :'Lufthansa',
+  SAS:'Scandinavian Air', AZA:'ITA Airways',      EZY:'easyJet',
+  RYR:'Ryanair',          WZZ:'Wizz Air',         AUA:'Austrian Airlines',
+  EK :'Emirates',         QR :'Qatar Airways',    SQ :'Singapore Airlines',
+  AI :'Air India',        CX :'Cathay Pacific',   NH :'All Nippon Airways',
+  JL :'Japan Airlines',   CA :'Air China',        MH :'Malaysia Airlines',
+  TG :'Thai Airways',     KE :'Korean Air',       OZ :'Asiana Airlines',
+  EY :'Etihad Airways',   SV :'Saudi Arabian AL', MS :'EgyptAir',
+  ET :'Ethiopian Airlines',LA :'LATAM Airlines',  AV :'Avianca',
+  AM :'Aeromexico',       AC :'Air Canada',       WS :'WestJet',
+  VS :'Virgin Atlantic',  LX :'Swiss International',FI:'Icelandair',
+  SK :'SAS',              AY :'Finnair',          OS :'Austrian Airlines',
+  LO :'LOT Polish',       OK :'Czech Airlines',   BT :'airBaltic',
+  FR :'Ryanair',          U2 :'easyJet',          PC :'Pegasus Airlines',
+  // Cargo / Freight
+  FDX:'FedEx Express',    UPS:'UPS Airlines',     DHL:'DHL Aviation',
+  CLX:'Cargolux',         PAC:'Polar Air Cargo',  GTI:'Atlas Air',
+  // Military / Government callsigns handled by PATTERNS
+};
+
+function getAirlineName(callsign) {
+  const cs = (callsign || '').trim().toUpperCase();
+  // Try 3-char prefix, then 2-char, then 2-char with digit strip
+  for (let len = 3; len >= 2; len--) {
+    const code = cs.slice(0, len).replace(/\d+$/, ''); // strip trailing digits for 2-char
+    const key  = cs.slice(0, len);
+    if (AIRLINE_CODES[key])  return AIRLINE_CODES[key];
+    if (len === 2 && AIRLINE_CODES[code]) return AIRLINE_CODES[code];
+  }
+  return null;
+}
+
 const AIRCRAFT = (() => {
   let map          = null;
   let layer        = null;
@@ -128,29 +166,42 @@ const AIRCRAFT = (() => {
   function altFt(m)  { return m ? Math.round(m * 3.281).toLocaleString() : '?'; }
 
   function makePopup(s) {
-    const cs      = (s[I.callsign] || '').trim() || 'N/A';
-    const origin  = s[I.origin] || 'Unknown';
-    const spd     = speedKts(s[I.velocity]);
-    const alt     = altFt(s[I.alt]);
-    const hdg     = s[I.heading] ? Math.round(s[I.heading]) + '°' : '?';
-    const vr      = s[I.vert_rate] ? s[I.vert_rate].toFixed(1) + ' m/s' : '0';
-    const ground  = s[I.on_ground] ? 'YES' : 'NO';
-    const type    = detectType(cs, s[I.on_ground]);
-    const meta    = TYPE_META[type] || TYPE_META.civilian;
-    const milFlag = isMilitary(cs);
+    const cs       = (s[I.callsign] || '').trim() || 'N/A';
+    const origin   = s[I.origin] || 'Unknown';
+    const spd      = speedKts(s[I.velocity]);
+    const alt      = altFt(s[I.alt]);
+    const hdg      = s[I.heading] ? Math.round(s[I.heading]) + '°' : '?';
+    const vr       = s[I.vert_rate] ? s[I.vert_rate].toFixed(1) + ' m/s' : '0';
+    const ground   = s[I.on_ground] ? 'YES' : 'NO';
+    const type     = detectType(cs, s[I.on_ground]);
+    const meta     = TYPE_META[type] || TYPE_META.civilian;
+    const milFlag  = isMilitary(cs);
+    const airline  = getAirlineName(cs);
+    // Extended fields from ADSB.fi/ADSB.one/ADSBEx (index 12+ if present)
+    const dest     = s[17] || s.dest || '';
+    const origin2  = s[16] || s.orig || '';
+    const model    = s[18] || s.model || s.t || '';
+    const reg      = s[19] || s.r || '';
+    const icao24   = s[I.icao] || '?';
 
     return `
       <div class="popup-box">
         <div class="popup-title" style="color:${meta.color}">${meta.emoji} ${meta.label}: ${cs}</div>
-        <div class="popup-row"><span class="popup-key">ICAO24</span><span class="popup-val">${s[I.icao]}</span></div>
-        <div class="popup-row"><span class="popup-key">ORIGIN</span><span class="popup-val">${origin}</span></div>
+        <div class="popup-row"><span class="popup-key">AIRCRAFT NO</span><span class="popup-val" style="color:#00d4ff">${reg || icao24}</span></div>
+        <div class="popup-row"><span class="popup-key">ICAO24</span><span class="popup-val">${icao24}</span></div>
+        ${airline ? `<div class="popup-row"><span class="popup-key">AIRLINE</span><span class="popup-val" style="color:#ffaa00">${airline}</span></div>` : ''}
+        ${model ? `<div class="popup-row"><span class="popup-key">AIRCRAFT</span><span class="popup-val">${model}</span></div>` : ''}
         <div class="popup-row"><span class="popup-key">TYPE</span><span class="popup-val" style="color:${meta.color}">${meta.label}</span></div>
-        <div class="popup-row"><span class="popup-key">ALT</span><span class="popup-val green">${alt} ft</span></div>
+        <div class="popup-row"><span class="popup-key">SOURCE COUNTRY</span><span class="popup-val">${origin}</span></div>
+        ${origin2 ? `<div class="popup-row"><span class="popup-key">ORIGIN AIRPORT</span><span class="popup-val green">${origin2}</span></div>` : ''}
+        ${dest   ? `<div class="popup-row"><span class="popup-key">DESTINATION</span><span class="popup-val green">${dest}</span></div>` : ''}
+        <div class="popup-row"><span class="popup-key">ALTITUDE</span><span class="popup-val green">${alt} ft</span></div>
         <div class="popup-row"><span class="popup-key">SPEED</span><span class="popup-val">${spd} kts</span></div>
         <div class="popup-row"><span class="popup-key">HEADING</span><span class="popup-val">${hdg}</span></div>
         <div class="popup-row"><span class="popup-key">VERT RATE</span><span class="popup-val ${parseFloat(vr) < 0 ? 'red' : 'green'}">${vr}</span></div>
         <div class="popup-row"><span class="popup-key">ON GROUND</span><span class="popup-val ${ground === 'YES' ? 'orange' : ''}">${ground}</span></div>
-        ${milFlag ? '<div class="popup-mil-tag">⚠ MILITARY ASSET</div>' : ''}
+        ${milFlag ? '<div class="popup-mil-tag">⚠ MILITARY ASSET — OSINT</div>' : ''}
+        <div style="font-size:7px;color:#3d5a78;margin-top:4px;padding-top:4px;border-top:1px solid #182030">Source: OpenSky / ADS-B</div>
       </div>`;
   }
 
