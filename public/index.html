@@ -306,6 +306,7 @@
         <button class="rptab" data-rptab="search">🔍 SEARCH</button>
         <button class="rptab" data-rptab="polymarket">🎲 ODDS</button>
         <button class="rptab" data-rptab="defence">🛡 DEFENCE</button>
+        <button class="rptab" data-rptab="india" style="color:#ff9933;border-bottom-color:#ff9933">🇮🇳 INDIA</button>
       </div>
 
       <!-- TAB: News (GDELT) -->
@@ -807,6 +808,48 @@
         </div>
       </div>
 
+      <!-- ── INDIA DASHBOARD ─────────────────────────────── -->
+      <div class="rp-tab-body" id="rptab-india" style="display:none;padding:0">
+
+        <!-- Header stats row -->
+        <div class="ind-header-bar">
+          <div class="ind-header-flag">🇮🇳</div>
+          <div class="ind-header-title">INDIA AIRSPACE</div>
+          <div id="india-threat-badge" class="ind-threat-badge" style="color:#aaa">–</div>
+          <button class="mini-btn" onclick="INDIA.refresh()" style="margin-left:auto">↻</button>
+        </div>
+
+        <!-- Compact stat counters -->
+        <div class="ind-quick-stats">
+          <div class="ind-qs-box">
+            <div id="india-ac-count" class="ind-qs-val">–</div>
+            <div class="ind-qs-lbl">FLIGHTS</div>
+          </div>
+          <div class="ind-qs-box">
+            <div id="india-in-count" class="ind-qs-val" style="color:#ff9933">–</div>
+            <div class="ind-qs-lbl">INDIAN</div>
+          </div>
+          <div class="ind-qs-box">
+            <div id="india-for-count" class="ind-qs-val" style="color:#00d4ff">–</div>
+            <div class="ind-qs-lbl">FOREIGN</div>
+          </div>
+        </div>
+
+        <!-- Sub-tabs -->
+        <div class="ind-tabs">
+          <button class="ind-tab-btn active" data-tab="flights" onclick="INDIA.setTab('flights')">✈ FLIGHTS</button>
+          <button class="ind-tab-btn" data-tab="intel"   onclick="INDIA.setTab('intel')">◈ AI INTEL</button>
+          <button class="ind-tab-btn" data-tab="news"    onclick="INDIA.setTab('news')">📡 NEWS</button>
+          <button class="ind-tab-btn" data-tab="defence" onclick="INDIA.setTab('defence')">🛡 DEFENCE</button>
+        </div>
+
+        <!-- Dynamic body rendered by india.js -->
+        <div id="india-body" style="overflow-y:auto;height:calc(100vh - 230px);padding:6px 8px">
+          <div class="ind-loading">⟳ India intelligence agent initialising…</div>
+        </div>
+
+      </div>
+
     </aside>
   </div>
 
@@ -1053,6 +1096,7 @@
   <script src="js/polymarket.js"></script>
   <script src="js/submarine.js"></script>
   <script src="js/defence.js"></script>
+  <script src="js/india.js"></script>
   <script src="js/app.js"></script>
 
   <script>
@@ -1072,6 +1116,7 @@
         if (tab === 'iranisr'    && !btn._irnInited)     { btn._irnInited    = true; loadIranIsrNews(); if (window.twttr?.widgets) window.twttr.widgets.load(); }
         if (tab === 'polymarket' && !btn._pmInited)      { btn._pmInited     = true; POLYMARKET.init(); }
         if (tab === 'defence'   && !btn._defInited)     { btn._defInited    = true; DEFENCE.init(); }
+        if (tab === 'india'     && !btn._indiaInited)   { btn._indiaInited  = true; INDIA.init(); }
       });
     });
 

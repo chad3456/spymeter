@@ -1,5 +1,6 @@
-const express = require('express');
-const axios = require('axios');
+const Anthropic = require('@anthropic-ai/sdk');
+const express    = require('express');
+const axios      = require('axios');
 const cors = require('cors');
 const WebSocket = require('ws');
 const http = require('http');
@@ -84,77 +85,233 @@ function normalizeADSBOne(ac) {
 // Track aircraft source health for API status endpoint
 const srcHealth = { adsbfi: null, adsbOne: null, opensky: null };
 
-// ─── Aircraft – parallel multi-source: ADSB.fi / ADSB.one / OpenSky ──────────
-// All sources fired simultaneously; first with >20 aircraft wins.
-// No static fallback — returns empty + error when all fail.
+// ─── ADS-B fetch helper (module-level, reusable) ─────────────────────────────
+const ADSB_HEADERS = {
+  'Accept': 'application/json',
+  'User-Agent': 'Mozilla/5.0 (compatible; SpymeterOSINT/1.0)',
+  'Accept-Encoding': 'gzip, deflate',
+};
+
+// Confirmed working free ADS-B sources (no auth required)
+// Sources: adsb.lol (global), airplanes.live (global), ADSB.fi (global), OpenSky (rate-limited)
+async function fetchAdsbSource(label, url, extraHeaders = {}) {
+  const r = await axios.get(url, {
+    timeout: 12_000,
+    headers: { ...ADSB_HEADERS, ...extraHeaders },
+    decompress: true,
+  });
+  const raw = r.data?.ac || r.data?.aircraft || r.data?.states || [];
+  if (!Array.isArray(raw)) throw new Error(`${label}: unexpected response format`);
+
+  // OpenSky returns arrays [icao,callsign,...] — already normalised
+  if (raw.length && Array.isArray(raw[0])) {
+    return { source: label, states: raw.map(s => [...s, '', '', '', '']) };
+  }
+
+  const states = raw
+    .filter(a => a.lat != null && a.lon != null)
+    .map(normalizeADSBOne);
+  return { source: label, states };
+}
+
+// ─── Aircraft – parallel live ADS-B (adsb.lol + airplanes.live + ADSB.fi) ───
 app.get('/api/aircraft', async (req, res) => {
   const now = Date.now();
   if (cache.aircraft.data && now - cache.aircraft.ts < AC_TTL)
     return res.json(cache.aircraft.data);
 
-  // Helper: fetch one source and normalise to { states, source }
-  async function trySource(label, url, headers, parser) {
-    const r = await axios.get(url, { timeout: 12_000, headers: { Accept: 'application/json', 'User-Agent': 'SpymeterOSINT/1.0', ...headers } });
-    return { states: parser(r.data), source: label };
-  }
-
-  const sources = [
-    // ADSB.fi – large community aggregator, typically 5 000–15 000 aircraft
-    trySource('ADSB.fi', 'https://api.adsb.fi/v1/aircraft', {}, d => {
-      const raw = d?.ac || d?.aircraft || [];
-      return raw.filter(a => a.lat != null && a.lon != null).map(normalizeADSBOne);
-    }),
-    // ADSB.one – alternative global aggregator
-    trySource('ADSB.one', 'https://api.adsb.one/v2/all', {}, d => {
-      const raw = d?.ac || d?.aircraft || [];
-      return raw.filter(a => a.lat != null && a.lon != null).map(normalizeADSBOne);
-    }),
-    // OpenSky Network – free, anonymous, rate-limited (100 req/day)
-    trySource('OpenSky', 'https://opensky-network.org/api/states/all', {}, d => {
-      return (d?.states || []).map(s => [...s, '', '', '', '']);
-    }),
-    // ADSBHub community feed
-    trySource('ADSBHub', 'https://www.adsbhub.org/api/data/aircraft', {}, d => {
-      const raw = d?.aircraft || d?.ac || [];
-      return raw.filter(a => a.lat != null && a.lon != null).map(normalizeADSBOne);
-    }),
+  // Fire all sources in parallel; pick first with real data
+  const attempts = [
+    // adsb.lol — community global aggregator, always free, no auth, no rate-limit
+    fetchAdsbSource('adsb.lol', 'https://api.adsb.lol/v2/all'),
+    // airplanes.live — high coverage free API, no auth required
+    fetchAdsbSource('airplanes.live', 'https://api.airplanes.live/v2/point/0/0/10000'),
+    // ADSB.fi — community aggregator, free, no auth
+    fetchAdsbSource('ADSB.fi', 'https://api.adsb.fi/v1/aircraft'),
+    // OpenSky — free but limited 100 req/day anonymous
+    fetchAdsbSource('OpenSky', 'https://opensky-network.org/api/states/all'),
   ];
 
-  // If ADSBExchange key provided, add it as highest-priority source
   if (process.env.ADSB_API_KEY) {
-    sources.unshift(trySource('ADSBExchange',
+    attempts.unshift(fetchAdsbSource('ADSBExchange',
       'https://api.adsbexchange.com/api/aircraft/v2/lat/0/lng/0/dist/99999/',
-      { 'api-auth': process.env.ADSB_API_KEY },
-      d => (d?.ac || []).filter(a => a.lat != null && a.lon != null).map(normalizeADSBOne)
+      { 'api-auth': process.env.ADSB_API_KEY }
     ));
   }
 
-  const results = await Promise.allSettled(sources);
+  const results = await Promise.allSettled(attempts);
 
-  // Pick first fulfilled result with meaningful data
   for (const r of results) {
-    if (r.status === 'fulfilled' && r.value.states.length > 20) {
-      const { states, source } = r.value;
+    if (r.status === 'rejected') {
+      console.warn('[Aircraft]', r.reason?.message || r.reason);
+      continue;
+    }
+    if (r.value.states.length > 20) {
+      const { source, states } = r.value;
       srcHealth[source] = 'ok';
       const result = { states, ts: now, source, count: states.length };
       cache.aircraft = { data: result, ts: now };
       return res.json(result);
     }
-    if (r.status === 'rejected') {
-      const label = r.reason?.config?.url || 'unknown';
-      console.warn(`[Aircraft] source failed: ${label} – ${r.reason?.message}`);
-    }
+    console.warn(`[Aircraft] ${r.value.source} returned ${r.value.states.length} states — skipping`);
   }
 
-  // Return stale cache if available — better than nothing
-  if (cache.aircraft.data) {
-    console.warn('[Aircraft] All live sources failed, serving stale cache');
+  if (cache.aircraft.data)
     return res.json({ ...cache.aircraft.data, stale: true });
-  }
 
-  // Truly no data
-  console.warn('[Aircraft] All live ADS-B sources failed:', JSON.stringify(srcHealth));
-  return res.status(503).json({ states: [], ts: now, source: 'none', count: 0, error: 'All live ADS-B sources unavailable. Retry in 15s.' });
+  console.error('[Aircraft] All ADS-B sources failed:', results.map(r => r.reason?.message || r.value?.source));
+  return res.status(503).json({ states: [], ts: now, source: 'none', count: 0, error: 'All ADS-B sources failed. Check server logs.' });
+});
+
+// ─── India airspace aircraft (airplanes.live bbox around South Asia) ──────────
+const indiaAcCache = { data: null, ts: 0 };
+app.get('/api/aircraft/india', async (req, res) => {
+  const now = Date.now();
+  if (indiaAcCache.data && now - indiaAcCache.ts < AC_TTL)
+    return res.json(indiaAcCache.data);
+  try {
+    // Center 22°N 82°E, 2200nm radius covers all India + Pakistan + Sri Lanka + Bay of Bengal
+    const r = await fetchAdsbSource('airplanes.live/india',
+      'https://api.airplanes.live/v2/point/22/82/2200');
+    const INDIA_AIRLINES = /^(AI|6E|SG|UK|G8|I5|QP|IX|9W|IT|S2|DN|2T|YW|IG|LB)/i;
+    const IAF_PREFIX     = /^(IAF|VT-|H-\d|K-\d|RR-\d)/i;
+    const result = {
+      ...r,
+      indian:  r.states.filter(s => INDIA_AIRLINES.test(s[1] || '')).length,
+      iaf:     r.states.filter(s => IAF_PREFIX.test(s[1] || '') || (s[2] === 'India' && (s[8] === false) && parseFloat(s[9]) > 200)).length,
+      ts: now,
+    };
+    indiaAcCache.data = result;
+    indiaAcCache.ts   = now;
+    return res.json(result);
+  } catch (e) {
+    if (indiaAcCache.data) return res.json({ ...indiaAcCache.data, stale: true });
+    return res.status(503).json({ states: [], count: 0, error: e.message });
+  }
+});
+
+// ─── Claude AI Agent — India Intelligence (runs every 10 min) ───────────────
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null;
+
+const indiaIntelCache = { data: null, ts: 0, running: false };
+
+async function runIndiaAgent() {
+  if (indiaIntelCache.running) return;
+  indiaIntelCache.running = true;
+  const now = Date.now();
+
+  try {
+    // ── 1. Gather raw data from open sources in parallel ──────────────────
+    const [acResult, newsResult, defenceResult] = await Promise.allSettled([
+      // Aircraft in India airspace (airplanes.live)
+      fetchAdsbSource('airplanes.live', 'https://api.airplanes.live/v2/point/22/82/2200'),
+
+      // India news — GDELT with India-specific queries
+      (async () => {
+        const queries = ['India military DRDO IAF', 'India Pakistan China border 2026', 'India economy geopolitics'];
+        const articles = [];
+        for (const q of queries) {
+          try {
+            const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+              params: { query: q, mode: 'artlist', maxrecords: 8, format: 'json', sort: 'datedesc', timespan: '24h' },
+              timeout: 8_000,
+            });
+            if (r.data?.articles) articles.push(...r.data.articles.slice(0, 8));
+          } catch (_) {}
+        }
+        return articles;
+      })(),
+
+      // Defence RSS — NavalNews + Indian Defence Review
+      (async () => {
+        const items = [];
+        for (const feed of ['https://www.indiandefencereview.com/feed/', 'https://www.defenseworld.net/rss']) {
+          try {
+            const r = await axios.get(feed, { timeout: 6_000, headers: { 'User-Agent': 'SpymeterOSINT/1.0' } });
+            const matches = (r.data || '').match(/<item>([\s\S]*?)<\/item>/g) || [];
+            matches.slice(0, 10).forEach(item => {
+              const title = item.match(/<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/)?.[1] || '';
+              if (/india|IAF|DRDO|HAL|BEL|Tejas|Brahmos|Indian/i.test(title))
+                items.push(title.trim().slice(0, 120));
+            });
+          } catch (_) {}
+        }
+        return items;
+      })(),
+    ]);
+
+    // ── 2. Summarise gathered data ────────────────────────────────────────
+    const ac = acResult.status === 'fulfilled' ? acResult.value : { states: [], count: 0 };
+    const acCount   = ac.states?.length || 0;
+    const INDIA_RE  = /^(AI|6E|SG|UK|G8|I5|QP|IX|9W)/i;
+    const indianAc  = (ac.states || []).filter(s => INDIA_RE.test(s[1] || '')).length;
+    const foreignAc = acCount - indianAc;
+
+    const newsItems  = newsResult.status  === 'fulfilled' ? (newsResult.value  || []).slice(0, 12) : [];
+    const defItems   = defenceResult.status === 'fulfilled' ? (defenceResult.value || []).slice(0, 8)  : [];
+
+    const headlines  = newsItems.map(a => `- ${a.title}`).join('\n');
+    const defHeads   = defItems.join('\n- ');
+
+    // ── 3. Call Claude AI for India intelligence brief ────────────────────
+    let brief = null;
+    if (anthropic) {
+      const prompt = `You are an open-source intelligence (OSINT) analyst specialising in India.
+Based on the following real-time data gathered right now, produce a concise India intelligence brief.
+
+== AIRSPACE DATA (live, ${new Date().toUTCString()}) ==
+Total aircraft in South Asian airspace: ${acCount}
+Indian-registered airlines (AI, 6E, SG, UK, G8, QP, IX): ${indianAc} flights
+Foreign aircraft over India: ${foreignAc}
+
+== INDIA NEWS HEADLINES (last 24h, GDELT) ==
+${headlines || '(no headlines retrieved)'}
+
+== INDIA DEFENCE / OSINT RSS ==
+${defHeads ? '- ' + defHeads : '(no defence items retrieved)'}
+
+Instructions:
+1. Highlight any notable threats, tensions, or significant events involving India.
+2. Comment on airspace activity (is it unusual? elevated? normal?).
+3. Note any India-Pakistan, India-China, or India-US developments.
+4. Keep the brief under 300 words. Use concise bullet points under 3-4 headers.
+5. Mark speculation clearly with [ASSESSMENT].
+6. At the end, give an overall India threat level: LOW / MEDIUM / HIGH / CRITICAL with one-line reason.`;
+
+      const message = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 600,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      brief = message.content[0]?.text || null;
+    }
+
+    indiaIntelCache.data = {
+      ts: now,
+      acCount, indianAc, foreignAc,
+      headlines: newsItems.slice(0, 8).map(a => ({ title: a.title, url: a.url, source: a.domain })),
+      defItems: defItems.slice(0, 6),
+      brief: brief || `[Auto-brief unavailable — set ANTHROPIC_API_KEY]\nActive aircraft: ${acCount} | Indian airlines: ${indianAc}`,
+      source: 'Claude haiku-4-5 + airplanes.live + GDELT',
+    };
+    console.log(`[IndiaAgent] Updated at ${new Date().toISOString()} — ${acCount} aircraft, brief: ${brief ? 'OK' : 'no API key'}`);
+  } catch (e) {
+    console.error('[IndiaAgent] Error:', e.message);
+  } finally {
+    indiaIntelCache.running = false;
+  }
+}
+
+// Run immediately + every 10 minutes
+runIndiaAgent();
+setInterval(runIndiaAgent, 10 * 60 * 1000);
+
+app.get('/api/india-intel', (req, res) => {
+  if (!indiaIntelCache.data)
+    return res.json({ status: 'loading', message: 'India intelligence agent initialising…' });
+  res.json(indiaIntelCache.data);
 });
 
 // ─── Regional aircraft via ADSB.one (free, unfiltered military) ──

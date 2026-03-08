@@ -2134,3 +2134,113 @@ body.lego-mode .leaflet-tile {
 }
 /* Lego mode label on map-ctrl */
 body.lego-mode #overlay-panel { border-color:#ffcc00; }
+
+/* ══════════════════════════════════════════════
+   INDIA DASHBOARD
+══════════════════════════════════════════════ */
+.ind-header-bar {
+  display:flex; align-items:center; gap:6px;
+  padding:6px 10px; background:#0d1a0d;
+  border-bottom:1px solid #1a3a1a;
+}
+.ind-header-flag  { font-size:18px; }
+.ind-header-title { font-size:10px; font-weight:700; letter-spacing:1.5px; color:#ff9933; flex:1; }
+.ind-threat-badge {
+  font-size:9px; font-weight:700; padding:2px 6px;
+  border-radius:3px; letter-spacing:1px;
+  border:1px solid currentColor; background:rgba(0,0,0,0.3);
+}
+
+.ind-quick-stats {
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:1px; background:#1a2a1a; border-bottom:1px solid #1a3a1a;
+}
+.ind-qs-box  { padding:6px 4px; text-align:center; background:#0a150a; }
+.ind-qs-val  { font-size:20px; font-weight:700; color:#fff; font-family:monospace; }
+.ind-qs-lbl  { font-size:7px; letter-spacing:1px; color:#4a6a4a; margin-top:1px; }
+
+.ind-tabs {
+  display:flex; border-bottom:1px solid #1a3a1a;
+  background:#0a150a; overflow-x:auto;
+}
+.ind-tab-btn {
+  flex:1; min-width:60px; padding:5px 4px; font-size:8px; font-weight:700;
+  letter-spacing:0.8px; background:transparent; border:none; border-bottom:2px solid transparent;
+  color:#4a6a4a; cursor:pointer; transition:all .2s; white-space:nowrap;
+}
+.ind-tab-btn:hover  { color:#ff9933; background:#0d1a0d; }
+.ind-tab-btn.active { color:#ff9933; border-bottom-color:#ff9933; background:#0d1a0d; }
+
+.ind-loading {
+  padding:20px; text-align:center; color:#4a6a4a; font-size:11px; letter-spacing:0.5px;
+}
+
+/* Flights tab */
+.ind-stat-row {
+  display:grid; grid-template-columns:repeat(3,1fr); gap:6px; padding:10px 6px;
+}
+.ind-stat      { background:#0d1a0d; border:1px solid #1a3a1a; border-radius:4px; padding:8px 4px; text-align:center; }
+.ind-stat-val  { font-size:22px; font-weight:700; font-family:monospace; }
+.ind-stat-lbl  { font-size:7px; letter-spacing:1px; color:#4a6a4a; margin-top:2px; }
+.ind-blue      { color:#00d4ff; }
+.ind-green     { color:#00ff88; }
+.ind-amber     { color:#ff9933; }
+
+.ind-section-hdr {
+  font-size:8px; letter-spacing:1.5px; font-weight:700; color:#ff9933;
+  padding:5px 0 3px; margin-top:8px; border-bottom:1px solid #1a3a1a;
+  text-transform:uppercase;
+}
+
+.ind-airport-grid {
+  display:grid; grid-template-columns:repeat(2,1fr); gap:4px; margin-top:4px;
+}
+.ind-airport-card {
+  background:#0d1a0d; border:1px solid #1a3a1a; border-radius:3px;
+  padding:4px 6px; display:flex; gap:6px; align-items:center;
+}
+.ind-iata      { font-size:11px; font-weight:700; color:#ff9933; font-family:monospace; width:32px; }
+.ind-ap-city   { font-size:8px; color:#6a8a6a; }
+
+.ind-airline-list  { margin-top:4px; }
+.ind-airline-row {
+  display:flex; gap:8px; align-items:center; padding:3px 4px;
+  border-bottom:1px solid #0d1a0d;
+}
+.ind-airline-code { font-size:9px; font-weight:700; color:#ff9933; width:24px; font-family:monospace; }
+.ind-airline-name { font-size:9px; color:#6a8a6a; }
+
+/* Intel tab */
+.ind-intel-header {
+  display:flex; align-items:center; gap:6px; padding:6px 0;
+  border-bottom:1px solid #1a3a1a; margin-bottom:8px;
+}
+.ind-intel-badge {
+  font-size:8px; font-weight:700; padding:2px 6px; background:#0d2a0d;
+  border:1px solid #00ff88; color:#00ff88; border-radius:3px; letter-spacing:0.5px;
+}
+.ind-intel-body {
+  font-size:10px; line-height:1.7; color:#8aaa8a; white-space:pre-wrap;
+}
+.ind-intel-meta {
+  font-size:7px; color:#2a4a2a; margin-top:10px; padding-top:6px;
+  border-top:1px solid #1a3a1a; letter-spacing:0.3px;
+}
+
+/* News tab */
+.ind-news-item {
+  display:block; padding:6px 4px; border-bottom:1px solid #0d1a0d;
+  text-decoration:none; transition:background .15s;
+}
+.ind-news-item:hover  { background:#0d1a0d; }
+.ind-news-source { font-size:7px; color:#3a5a3a; text-transform:uppercase; letter-spacing:0.5px; }
+.ind-news-title  { font-size:10px; color:#8aaa8a; margin-top:1px; line-height:1.4; }
+
+/* Defence tab */
+.ind-def-item {
+  display:flex; gap:8px; padding:4px 2px; border-bottom:1px solid #0d1a0d;
+}
+.ind-def-bullet { color:#ff9933; font-size:8px; padding-top:1px; flex-shrink:0; }
+.ind-def-text   { font-size:9px; color:#6a8a6a; line-height:1.5; }
+
+.ind-ts { font-size:7px; color:#2a4a2a; margin-top:6px; text-align:right; }
