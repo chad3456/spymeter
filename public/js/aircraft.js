@@ -42,7 +42,7 @@ function getAirlineName(callsign) {
 const AIRCRAFT = (() => {
   let map          = null;
   let layer        = null;
-  let enabled      = true;
+  let enabled      = false;  // off by default — enable via ✈ AIRCRAFT button
   let markers      = {};
   let data         = [];
   let dataTs       = 0;     // timestamp of last successful fetch
@@ -317,9 +317,9 @@ const AIRCRAFT = (() => {
 
   function init(mapInstance) {
     map   = mapInstance;
-    layer = L.layerGroup().addTo(map);
-    fetchData();
-    setInterval(fetchData, 15_000);
+    layer = L.layerGroup();  // don't add to map until enabled
+    // No fetch on init — aircraft layer is off by default
+    setInterval(() => { if (enabled) fetchData(); }, 15_000);
   }
 
   function setEnabled(on) {
