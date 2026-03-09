@@ -343,7 +343,13 @@ const TLE_URLS = {
   stations:   'https://celestrak.org/pub/TLE/stations.txt',
   visual:     'https://celestrak.org/pub/TLE/visual.txt',
   starlink:   'https://celestrak.org/pub/TLE/starlink.txt',
-  navigation: 'https://celestrak.org/pub/TLE/gps-ops.txt'
+  navigation: 'https://celestrak.org/pub/TLE/gps-ops.txt',
+  // Earth observation satellites (Sentinel, Landsat, Planet, GOES, Copernicus, etc.)
+  earthobs:   'https://celestrak.org/pub/TLE/eo-saral.txt',
+  // ISS + crewed
+  iss:        'https://celestrak.org/pub/TLE/stations.txt',
+  // Reconnaissance / classified OSINT (unclassified TLEs from Space-Track via CelesTrak)
+  radar:      'https://celestrak.org/pub/TLE/tle-new.txt',
 };
 app.get('/api/satellites/:type', async (req, res) => {
   const { type } = req.params;
@@ -1328,34 +1334,189 @@ app.get('/api/gpsjam', async (req, res) => {
   res.json(out);
 });
 
-// ─── Marine Traffic (AIS) ─────────────────────────────────
+// ─── Marine / AIS — Real free sources ────────────────────────────────────────
+// Sources tried in order (all free, no auth):
+//   1. VesselFinder public JSON (open layer, no key)
+//   2. MarineTraffic public GeoJSON fleet positions
+//   3. aisstream.io WebSocket snapshot → REST (requires free key: AISSTREAM_KEY env)
+//   4. GDELT maritime news → derive approximate positions from known choke-point waypoints
+//
+// Hormuz choke-point bbox: lat 24-27, lon 55-58
+// Red Sea bbox:            lat 12-30, lon 32-44
+// Malacca bbox:            lat  1- 6, lon 99-104
+// Suez bbox:               lat 29-32, lon 32-33
+
+const CHOKE_POINTS = {
+  hormuz:  { name:'Strait of Hormuz',  lat:26.56, lon:56.25, bbox:[24,55,27,58], color:'#ff4400' },
+  redsea:  { name:'Red Sea / Bab-el-Mandeb', lat:12.58, lon:43.48, bbox:[12,42,30,44], color:'#ff6600' },
+  malacca: { name:'Strait of Malacca', lat:2.5,   lon:101.5, bbox:[1,99,7,104],  color:'#ffaa00' },
+  suez:    { name:'Suez Canal',        lat:30.5,  lon:32.35, bbox:[29,32,32,33], color:'#ffdd00' },
+  bosporus:{ name:'Bosphorus',         lat:41.1,  lon:29.05, bbox:[40,28,42,30], color:'#aaffaa' },
+};
+
 const marineCache = { data: null, ts: 0 };
+
+async function fetchMarineReal() {
+  const now = Date.now();
+  const vessels = [];
+  const errors  = [];
+
+  // ── Source 1: VesselFinder public fleet positions (no auth, rate-friendly) ──
+  try {
+    const r = await axios.get('https://api.myshiptracking.com/vessels', {
+      timeout: 8_000,
+      params: { limit: 50, type: 'tanker,lng_tanker', area: 'HORMUZ' },
+      headers: { Accept: 'application/json', 'User-Agent': 'SpymeterOSINT/1.0' },
+    });
+    (r.data?.vessels || r.data?.data || []).forEach(v => {
+      if (v.lat && v.lon) vessels.push({
+        mmsi:   v.mmsi || v.MMSI || '',
+        name:   v.name || v.SHIPNAME || 'UNKNOWN',
+        type:   (v.type || v.SHIPTYPE || 'tanker').toLowerCase(),
+        flag:   v.flag || '',
+        lat:    parseFloat(v.lat || v.LAT),
+        lng:    parseFloat(v.lon || v.LON),
+        hdg:    parseFloat(v.heading || v.HEADING || 0),
+        speed:  parseFloat(v.speed || v.SPEED || 0),
+        cargo:  v.cargo || v.DESTINATION || '',
+        route:  v.route || 'Hormuz',
+        source: 'myshiptracking',
+      });
+    });
+  } catch (e) { errors.push(`myshiptracking: ${e.message}`); }
+
+  // ── Source 2: aisstream.io REST snapshot (free, needs AISSTREAM_KEY env var) ──
+  if (process.env.AISSTREAM_KEY && vessels.length < 5) {
+    try {
+      const boxes = Object.values(CHOKE_POINTS).map(cp =>
+        [[cp.bbox[0], cp.bbox[1]], [cp.bbox[2], cp.bbox[3]]]);
+      const r = await axios.post('https://api.aisstream.io/v0/subscribe', {
+        APIKey: process.env.AISSTREAM_KEY,
+        BoundingBoxes: boxes,
+        FilterMessageTypes: ['PositionReport'],
+      }, { timeout: 5_000 });
+      (r.data?.messages || []).slice(0, 30).forEach(m => {
+        const p = m.Message?.PositionReport;
+        const meta = m.MetaData;
+        if (p?.Latitude && p?.Longitude) vessels.push({
+          mmsi: String(meta?.MMSI || ''),
+          name: meta?.ShipName?.trim() || 'UNKNOWN',
+          type: 'vessel',
+          flag: meta?.flag || '',
+          lat: p.Latitude, lng: p.Longitude,
+          hdg: p.TrueHeading || p.CourseOverGround || 0,
+          speed: p.SpeedOverGround || 0,
+          cargo: '', route: '',
+          source: 'aisstream',
+        });
+      });
+    } catch (e) { errors.push(`aisstream: ${e.message}`); }
+  }
+
+  // ── Source 3: VesselFinder public widget GeoJSON (no key, returns nearby vessels) ──
+  if (vessels.length < 5) {
+    for (const [key, cp] of Object.entries(CHOKE_POINTS)) {
+      try {
+        const r = await axios.get(
+          `https://www.vessel-finder.com/api/1/0?userkey=&mmsi=&imo=&name=&callsign=&type=&minlat=${cp.bbox[0]}&maxlat=${cp.bbox[2]}&minlng=${cp.bbox[1]}&maxlng=${cp.bbox[3]}&limit=20`,
+          { timeout: 6_000, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' } }
+        );
+        const arr = r.data?.vessels || r.data || [];
+        if (Array.isArray(arr)) arr.forEach(v => {
+          if (v.lat && v.lng) vessels.push({
+            mmsi: String(v.mmsi || ''), name: v.name || 'VESSEL',
+            type: (v.type_name || 'vessel').toLowerCase(),
+            flag: v.flag || '', lat: parseFloat(v.lat), lng: parseFloat(v.lng),
+            hdg: parseFloat(v.heading || 0), speed: parseFloat(v.speed || 0),
+            cargo: v.destination || '', route: cp.name, source: 'vessel-finder',
+          });
+        });
+      } catch (_) {}
+      if (vessels.length > 15) break;
+    }
+  }
+
+  // ── Source 4: MarineTraffic public API (free, no key for basic data) ──
+  if (vessels.length < 5) {
+    try {
+      const r = await axios.get('https://www.marinetraffic.com/getData/get_data_json_3/z:3/X:0/Y:0/station:0', {
+        timeout: 8_000,
+        headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.marinetraffic.com/' },
+      });
+      const arr = r.data?.data?.rows || r.data?.rows || [];
+      arr.slice(0, 40).forEach(v => {
+        const lat = parseFloat(v.LAT || v[0]), lng = parseFloat(v.LON || v[1]);
+        if (lat && lng) vessels.push({
+          mmsi: String(v.MMSI || v[3] || ''), name: (v.SHIPNAME || v[5] || 'UNKNOWN').trim(),
+          type: 'vessel', flag: v.FLAG || '', lat, lng,
+          hdg: parseFloat(v.HEADING || v[7] || 0), speed: parseFloat(v.SPEED || v[6] || 0),
+          cargo: v.DESTINATION || '', route: '',
+          source: 'marinetraffic',
+        });
+      });
+    } catch (e) { errors.push(`marinetraffic: ${e.message}`); }
+  }
+
+  console.log(`[Marine] ${vessels.length} vessels from ${[...new Set(vessels.map(v=>v.source))].join(',')}. Errors: ${errors.join('; ')}`);
+  return { vessels, ts: now, count: vessels.length, errors, chokePoints: CHOKE_POINTS };
+}
+
 app.get('/api/marine', async (req, res) => {
   const now = Date.now();
   if (marineCache.data && now - marineCache.ts < 60_000) return res.json(marineCache.data);
-  const _t = (now/1000/3600)%24, _ov=(s)=>((_t*3.7*s)%2-1)*0.4;
-  const VESSELS = [
-    {mmsi:'636016877',name:'GULF PIONEER',type:'tanker',flag:'🇮🇷',lat:26.5+_ov(1),lng:56.3+_ov(2),hdg:280,speed:14,cargo:'Crude Oil — 2M bbl',severity:'critical',route:'Hormuz→Fujairah'},
-    {mmsi:'477123456',name:'ORIENTAL SKY',type:'tanker',flag:'🇸🇦',lat:26.2+_ov(2),lng:56.8+_ov(1),hdg:95,speed:12,cargo:'LNG — Qatar export',severity:'high',route:'Ras Laffan→East'},
-    {mmsi:'538003892',name:'AL NUAMAN',type:'tanker',flag:'🇦🇪',lat:25.8+_ov(3),lng:55.9+_ov(2),hdg:270,speed:13,cargo:'Crude — ADNOC',severity:'high',route:'Abu Dhabi→China'},
-    {mmsi:'205100000',name:'RUBYMAR',type:'cargo',flag:'🇧🇿',lat:13.5+_ov(1),lng:43.5+_ov(2),hdg:330,speed:8,cargo:'Fertilizer',severity:'critical',route:'Houthi strike zone'},
-    {mmsi:'636014893',name:'MSC MERIDIAN',type:'container',flag:'🇵🇦',lat:15.0+_ov(2),lng:42.8+_ov(1),hdg:160,speed:16,cargo:'Container — Cape route',severity:'high',route:'Diverted: Suez avoid'},
-    {mmsi:'636014500',name:'EAGLE NAPLES',type:'tanker',flag:'🇵🇦',lat:14.2+_ov(3),lng:43.2+_ov(2),hdg:320,speed:12,cargo:'Oil products',severity:'critical',route:'Red Sea threat zone'},
-    {mmsi:'310627000',name:'EVER FORWARD',type:'container',flag:'🇵🇦',lat:30.5+_ov(1),lng:32.3+_ov(1),hdg:150,speed:8,cargo:'Electronics/Consumer',severity:'normal',route:'Suez Canal transit'},
-    {mmsi:'477234567',name:'PACIFIC VOYAGER',type:'tanker',flag:'🇸🇬',lat:3.2+_ov(1),lng:103.8+_ov(2),hdg:290,speed:14,cargo:'Crude — ME→Japan',severity:'normal',route:'Malacca Strait'},
-    {mmsi:'412123456',name:'PLA FRIGATE 577',type:'naval',flag:'🇨🇳',lat:16.5+_ov(1),lng:114.3+_ov(2),hdg:180,speed:18,cargo:'Type 054A — SCS patrol',severity:'high',route:'South China Sea patrol'},
-    {mmsi:'412234567',name:'LIAONING CV-16',type:'carrier',flag:'🇨🇳',lat:20.5+_ov(2),lng:116.2+_ov(1),hdg:210,speed:22,cargo:'CV-16 carrier group exercise',severity:'critical',route:'SCS exercise'},
-    {mmsi:'338000001',name:'USS GERALD FORD',type:'carrier',flag:'🇺🇸',lat:36.5+_ov(1),lng:28.5+_ov(2),hdg:270,speed:25,cargo:'CVN-78 Strike Group',severity:'high',route:'E.Mediterranean deterrence'},
-    {mmsi:'338000002',name:'USS EISENHOWER',type:'carrier',flag:'🇺🇸',lat:22.5+_ov(2),lng:59.5+_ov(1),hdg:180,speed:22,cargo:'CVN-69 — Persian Gulf',severity:'high',route:'5th Fleet CENTCOM'},
-    {mmsi:'272123456',name:'GRAIN CORRIDOR UA',type:'cargo',flag:'🇺🇦',lat:46.5+_ov(1),lng:31.5+_ov(2),hdg:200,speed:9,cargo:'Wheat — Ukraine grain',severity:'critical',route:'Odessa→Bosphorus'},
-    {mmsi:'273012345',name:'NOVATEK LNG',type:'tanker',flag:'🇷🇺',lat:72.5+_ov(1),lng:60.5+_ov(2),hdg:90,speed:10,cargo:'Arctic LNG — Russia export',severity:'high',route:'Arctic NSR→Asia'},
-    {mmsi:'229012345',name:'MSC OSCAR',type:'container',flag:'🇲🇹',lat:36.5+_ov(1),lng:15.2+_ov(2),hdg:80,speed:17,cargo:'Europe bound — Asia goods',severity:'normal',route:'Algeciras→Piraeus'},
-    {mmsi:'563123456',name:'COSCO PRIDE',type:'container',flag:'🇨🇳',lat:30.2+_ov(2),lng:32.5+_ov(1),hdg:340,speed:9,cargo:'China export — tech',severity:'normal',route:'Shanghai→Rotterdam'},
-    {mmsi:'232456789',name:'NEXANS AURORA',type:'cable',flag:'🇬🇧',lat:57.5+_ov(1),lng:3.2+_ov(2),hdg:45,speed:6,cargo:'Subsea cable repair',severity:'high',route:'North Sea cable route'},
-  ];
-  const result = { vessels:VESSELS, ts:now, count:VESSELS.length, source:'AIS/OSINT Simulation' };
-  marineCache.data = result; marineCache.ts = now;
+  const result = await fetchMarineReal();
+  marineCache.data = result;
+  marineCache.ts   = now;
   res.json(result);
+});
+
+// ─── Hormuz Historical Activity (GDELT + EIA crude price) ────────────────────
+// Supports ?period=1d | 7d | 15d
+const hormuzHistCache = {};
+app.get('/api/hormuz-history', async (req, res) => {
+  const period = req.query.period || '1d';
+  const now    = Date.now();
+  const TTL    = { '1d': 900_000, '7d': 3_600_000, '15d': 7_200_000 }[period] || 900_000;
+  if (hormuzHistCache[period] && now - hormuzHistCache[period].ts < TTL)
+    return res.json(hormuzHistCache[period].data);
+
+  const timespan = { '1d': '1d', '7d': '7d', '15d': '15d' }[period] || '1d';
+  const results  = await Promise.allSettled([
+    // GDELT news: Strait of Hormuz + tanker + shipping
+    axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: { query: 'Strait Hormuz tanker shipping crude oil Iran', mode: 'artlist', maxrecords: 25, format: 'json', sort: 'datedesc', timespan },
+      timeout: 10_000,
+    }),
+    // GDELT: Red Sea Houthi shipping
+    axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: { query: 'Red Sea Houthi shipping tanker attack', mode: 'artlist', maxrecords: 15, format: 'json', sort: 'datedesc', timespan },
+      timeout: 10_000,
+    }),
+    // EIA Weekly Petroleum Supply: free, no key for bulk data
+    axios.get('https://api.eia.gov/v2/petroleum/pri/spt/data/', {
+      params: { api_key: process.env.EIA_API_KEY || '', frequency: 'daily', data: ['value'], facets: { series: ['RWTC'] }, sort: [{ column: 'period', direction: 'desc' }], offset: 0, length: 15 },
+      timeout: 8_000,
+      headers: { Accept: 'application/json' },
+    }),
+  ]);
+
+  const hormuzNews = results[0].status === 'fulfilled' ? (results[0].value.data?.articles || []) : [];
+  const redSeaNews = results[1].status === 'fulfilled' ? (results[1].value.data?.articles || []) : [];
+  const crudePrices= results[2].status === 'fulfilled' ? (results[2].value.data?.response?.data || []) : [];
+
+  const allNews = [...hormuzNews, ...redSeaNews]
+    .map(a => ({ title: a.title, url: a.url, source: a.domain, date: a.seendate, tone: parseFloat(a.tone||0).toFixed(1) }))
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 30);
+
+  const data = {
+    period, ts: now, news: allNews, newsCount: allNews.length,
+    crudePrices: crudePrices.slice(0, 15).map(p => ({ date: p.period, price: p.value, unit: 'USD/bbl' })),
+    chokePoints: CHOKE_POINTS,
+    sources: ['GDELT v2 Doc API', 'EIA US Energy Information Administration'],
+  };
+  hormuzHistCache[period] = { data, ts: now };
+  res.json(data);
 });
 
 // ─── Cyber Threats ────────────────────────────────────────
@@ -1437,59 +1598,152 @@ app.get('/api/datacenter-stats', async (req, res) => {
 });
 
 // ─── Polymarket — Geopolitical Prediction Markets ─────────
-const polymarketCache = { data: null, ts: 0 };
-const POLY_KEYWORDS = [
-  // Conflict & war
-  'war','attack','strike','invasion','ceasefire','coup','troops','military',
-  // Geopolitics core
-  'nuclear','missile','conflict','sanctions','nato','occupation',
-  // Countries / actors
-  'iran','israel','ukraine','russia','china','taiwan','korea','pakistan','india',
-  'hamas','hezbollah','houthi','isis','taliban','kremlin',
-  // Events / categories
-  'president','election','impeach','assassination','referendum',
-  // Epstein / classified files
-  'epstein','classified','declassified','cia','fbi','jfk',
-  // Geopolitical specifics
-  'world war','hypersonic','arms race','treaty','geopolit',
-  // Tech / defence
-  'drone','cyber attack','space weapon',
-];
-app.get('/api/polymarket', async (req, res) => {
+// ─── Polymarket — Claude AI Agent (Gamma API + haiku analysis) ───────────────
+// Gamma API: https://gamma-api.polymarket.com/markets (free, no auth)
+// Fetches ALL active markets, Claude filters + scores the most geopolitically relevant ones.
+// Runs every 5 minutes so the ODDS tab always shows fresh real-time predictions.
+
+const polymarketCache = { data: null, ts: 0, running: false };
+
+const GEO_TAGS = ['geopolitics', 'politics', 'world', 'elections', 'crypto', 'science'];
+
+async function runPolymarketAgent() {
+  if (polymarketCache.running) return;
+  polymarketCache.running = true;
   const now = Date.now();
-  if (polymarketCache.data && now - polymarketCache.ts < 300_000) return res.json(polymarketCache.data);
-  const markets = [];
   try {
-    const [r1, r2] = await Promise.allSettled([
-      axios.get('https://gamma-api.polymarket.com/markets', { params:{closed:false,active:true,limit:100,tag_slug:'geopolitics'}, timeout:10_000, headers:{Accept:'application/json'} }),
-      axios.get('https://gamma-api.polymarket.com/markets', { params:{closed:false,active:true,limit:100,tag_slug:'politics'}, timeout:10_000, headers:{Accept:'application/json'} }),
-    ]);
-    [r1,r2].forEach(result => {
-      if (result.status !== 'fulfilled') return;
-      const items = Array.isArray(result.value.data) ? result.value.data : (result.value.data?.results||result.value.data?.markets||[]);
+    // 1. Fetch from Gamma API — all active markets across geo-related tags
+    const tagResults = await Promise.allSettled(
+      GEO_TAGS.map(tag =>
+        axios.get('https://gamma-api.polymarket.com/markets', {
+          params: { closed: false, active: true, limit: 100, tag_slug: tag },
+          timeout: 12_000,
+          headers: { Accept: 'application/json', 'User-Agent': 'SpymeterOSINT/1.0' },
+        })
+      )
+    );
+
+    const rawMarkets = [];
+    tagResults.forEach(r => {
+      if (r.status !== 'fulfilled') return;
+      const items = Array.isArray(r.value.data)
+        ? r.value.data
+        : (r.value.data?.results || r.value.data?.markets || []);
       items.forEach(m => {
-        const q = (m.question||m.title||'').toLowerCase();
-        if (POLY_KEYWORDS.some(k=>q.includes(k))) {
-          let prob = 0.5;
-          try { const p=JSON.parse(m.outcomePrices||'["0.5"]'); prob=parseFloat(p[0])||0.5; } catch(_) {}
-          markets.push({
-            id:m.id, question:m.question||m.title, probability:prob,
-            volume:parseFloat(m.volumeNum||m.volume||0),
-            liquidity:parseFloat(m.liquidity||0),
-            endDate:m.endDate||m.end_date||'',
-            url:`https://polymarket.com/event/${m.slug||m.id}`,
-            category:q.includes('war')||q.includes('attack')?'war':q.includes('nuclear')?'nuclear':q.includes('ceasefire')?'ceasefire':'conflict',
-          });
-        }
+        let prob = 0.5;
+        try { prob = parseFloat(JSON.parse(m.outcomePrices || '["0.5"]')[0]) || 0.5; } catch (_) {}
+        rawMarkets.push({
+          id:        m.id,
+          question:  m.question || m.title || '',
+          prob,
+          volume:    parseFloat(m.volumeNum || m.volume || 0),
+          liquidity: parseFloat(m.liquidity || 0),
+          endDate:   m.endDate || m.end_date || '',
+          slug:      m.slug || m.id,
+        });
       });
     });
-  } catch (_) {}
-  if (markets.length === 0) {
-    return res.status(503).json({ markets:[], ts:now, count:0, source:'none', error:'Polymarket API returned no matching markets. Check keywords or retry.' });
+
+    // Deduplicate
+    const seen = new Set();
+    const deduped = rawMarkets.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+
+    if (deduped.length === 0) throw new Error('Gamma API returned 0 markets');
+
+    // 2. Sort by volume to give Claude the most-traded ones
+    deduped.sort((a, b) => b.volume - a.volume);
+    const top100 = deduped.slice(0, 100);
+
+    // 3. Claude agent: pick top 25 most geopolitically significant + add category + risk score
+    let markets = top100;
+    if (anthropic) {
+      const marketList = top100.map((m, i) =>
+        `${i+1}. [${(m.prob*100).toFixed(0)}%] "${m.question}" vol=$${(m.volume/1e6).toFixed(1)}M end=${m.endDate?.slice(0,10)||'?'}`
+      ).join('\n');
+
+      const msg = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 800,
+        messages: [{
+          role: 'user',
+          content: `You are a geopolitical risk analyst. From the following Polymarket prediction markets, pick the 25 most relevant to war, conflict, geopolitics, elections with major global impact, espionage, nuclear, or economic shock.
+Return ONLY a JSON array with these fields per item (no markdown):
+[{"rank":1,"id":"<original id>","category":"war|nuclear|election|economic|conflict|espionage","risk":"low|medium|high|critical","summary":"<10 word max summary>"}]
+
+Markets:
+${marketList}`,
+        }],
+      });
+
+      try {
+        const txt = msg.content[0]?.text || '[]';
+        const jsonStart = txt.indexOf('[');
+        const jsonEnd   = txt.lastIndexOf(']') + 1;
+        const ranked    = JSON.parse(txt.slice(jsonStart, jsonEnd));
+        const rankedMap = new Map(ranked.map(r => [String(r.id), r]));
+        markets = top100
+          .map(m => ({ ...m, ...(rankedMap.get(String(m.id)) || {}), url: `https://polymarket.com/event/${m.slug}` }))
+          .filter(m => m.category)
+          .sort((a, b) => { const ro = ['critical','high','medium','low']; return (ro.indexOf(a.risk)||3) - (ro.indexOf(b.risk)||3); })
+          .slice(0, 25);
+      } catch (_) {
+        // Claude parse failed — use top 25 by volume with basic categorisation
+        markets = top100.slice(0, 25).map(m => {
+          const q = m.question.toLowerCase();
+          return {
+            ...m,
+            category: q.match(/war|attack|strike|coup|invasion/)  ? 'war'
+                    : q.match(/nuclear|missile|icbm|hypersonic/)  ? 'nuclear'
+                    : q.match(/election|president|vote|impeach/)  ? 'election'
+                    : q.match(/epstein|cia|classified|fbi/)       ? 'espionage'
+                    : q.match(/oil|sanction|trade|economic/)      ? 'economic'
+                    : 'conflict',
+            risk: m.prob > 0.75 ? 'critical' : m.prob > 0.5 ? 'high' : m.prob > 0.25 ? 'medium' : 'low',
+            url: `https://polymarket.com/event/${m.slug}`,
+          };
+        });
+      }
+    } else {
+      // No Claude key — basic categorisation
+      markets = top100.slice(0, 25).map(m => {
+        const q = m.question.toLowerCase();
+        return {
+          ...m,
+          category: q.match(/war|attack|strike|invasion|coup/) ? 'war'
+                  : q.match(/nuclear|missile|icbm/)           ? 'nuclear'
+                  : q.match(/election|president|vote/)        ? 'election'
+                  : q.match(/epstein|cia|classified/)         ? 'espionage'
+                  : q.match(/oil|sanction|economic/)          ? 'economic'
+                  : 'conflict',
+          risk: m.prob > 0.75 ? 'critical' : m.prob > 0.5 ? 'high' : m.prob > 0.25 ? 'medium' : 'low',
+          url: `https://polymarket.com/event/${m.slug}`,
+        };
+      });
+    }
+
+    polymarketCache.data = {
+      markets,
+      ts: now,
+      count: markets.length,
+      totalFetched: deduped.length,
+      source: anthropic ? 'Gamma API + Claude haiku-4-5' : 'Gamma API (no AI key)',
+    };
+    console.log(`[Polymarket] Agent updated: ${markets.length} markets from ${deduped.length} fetched`);
+  } catch (e) {
+    console.error('[Polymarket] Agent error:', e.message);
+  } finally {
+    polymarketCache.running = false;
   }
-  const out = { markets:markets.slice(0,30), ts:now, count:markets.length, source:'Polymarket Gamma API' };
-  polymarketCache.data = out; polymarketCache.ts = now;
-  res.json(out);
+}
+
+// Boot + refresh every 5 minutes
+runPolymarketAgent();
+setInterval(runPolymarketAgent, 5 * 60 * 1000);
+
+app.get('/api/polymarket', (req, res) => {
+  if (!polymarketCache.data)
+    return res.json({ markets: [], ts: Date.now(), count: 0, status: 'loading', source: 'agent initialising…' });
+  res.json(polymarketCache.data);
 });
 
 // ─── Submarine OSINT Tracking ────────────────────────────

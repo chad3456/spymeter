@@ -204,9 +204,21 @@ const APP = (() => {
         .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
         .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
         .showAtmosphere(true)
-        .atmosphereColor('rgba(30,100,200,0.7)')
-        .atmosphereAltitude(0.18)
+        .atmosphereColor('rgba(40,140,255,0.9)')
+        .atmosphereAltitude(0.22)
         (container);
+
+      // Gaussian glow layer — CSS radial-gradient overlay injected on top of canvas
+      const gaussEl = document.createElement('div');
+      gaussEl.id    = 'globe-gaussian-glow';
+      gaussEl.style.cssText = [
+        'position:absolute','inset:0','pointer-events:none','border-radius:50%','z-index:2',
+        'background:radial-gradient(ellipse at 30% 30%,rgba(40,140,255,0.12) 0%,rgba(0,30,80,0.05) 40%,transparent 70%)',
+        'box-shadow:0 0 80px 20px rgba(20,80,200,0.25),inset 0 0 120px 40px rgba(0,20,80,0.15)',
+        'mix-blend-mode:screen',
+      ].join(';');
+      container.style.position = 'relative';
+      container.appendChild(gaussEl);
 
       globe.controls().autoRotate      = true;
       globe.controls().autoRotateSpeed = 0.35;

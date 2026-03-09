@@ -150,7 +150,7 @@
       <div class="panel-card collapsible-card" id="card-country">
         <div class="card-hdr" onclick="toggleCard('card-country')" style="cursor:pointer">
           <span>⬡ COUNTRY / FLY-TO</span>
-          <span class="card-collapse-arrow">▴</span>
+          <span class="card-collapse-arrow">▾</span>
         </div>
         <div class="card-body" id="card-country-body" style="display:none">
           <div id="country-filter" class="scroll-list" style="max-height:100px"></div>
@@ -306,7 +306,8 @@
         <button class="rptab" data-rptab="search">🔍 SEARCH</button>
         <button class="rptab" data-rptab="polymarket">🎲 ODDS</button>
         <button class="rptab" data-rptab="defence">🛡 DEFENCE</button>
-        <button class="rptab" data-rptab="india" style="color:#ff9933;border-bottom-color:#ff9933">🇮🇳 INDIA</button>
+        <button class="rptab" data-rptab="india"   style="color:#ff9933;border-bottom-color:#ff9933">🇮🇳 INDIA</button>
+        <button class="rptab" data-rptab="hormuz"  style="color:#00d4ff;border-bottom-color:#00d4ff">⚓ HORMUZ</button>
       </div>
 
       <!-- TAB: News (GDELT) -->
@@ -850,6 +851,38 @@
 
       </div>
 
+      <!-- ── HORMUZ / SHIPPING DASHBOARD ───────────────── -->
+      <div class="rp-tab-body" id="rptab-hormuz" style="display:none;padding:0">
+
+        <!-- Header -->
+        <div class="hrm-header">
+          <span class="hrm-title">⚓ STRATEGIC SHIPPING</span>
+          <button class="mini-btn" onclick="HORMUZ.refresh()" style="margin-left:auto">↻</button>
+        </div>
+
+        <!-- Choke-point quick links -->
+        <div class="hrm-choke-row">
+          <button class="hrm-choke-btn active" onclick="HORMUZ.setRegion('hormuz')">🛢 Hormuz</button>
+          <button class="hrm-choke-btn" onclick="HORMUZ.setRegion('redsea')">🔴 Red Sea</button>
+          <button class="hrm-choke-btn" onclick="HORMUZ.setRegion('malacca')">⚓ Malacca</button>
+          <button class="hrm-choke-btn" onclick="HORMUZ.setRegion('suez')">🏜 Suez</button>
+        </div>
+
+        <!-- Sub-tabs: LIVE | 1D | 7D | 15D -->
+        <div class="hrm-period-row">
+          <button class="hrm-period-btn active" onclick="HORMUZ.setPeriod('live')">LIVE</button>
+          <button class="hrm-period-btn" onclick="HORMUZ.setPeriod('1d')">1 DAY</button>
+          <button class="hrm-period-btn" onclick="HORMUZ.setPeriod('7d')">7 DAYS</button>
+          <button class="hrm-period-btn" onclick="HORMUZ.setPeriod('15d')">15 DAYS</button>
+        </div>
+
+        <!-- Dynamic body -->
+        <div id="hormuz-body" style="overflow-y:auto;height:calc(100vh - 195px);padding:6px 8px">
+          <div class="ind-loading">⟳ Fetching shipping data…</div>
+        </div>
+
+      </div>
+
     </aside>
   </div>
 
@@ -1097,6 +1130,7 @@
   <script src="js/submarine.js"></script>
   <script src="js/defence.js"></script>
   <script src="js/india.js"></script>
+  <script src="js/hormuz.js"></script>
   <script src="js/app.js"></script>
 
   <script>
@@ -1117,6 +1151,7 @@
         if (tab === 'polymarket' && !btn._pmInited)      { btn._pmInited     = true; POLYMARKET.init(); }
         if (tab === 'defence'   && !btn._defInited)     { btn._defInited    = true; DEFENCE.init(); }
         if (tab === 'india'     && !btn._indiaInited)   { btn._indiaInited  = true; INDIA.init(); }
+        if (tab === 'hormuz'   && !btn._hormuzInited)  { btn._hormuzInited = true; HORMUZ.init(); }
       });
     });
 
