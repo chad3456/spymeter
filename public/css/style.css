@@ -2497,3 +2497,100 @@ body.lego-mode #overlay-panel { border-color:#ffcc00; }
 
 .edu-loading { font-size:9px; color:#3a6a8a; padding:12px 8px; text-align:center; animation:blink 1.5s infinite; }
 .edu-empty   { font-size:9px; color:#2a4a5a; padding:12px 8px; text-align:center; }
+
+/* ══════════════════════════════════════════════
+   AIRCRAFT TOGGLE SWITCH + LEGEND
+══════════════════════════════════════════════ */
+.ac-toggle-label {
+  display:flex; align-items:center; gap:4px; cursor:pointer;
+  margin-left:auto; user-select:none;
+}
+.ac-toggle-label input[type=checkbox] { display:none; }
+.ac-toggle-slider {
+  width:28px; height:14px; background:#1a3a5a; border-radius:7px;
+  position:relative; transition:background 0.2s; flex-shrink:0;
+  border:1px solid #2a5a7a;
+}
+.ac-toggle-slider::after {
+  content:''; position:absolute; left:2px; top:2px;
+  width:10px; height:10px; border-radius:50%; background:#4a7aaa;
+  transition:left 0.2s, background 0.2s;
+}
+#ac-toggle-chk:checked ~ .ac-toggle-slider { background:rgba(0,212,255,0.25); border-color:#00aaff; }
+#ac-toggle-chk:checked ~ .ac-toggle-slider::after { left:16px; background:#00d4ff; }
+.ac-toggle-txt { font-size:7.5px; color:#4a7aaa; letter-spacing:0.5px; min-width:18px; }
+#ac-toggle-chk:checked ~ .ac-toggle-txt { color:#00d4ff; }
+
+/* Aircraft legend */
+.ac-legend { padding:5px 0; border-top:1px solid #0d2535; margin-top:4px; }
+.ac-legend-hdr { font-size:7.5px; letter-spacing:1.5px; color:#5a8aaa; margin-bottom:4px; }
+.ac-legend-sub { font-size:7px; letter-spacing:0.5px; color:#3a5a6a; margin-bottom:2px; }
+.ac-legend-grid { display:grid; grid-template-columns:1fr 1fr; gap:2px; }
+.ac-legend-item { display:flex; align-items:center; gap:4px; }
+.ac-legend-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.ac-legend-lbl  { font-size:7.5px; color:#6a8aaa; }
+.ac-legend-note { font-size:6.5px; color:#2a4a5a; margin-top:3px; }
+
+/* Aircraft popup airline banner */
+.popup-airline-banner {
+  padding:3px 6px; margin:2px 0 4px; border-radius:2px;
+  font-size:9px; font-weight:700; letter-spacing:0.5px; color:#fff;
+}
+
+/* ══════════════════════════════════════════════
+   INDIA OSINT DATABASE STYLES
+══════════════════════════════════════════════ */
+.ind-osint-section { padding:2px 0; }
+.ind-src-badge {
+  font-size:7px; color:#3a6a8a; background:rgba(0,100,180,0.1);
+  border:1px solid #0d2535; padding:1px 4px; border-radius:2px; margin-left:4px;
+  font-weight:normal; letter-spacing:0;
+}
+.ind-osint-card {
+  background:rgba(0,15,35,0.6); border:1px solid #0d2535; border-left:3px solid #ff9933;
+  border-radius:2px; padding:5px 7px; margin-bottom:4px;
+}
+.ind-oc-top { display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-bottom:3px; }
+.ind-oc-name { font-size:9.5px; font-weight:700; color:#ffd0a0; flex:1; min-width:120px; }
+.ind-oc-type { font-size:7px; color:#4a7aaa; background:rgba(0,20,60,0.5); padding:1px 4px; border-radius:2px; border:1px solid #1a3a5a; white-space:nowrap; }
+.ind-oc-status { font-size:7px; padding:1px 5px; border-radius:2px; letter-spacing:0.3px; white-space:nowrap; }
+.ind-oc-meta { display:flex; gap:8px; flex-wrap:wrap; font-size:7.5px; color:#4a7aaa; margin-bottom:2px; }
+.ind-oc-note { font-size:8px; color:#4a6a7a; line-height:1.4; font-style:italic; }
+
+/* Defence deals table */
+.ind-deals-table { font-size:7.5px; border-collapse:collapse; width:100%; margin-bottom:4px; }
+.ind-deals-hdr-row {
+  display:grid; grid-template-columns:32px 38px 42px 1fr 70px;
+  gap:3px; padding:3px 4px; background:#0d1e30; color:#3a6a8a;
+  font-size:7px; letter-spacing:0.5px; border-bottom:1px solid #1a3a5a;
+}
+.ind-deal-row {
+  display:grid; grid-template-columns:32px 38px 42px 1fr 70px;
+  gap:3px; padding:3px 4px; border-bottom:1px solid #081520;
+  transition:background 0.1s;
+}
+.ind-deal-row:hover { background:rgba(255,153,51,0.05); }
+.ind-deal-year    { color:#ff9933; font-weight:700; font-size:7.5px; }
+.ind-deal-country { color:#a0c0d8; }
+.ind-deal-value   { color:#00d4ff; font-weight:700; }
+.ind-deal-item    { color:#8aа0b8; font-size:7px; line-height:1.3; }
+.ind-deal-status  { font-size:7px; }
+
+/* Military stats grid */
+.ind-stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:6px; }
+.ind-stat-card {
+  background:rgba(0,10,30,0.7); border:1px solid #0d2535; border-radius:2px;
+  padding:5px 6px; border-top:2px solid #ff9933;
+}
+.ind-sc-val  { font-size:10px; font-weight:700; color:#ffd0a0; margin-bottom:1px; line-height:1.2; }
+.ind-sc-lbl  { font-size:7.5px; color:#6a8aaa; margin-bottom:1px; line-height:1.3; }
+.ind-sc-note { font-size:7px; color:#4a6a7a; font-style:italic; line-height:1.3; }
+.ind-sc-src  { font-size:6.5px; color:#2a4a5a; margin-top:2px; }
+
+.ind-osint-footer {
+  font-size:7px; color:#3a5a6a; border-top:1px solid #0d2535;
+  padding-top:5px; margin-top:8px; line-height:1.5; font-style:italic;
+}
+
+/* Fix deal item color (mixed emoji in selector) */
+.ind-deal-item { color:#8a9ab8; }

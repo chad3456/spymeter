@@ -138,11 +138,18 @@
         <div class="card-hdr" onclick="toggleCard('card-ac')" style="cursor:pointer">
           <span>✈ AIRSPACE <span class="badge-live">● ADS-B</span></span>
           <span id="mil-count" class="badge-mil" onclick="event.stopPropagation()">0 MIL</span>
+          <label class="ac-toggle-label" onclick="event.stopPropagation()" title="Toggle real-time flight tracking (also available via ✈ AIRCRAFT button in top bar)">
+            <input type="checkbox" id="ac-toggle-chk" onchange="(function(on){var b=document.querySelector('.lbtn[data-layer=aircraft]');if(b&&b.classList.contains('active')!==on)b.click();var t=document.getElementById('ac-toggle-txt');if(t)t.textContent=on?'LIVE':'OFF';var w=document.getElementById('ac-legend-wrap');if(w)w.innerHTML=on?AIRCRAFT.buildLegendHTML():''})(this.checked)"/>
+            <span class="ac-toggle-slider"></span>
+            <span class="ac-toggle-txt" id="ac-toggle-txt">OFF</span>
+          </label>
           <span class="card-collapse-arrow">▾</span>
         </div>
         <div class="card-body" id="card-ac-body" style="display:none">
           <div id="ac-country-bars"></div>
           <div id="ac-list" class="scroll-list" style="max-height:120px"></div>
+          <!-- Legend — populated by JS -->
+          <div id="ac-legend-wrap"></div>
         </div>
       </div>
 
@@ -843,6 +850,7 @@
           <button class="ind-tab-btn" data-tab="intel"   onclick="INDIA.setTab('intel')">◈ AI INTEL</button>
           <button class="ind-tab-btn" data-tab="news"    onclick="INDIA.setTab('news')">📡 NEWS</button>
           <button class="ind-tab-btn" data-tab="defence" onclick="INDIA.setTab('defence')">🛡 DEFENCE</button>
+          <button class="ind-tab-btn" data-tab="osint"   onclick="INDIA.setTab('osint')" style="color:#ff9933;border-bottom-color:#ff9933">📚 OSINT DB</button>
         </div>
 
         <!-- Dynamic body rendered by india.js -->

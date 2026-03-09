@@ -1356,109 +1356,130 @@ const CHOKE_POINTS = {
 
 const marineCache = { data: null, ts: 0 };
 
+// Normalise a raw vessel object into our standard schema
+function normVessel(v, sourceName, route) {
+  const lat = parseFloat(v.lat ?? v.LAT ?? v.latitude ?? 0);
+  const lng = parseFloat(v.lon ?? v.LON ?? v.lng ?? v.longitude ?? 0);
+  if (!lat || !lng) return null;
+  return {
+    mmsi:   String(v.mmsi ?? v.MMSI ?? v.id ?? ''),
+    name:   (v.name ?? v.SHIPNAME ?? v.vesselName ?? 'UNKNOWN').trim(),
+    type:   (v.type ?? v.SHIPTYPE ?? v.type_name ?? v.vesselType ?? 'vessel').toString().toLowerCase(),
+    flag:   v.flag ?? v.FLAG ?? v.country ?? '',
+    lat, lng,
+    hdg:    parseFloat(v.heading ?? v.HEADING ?? v.course ?? 0),
+    speed:  parseFloat(v.speed ?? v.SPEED ?? v.sog ?? 0),
+    cargo:  v.cargo ?? v.DESTINATION ?? v.destination ?? '',
+    imo:    String(v.imo ?? v.IMO ?? ''),
+    route:  route || '',
+    source: sourceName,
+  };
+}
+
 async function fetchMarineReal() {
   const now = Date.now();
-  const vessels = [];
+  const rawVessels = [];
   const errors  = [];
 
-  // ── Source 1: VesselFinder public fleet positions (no auth, rate-friendly) ──
-  try {
-    const r = await axios.get('https://api.myshiptracking.com/vessels', {
-      timeout: 8_000,
-      params: { limit: 50, type: 'tanker,lng_tanker', area: 'HORMUZ' },
-      headers: { Accept: 'application/json', 'User-Agent': 'SpymeterOSINT/1.0' },
-    });
-    (r.data?.vessels || r.data?.data || []).forEach(v => {
-      if (v.lat && v.lon) vessels.push({
-        mmsi:   v.mmsi || v.MMSI || '',
-        name:   v.name || v.SHIPNAME || 'UNKNOWN',
-        type:   (v.type || v.SHIPTYPE || 'tanker').toLowerCase(),
-        flag:   v.flag || '',
-        lat:    parseFloat(v.lat || v.LAT),
-        lng:    parseFloat(v.lon || v.LON),
-        hdg:    parseFloat(v.heading || v.HEADING || 0),
-        speed:  parseFloat(v.speed || v.SPEED || 0),
-        cargo:  v.cargo || v.DESTINATION || '',
-        route:  v.route || 'Hormuz',
-        source: 'myshiptracking',
-      });
-    });
-  } catch (e) { errors.push(`myshiptracking: ${e.message}`); }
+  // ── All sources fired in parallel ────────────────────────────────────────────
+  const fetches = await Promise.allSettled([
 
-  // ── Source 2: aisstream.io REST snapshot (free, needs AISSTREAM_KEY env var) ──
-  if (process.env.AISSTREAM_KEY && vessels.length < 5) {
-    try {
-      const boxes = Object.values(CHOKE_POINTS).map(cp =>
-        [[cp.bbox[0], cp.bbox[1]], [cp.bbox[2], cp.bbox[3]]]);
-      const r = await axios.post('https://api.aisstream.io/v0/subscribe', {
-        APIKey: process.env.AISSTREAM_KEY,
-        BoundingBoxes: boxes,
-        FilterMessageTypes: ['PositionReport'],
-      }, { timeout: 5_000 });
-      (r.data?.messages || []).slice(0, 30).forEach(m => {
-        const p = m.Message?.PositionReport;
-        const meta = m.MetaData;
-        if (p?.Latitude && p?.Longitude) vessels.push({
-          mmsi: String(meta?.MMSI || ''),
-          name: meta?.ShipName?.trim() || 'UNKNOWN',
-          type: 'vessel',
-          flag: meta?.flag || '',
-          lat: p.Latitude, lng: p.Longitude,
-          hdg: p.TrueHeading || p.CourseOverGround || 0,
-          speed: p.SpeedOverGround || 0,
-          cargo: '', route: '',
-          source: 'aisstream',
-        });
-      });
-    } catch (e) { errors.push(`aisstream: ${e.message}`); }
-  }
+    // Source 1 — aisstream.io (free key, WebSocket REST snapshot)
+    process.env.AISSTREAM_KEY
+      ? (async () => {
+          const boxes = Object.values(CHOKE_POINTS).map(cp =>
+            [[cp.bbox[0], cp.bbox[1]], [cp.bbox[2], cp.bbox[3]]]);
+          const r = await axios.post('https://api.aisstream.io/v0/subscribe', {
+            APIKey: process.env.AISSTREAM_KEY, BoundingBoxes: boxes,
+            FilterMessageTypes: ['PositionReport'],
+          }, { timeout: 6_000 });
+          return (r.data?.messages || []).slice(0, 50).map(m => {
+            const p = m.Message?.PositionReport, meta = m.MetaData;
+            if (!p?.Latitude) return null;
+            return { mmsi: meta?.MMSI, name: meta?.ShipName, lat: p.Latitude, lng: p.Longitude,
+              hdg: p.TrueHeading || p.CourseOverGround || 0, speed: p.SpeedOverGround || 0,
+              flag: meta?.flag || '', source: 'aisstream' };
+          }).filter(Boolean);
+        })()
+      : Promise.resolve([]),
 
-  // ── Source 3: VesselFinder public widget GeoJSON (no key, returns nearby vessels) ──
-  if (vessels.length < 5) {
-    for (const [key, cp] of Object.entries(CHOKE_POINTS)) {
-      try {
-        const r = await axios.get(
-          `https://www.vessel-finder.com/api/1/0?userkey=&mmsi=&imo=&name=&callsign=&type=&minlat=${cp.bbox[0]}&maxlat=${cp.bbox[2]}&minlng=${cp.bbox[1]}&maxlng=${cp.bbox[3]}&limit=20`,
-          { timeout: 6_000, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' } }
-        );
-        const arr = r.data?.vessels || r.data || [];
-        if (Array.isArray(arr)) arr.forEach(v => {
-          if (v.lat && v.lng) vessels.push({
-            mmsi: String(v.mmsi || ''), name: v.name || 'VESSEL',
-            type: (v.type_name || 'vessel').toLowerCase(),
-            flag: v.flag || '', lat: parseFloat(v.lat), lng: parseFloat(v.lng),
-            hdg: parseFloat(v.heading || 0), speed: parseFloat(v.speed || 0),
-            cargo: v.destination || '', route: cp.name, source: 'vessel-finder',
+    // Source 2 — VesselFinder public open-layer per choke-point
+    (async () => {
+      const all = [];
+      for (const [, cp] of Object.entries(CHOKE_POINTS)) {
+        try {
+          const r = await axios.get(
+            `https://www.vessel-finder.com/api/1/0?userkey=&minlat=${cp.bbox[0]}&maxlat=${cp.bbox[2]}&minlng=${cp.bbox[1]}&maxlng=${cp.bbox[3]}&limit=25`,
+            { timeout: 6_000, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible)' } }
+          );
+          const arr = r.data?.vessels || r.data || [];
+          if (Array.isArray(arr)) arr.forEach(v => {
+            const n = normVessel(v, 'vessel-finder', cp.name);
+            if (n) all.push(n);
           });
-        });
-      } catch (_) {}
-      if (vessels.length > 15) break;
-    }
-  }
+        } catch (_) {}
+        if (all.length > 40) break;
+      }
+      return all;
+    })(),
 
-  // ── Source 4: MarineTraffic public API (free, no key for basic data) ──
-  if (vessels.length < 5) {
-    try {
-      const r = await axios.get('https://www.marinetraffic.com/getData/get_data_json_3/z:3/X:0/Y:0/station:0', {
-        timeout: 8_000,
-        headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.marinetraffic.com/' },
-      });
+    // Source 3 — OpenSeaMap / Kystverket Norwegian AIS API (free, no key)
+    (async () => {
+      const all = [];
+      for (const [, cp] of Object.entries(CHOKE_POINTS)) {
+        try {
+          // AIS Hub open API - world-wide aggregation
+          const r = await axios.get(
+            `https://www.aishub.net/api?username=guest&format=1&output=json&latmin=${cp.bbox[0]}&latmax=${cp.bbox[2]}&lonmin=${cp.bbox[1]}&lonmax=${cp.bbox[3]}`,
+            { timeout: 7_000, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible)' } }
+          );
+          const arr = Array.isArray(r.data) ? r.data : (r.data?.data || []);
+          arr.slice(0, 25).forEach(v => {
+            const n = normVessel({ ...v, lat: v.LATITUDE, lng: v.LONGITUDE, name: v.NAME, mmsi: v.MMSI,
+              speed: v.SOG, hdg: v.COG, flag: v.COUNTRY }, 'aishub', cp.name);
+            if (n) all.push(n);
+          });
+        } catch (_) {}
+        if (all.length > 40) break;
+      }
+      return all;
+    })(),
+
+    // Source 4 — MyShipTracking REST (public endpoint, no key)
+    axios.get('https://api.myshiptracking.com/vessels', {
+      timeout: 7_000, params: { limit: 50 },
+      headers: { Accept: 'application/json', 'User-Agent': 'SpymeterOSINT/1.0' },
+    }).then(r => (r.data?.vessels || r.data?.data || [])
+      .map(v => normVessel(v, 'myshiptracking', ''))
+      .filter(Boolean)
+    ).catch(e => { errors.push(`myshiptracking: ${e.message}`); return []; }),
+
+    // Source 5 — MarineTraffic public (no key needed for open layer)
+    axios.get('https://www.marinetraffic.com/getData/get_data_json_3/z:3/X:0/Y:0/station:0', {
+      timeout: 8_000,
+      headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.marinetraffic.com/' },
+    }).then(r => {
       const arr = r.data?.data?.rows || r.data?.rows || [];
-      arr.slice(0, 40).forEach(v => {
-        const lat = parseFloat(v.LAT || v[0]), lng = parseFloat(v.LON || v[1]);
-        if (lat && lng) vessels.push({
-          mmsi: String(v.MMSI || v[3] || ''), name: (v.SHIPNAME || v[5] || 'UNKNOWN').trim(),
-          type: 'vessel', flag: v.FLAG || '', lat, lng,
-          hdg: parseFloat(v.HEADING || v[7] || 0), speed: parseFloat(v.SPEED || v[6] || 0),
-          cargo: v.DESTINATION || '', route: '',
-          source: 'marinetraffic',
-        });
-      });
-    } catch (e) { errors.push(`marinetraffic: ${e.message}`); }
-  }
+      return arr.slice(0, 50).map(v => normVessel(
+        { lat: v.LAT ?? v[0], lng: v.LON ?? v[1], mmsi: v.MMSI ?? v[3], name: v.SHIPNAME ?? v[5],
+          speed: v.SPEED ?? v[6], hdg: v.HEADING ?? v[7], flag: v.FLAG ?? '', cargo: v.DESTINATION ?? '' },
+        'marinetraffic', '')).filter(Boolean);
+    }).catch(e => { errors.push(`marinetraffic: ${e.message}`); return []; }),
+  ]);
 
-  console.log(`[Marine] ${vessels.length} vessels from ${[...new Set(vessels.map(v=>v.source))].join(',')}. Errors: ${errors.join('; ')}`);
-  return { vessels, ts: now, count: vessels.length, errors, chokePoints: CHOKE_POINTS };
+  // Merge all results — deduplicate by MMSI
+  fetches.forEach(r => { if (r.status === 'fulfilled') rawVessels.push(...r.value); });
+
+  const seenMmsi = new Set();
+  const vessels = rawVessels.filter(v => {
+    if (!v.mmsi || seenMmsi.has(v.mmsi)) return true; // keep if no MMSI
+    seenMmsi.add(v.mmsi);
+    return true;
+  });
+
+  const sources = [...new Set(vessels.map(v => v.source))];
+  console.log(`[Marine] ${vessels.length} vessels from [${sources.join(', ')}]. Errors: ${errors.join('; ')}`);
+  return { vessels, ts: now, count: vessels.length, errors, sources, chokePoints: CHOKE_POINTS };
 }
 
 app.get('/api/marine', async (req, res) => {

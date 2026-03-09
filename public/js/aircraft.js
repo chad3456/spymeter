@@ -21,20 +21,100 @@ const AIRLINE_CODES = {
   SK :'SAS',              AY :'Finnair',          OS :'Austrian Airlines',
   LO :'LOT Polish',       OK :'Czech Airlines',   BT :'airBaltic',
   FR :'Ryanair',          U2 :'easyJet',          PC :'Pegasus Airlines',
+  // Indian airlines
+  '6E':'IndiGo',          SG :'SpiceJet',         IX :'Air India Express',
+  UK :'Vistara',          QP :'Akasa Air',        G8 :'Go First',
+  I5 :'AirAsia India',    '9W':'Jet Airways',
   // Cargo / Freight
   FDX:'FedEx Express',    UPS:'UPS Airlines',     DHL:'DHL Aviation',
   CLX:'Cargolux',         PAC:'Polar Air Cargo',  GTI:'Atlas Air',
   // Military / Government callsigns handled by PATTERNS
 };
 
+// ── Airline → brand color ─────────────────────────────────
+const AIRLINE_COLORS = {
+  '6E':'#4a90d9',   // IndiGo — blue
+  SG  :'#e02020',   // SpiceJet — red
+  AI  :'#e8500a',   // Air India — saffron-orange
+  UK  :'#7b2d8b',   // Vistara — purple
+  QP  :'#f97316',   // Akasa Air — bright orange
+  IX  :'#c0392b',   // Air India Express — red
+  G8  :'#e74c3c',   // Go First — red
+  I5  :'#e74c3c',   // AirAsia — red
+  EK  :'#c8102e',   // Emirates — deep red
+  QR  :'#5c0632',   // Qatar Airways — maroon
+  SQ  :'#00338d',   // Singapore Airlines — navy blue
+  EY  :'#8b6914',   // Etihad — gold
+  BAW :'#00308f',   // British Airways — blue
+  UAL :'#002244',   // United — dark blue
+  DAL :'#e21836',   // Delta — red
+  AAL :'#0078d2',   // American — blue
+  AFR :'#002395',   // Air France — navy
+  DLH :'#00679a',   // Lufthansa — dark teal
+  KLM :'#00a1de',   // KLM — cyan blue
+  TG  :'#4b0082',   // Thai Airways — purple
+  CA  :'#d62b1f',   // Air China — red
+  MH  :'#cc0001',   // Malaysia — red
+  EZY :'#ff6600',   // easyJet — orange
+  RYR :'#002B7F',   // Ryanair — dark blue
+  FDX :'#ff6200',   // FedEx — orange
+  UPS :'#351c15',   // UPS — dark brown
+};
+
+// ── IATA airport code → city name ─────────────────────────
+const IATA_CITIES = {
+  DEL:'Delhi',       BOM:'Mumbai',      BLR:'Bangalore',   MAA:'Chennai',
+  HYD:'Hyderabad',   CCU:'Kolkata',     AMD:'Ahmedabad',   COK:'Kochi',
+  GAU:'Guwahati',    IXC:'Chandigarh',  PNQ:'Pune',        GOI:'Goa',
+  LKO:'Lucknow',     PAT:'Patna',       IXB:'Bagdogra',    JAI:'Jaipur',
+  JFK:'New York',    LAX:'Los Angeles', ORD:'Chicago',     ATL:'Atlanta',
+  DFW:'Dallas',      DEN:'Denver',      SFO:'San Francisco',MIA:'Miami',
+  BOS:'Boston',      SEA:'Seattle',     IAD:'Washington DC',EWR:'Newark',
+  LHR:'London',      LGW:'London Gatwick',CDG:'Paris',     AMS:'Amsterdam',
+  FRA:'Frankfurt',   MUC:'Munich',      ZRH:'Zurich',      VIE:'Vienna',
+  MAD:'Madrid',      BCN:'Barcelona',   FCO:'Rome',        MXP:'Milan',
+  DXB:'Dubai',       AUH:'Abu Dhabi',   DOH:'Doha',        BAH:'Bahrain',
+  KWI:'Kuwait',      RUH:'Riyadh',      JED:'Jeddah',      MCT:'Muscat',
+  SIN:'Singapore',   KUL:'Kuala Lumpur',BKK:'Bangkok',     CGK:'Jakarta',
+  HAN:'Hanoi',       SGN:'Ho Chi Minh', MNL:'Manila',      HKG:'Hong Kong',
+  PEK:'Beijing',     PVG:'Shanghai',    CAN:'Guangzhou',   CTU:'Chengdu',
+  NRT:'Tokyo',       KIX:'Osaka',       ICN:'Seoul',       TPE:'Taipei',
+  SYD:'Sydney',      MEL:'Melbourne',   BNE:'Brisbane',    PER:'Perth',
+  YYZ:'Toronto',     YVR:'Vancouver',   YUL:'Montreal',    YYC:'Calgary',
+  GRU:'São Paulo',   GIG:'Rio de Janeiro',BOG:'Bogotá',    LIM:'Lima',
+  MEX:'Mexico City', EZE:'Buenos Aires',SCL:'Santiago',
+  CAI:'Cairo',       ADD:'Addis Ababa', NBO:'Nairobi',     JNB:'Johannesburg',
+  CMN:'Casablanca',  LOS:'Lagos',       ACC:'Accra',
+  SVO:'Moscow',      LED:'St. Petersburg',WAW:'Warsaw',    PRG:'Prague',
+  BUD:'Budapest',    ATH:'Athens',      IST:'Istanbul',    TLV:'Tel Aviv',
+  AMM:'Amman',       BEY:'Beirut',      KHI:'Karachi',     LHE:'Lahore',
+  ISB:'Islamabad',   DAC:'Dhaka',       CMB:'Colombo',     KTM:'Kathmandu',
+};
+
+function airportCity(code) {
+  if (!code) return null;
+  const c = (code || '').trim().toUpperCase().slice(0,4);
+  return IATA_CITIES[c] || null;
+}
+
 function getAirlineName(callsign) {
   const cs = (callsign || '').trim().toUpperCase();
-  // Try 3-char prefix, then 2-char, then 2-char with digit strip
   for (let len = 3; len >= 2; len--) {
-    const code = cs.slice(0, len).replace(/\d+$/, ''); // strip trailing digits for 2-char
+    const code = cs.slice(0, len).replace(/\d+$/, '');
     const key  = cs.slice(0, len);
     if (AIRLINE_CODES[key])  return AIRLINE_CODES[key];
     if (len === 2 && AIRLINE_CODES[code]) return AIRLINE_CODES[code];
+  }
+  return null;
+}
+
+function getAirlineColor(callsign) {
+  const cs = (callsign || '').trim().toUpperCase();
+  for (let len = 3; len >= 2; len--) {
+    const key  = cs.slice(0, len);
+    const code = cs.slice(0, len).replace(/\d+$/, '');
+    if (AIRLINE_COLORS[key])  return AIRLINE_COLORS[key];
+    if (len === 2 && AIRLINE_COLORS[code]) return AIRLINE_COLORS[code];
   }
   return null;
 }
@@ -167,7 +247,7 @@ const AIRCRAFT = (() => {
 
   function makePopup(s) {
     const cs       = (s[I.callsign] || '').trim() || 'N/A';
-    const origin   = s[I.origin] || 'Unknown';
+    const srcCountry = s[I.origin] || 'Unknown';
     const spd      = speedKts(s[I.velocity]);
     const alt      = altFt(s[I.alt]);
     const hdg      = s[I.heading] ? Math.round(s[I.heading]) + '°' : '?';
@@ -177,31 +257,36 @@ const AIRCRAFT = (() => {
     const meta     = TYPE_META[type] || TYPE_META.civilian;
     const milFlag  = isMilitary(cs);
     const airline  = getAirlineName(cs);
-    // Extended fields from ADSB.fi/ADSB.one/ADSBEx (index 12+ if present)
-    const dest     = s[17] || s.dest || '';
-    const origin2  = s[16] || s.orig || '';
-    const model    = s[18] || s.model || s.t || '';
-    const reg      = s[19] || s.r || '';
-    const icao24   = s[I.icao] || '?';
+    const airColor = getAirlineColor(cs) || meta.color;
+    // Extended fields — present when ADSB.fi/adsb.lol normalizes them
+    const destCode  = s[17] || s.dest || s.destination || '';
+    const origCode  = s[16] || s.orig || s.origin_airport || '';
+    const model     = s[18] || s.model || s.t || s.acType || '';
+    const reg       = s[19] || s.r || s.registration || '';
+    const icao24    = s[I.icao] || '?';
+    const origCity  = airportCity(origCode);
+    const destCity  = airportCity(destCode);
+    const origLabel = origCity ? `${origCode} (${origCity})` : (origCode || '');
+    const destLabel = destCity ? `${destCode} (${destCity})` : (destCode || '');
 
     return `
       <div class="popup-box">
-        <div class="popup-title" style="color:${meta.color}">${meta.emoji} ${meta.label}: ${cs}</div>
-        <div class="popup-row"><span class="popup-key">AIRCRAFT NO</span><span class="popup-val" style="color:#00d4ff">${reg || icao24}</span></div>
+        <div class="popup-title" style="color:${airColor}">${meta.emoji} ${cs}</div>
+        ${airline ? `<div class="popup-airline-banner" style="background:${airColor}22;border-left:3px solid ${airColor}">${airline}</div>` : ''}
+        <div class="popup-row"><span class="popup-key">REG</span><span class="popup-val" style="color:#00d4ff">${reg || '–'}</span></div>
         <div class="popup-row"><span class="popup-key">ICAO24</span><span class="popup-val">${icao24}</span></div>
-        ${airline ? `<div class="popup-row"><span class="popup-key">AIRLINE</span><span class="popup-val" style="color:#ffaa00">${airline}</span></div>` : ''}
         ${model ? `<div class="popup-row"><span class="popup-key">AIRCRAFT</span><span class="popup-val">${model}</span></div>` : ''}
-        <div class="popup-row"><span class="popup-key">TYPE</span><span class="popup-val" style="color:${meta.color}">${meta.label}</span></div>
-        <div class="popup-row"><span class="popup-key">SOURCE COUNTRY</span><span class="popup-val">${origin}</span></div>
-        ${origin2 ? `<div class="popup-row"><span class="popup-key">ORIGIN AIRPORT</span><span class="popup-val green">${origin2}</span></div>` : ''}
-        ${dest   ? `<div class="popup-row"><span class="popup-key">DESTINATION</span><span class="popup-val green">${dest}</span></div>` : ''}
+        <div class="popup-row"><span class="popup-key">TYPE</span><span class="popup-val" style="color:${airColor}">${meta.label}</span></div>
+        <div class="popup-row"><span class="popup-key">REG COUNTRY</span><span class="popup-val">${srcCountry}</span></div>
+        ${origLabel ? `<div class="popup-row"><span class="popup-key">FROM</span><span class="popup-val" style="color:#00ff88">✈ ${origLabel}</span></div>` : ''}
+        ${destLabel ? `<div class="popup-row"><span class="popup-key">TO</span><span class="popup-val" style="color:#00ff88">🛬 ${destLabel}</span></div>` : ''}
         <div class="popup-row"><span class="popup-key">ALTITUDE</span><span class="popup-val green">${alt} ft</span></div>
         <div class="popup-row"><span class="popup-key">SPEED</span><span class="popup-val">${spd} kts</span></div>
         <div class="popup-row"><span class="popup-key">HEADING</span><span class="popup-val">${hdg}</span></div>
         <div class="popup-row"><span class="popup-key">VERT RATE</span><span class="popup-val ${parseFloat(vr) < 0 ? 'red' : 'green'}">${vr}</span></div>
         <div class="popup-row"><span class="popup-key">ON GROUND</span><span class="popup-val ${ground === 'YES' ? 'orange' : ''}">${ground}</span></div>
         ${milFlag ? '<div class="popup-mil-tag">⚠ MILITARY ASSET — OSINT</div>' : ''}
-        <div style="font-size:7px;color:#3d5a78;margin-top:4px;padding-top:4px;border-top:1px solid #182030">Source: OpenSky / ADS-B</div>
+        <div style="font-size:7px;color:#3d5a78;margin-top:4px;padding-top:4px;border-top:1px solid #182030">Source: adsb.lol / airplanes.live / ADS-B</div>
       </div>`;
   }
 
@@ -218,7 +303,10 @@ const AIRCRAFT = (() => {
     const cs      = (s[I.callsign] || '').trim();
     const type    = detectType(cs, s[I.on_ground]);
     const meta    = TYPE_META[type] || TYPE_META.civilian;
-    const color   = isMilitary(cs) ? meta.color : UTILS.countryColor(country) || meta.color;
+    // Priority: military type color → airline brand color → country color → default
+    const color   = isMilitary(cs)
+      ? meta.color
+      : (getAirlineColor(cs) || UTILS.countryColor(country) || meta.color);
     const heading = s[I.heading] || 0;
 
     const html    = makeMarkerHTML(type, color, heading, cs || icao);
@@ -345,9 +433,56 @@ const AIRCRAFT = (() => {
   function getTs()          { return dataTs; }
   function getMarkers()     { return markers; }
 
+  // ── Legend HTML ───────────────────────────────────────────
+  function buildLegendHTML() {
+    const types = [
+      { color:'#ff2200', label:'UAV / Drone' },
+      { color:'#ff9900', label:'Fighter / Military' },
+      { color:'#ff6600', label:'Bomber' },
+      { color:'#ffaa44', label:'Air Tanker' },
+      { color:'#44ffaa', label:'Cargo' },
+      { color:'#ddaaff', label:'Govt / VIP' },
+      { color:'#00aaff', label:'Helicopter' },
+    ];
+    const airlines = [
+      { color:'#4a90d9', label:'IndiGo (6E)' },
+      { color:'#e02020', label:'SpiceJet (SG)' },
+      { color:'#e8500a', label:'Air India (AI)' },
+      { color:'#7b2d8b', label:'Vistara (UK)' },
+      { color:'#f97316', label:'Akasa Air (QP)' },
+      { color:'#c8102e', label:'Emirates (EK)' },
+      { color:'#5c0632', label:'Qatar (QR)' },
+      { color:'#00338d', label:'Singapore (SQ)' },
+      { color:'#00308f', label:'British (BA)' },
+      { color:'#3399ff', label:'Commercial (other)' },
+    ];
+    return `
+      <div class="ac-legend">
+        <div class="ac-legend-hdr">✈ AIRCRAFT LEGEND</div>
+        <div class="ac-legend-sub">MILITARY / SPECIAL TYPES</div>
+        <div class="ac-legend-grid">
+          ${types.map(t => `
+            <div class="ac-legend-item">
+              <span class="ac-legend-dot" style="background:${t.color};box-shadow:0 0 4px ${t.color}"></span>
+              <span class="ac-legend-lbl">${t.label}</span>
+            </div>`).join('')}
+        </div>
+        <div class="ac-legend-sub" style="margin-top:6px">AIRLINE COLOURS</div>
+        <div class="ac-legend-grid">
+          ${airlines.map(a => `
+            <div class="ac-legend-item">
+              <span class="ac-legend-dot" style="background:${a.color};box-shadow:0 0 4px ${a.color}"></span>
+              <span class="ac-legend-lbl">${a.label}</span>
+            </div>`).join('')}
+        </div>
+        <div class="ac-legend-note">Colors shown on map markers and icons</div>
+      </div>`;
+  }
+
   return {
     init, setEnabled, setCountryFilter, handleWSUpdate,
     getData, getTs, getMarkers, isMilitary, detectType,
+    buildLegendHTML,
     refresh: fetchData,
   };
 })();
