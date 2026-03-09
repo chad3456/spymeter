@@ -307,7 +307,8 @@
         <button class="rptab" data-rptab="polymarket">🎲 ODDS</button>
         <button class="rptab" data-rptab="defence">🛡 DEFENCE</button>
         <button class="rptab" data-rptab="india"   style="color:#ff9933;border-bottom-color:#ff9933">🇮🇳 INDIA</button>
-        <button class="rptab" data-rptab="hormuz"  style="color:#00d4ff;border-bottom-color:#00d4ff">⚓ HORMUZ</button>
+        <button class="rptab" data-rptab="hormuz"    style="color:#00d4ff;border-bottom-color:#00d4ff">⚓ HORMUZ</button>
+        <button class="rptab" data-rptab="education" style="color:#a0d4ff;border-bottom-color:#a0d4ff">📚 ARMS DB</button>
       </div>
 
       <!-- TAB: News (GDELT) -->
@@ -883,6 +884,30 @@
 
       </div>
 
+      <!-- TAB: Education / Arms Inventory -->
+      <div class="rp-tab-body" id="rptab-education" style="display:none;padding:0">
+
+        <!-- Header -->
+        <div class="edu-header">
+          <span class="edu-title">📚 ARMS &amp; DEFENCE INVENTORY</span>
+          <span class="edu-subtitle">OSINT · IISS · SIPRI · FAS</span>
+        </div>
+
+        <!-- Sub-tabs -->
+        <div class="edu-tabs">
+          <button class="edu-tab-btn active" data-edu-tab="overview"  onclick="EDUCATION.setTab('overview')">🌍 OVERVIEW</button>
+          <button class="edu-tab-btn"        data-edu-tab="missiles"  onclick="EDUCATION.setTab('missiles')">🚀 MISSILES</button>
+          <button class="edu-tab-btn"        data-edu-tab="drones"    onclick="EDUCATION.setTab('drones')">🛸 DRONES</button>
+          <button class="edu-tab-btn"        data-edu-tab="news"      onclick="EDUCATION.setTab('news')">📰 DEFENCE AI NEWS</button>
+        </div>
+
+        <!-- Dynamic body -->
+        <div id="education-body" style="overflow-y:auto;height:calc(100vh - 175px);padding:6px 8px">
+          <div class="edu-loading">⟳ Loading…</div>
+        </div>
+
+      </div>
+
     </aside>
   </div>
 
@@ -1131,6 +1156,7 @@
   <script src="js/defence.js"></script>
   <script src="js/india.js"></script>
   <script src="js/hormuz.js"></script>
+  <script src="js/education.js"></script>
   <script src="js/app.js"></script>
 
   <script>
@@ -1151,7 +1177,8 @@
         if (tab === 'polymarket' && !btn._pmInited)      { btn._pmInited     = true; POLYMARKET.init(); }
         if (tab === 'defence'   && !btn._defInited)     { btn._defInited    = true; DEFENCE.init(); }
         if (tab === 'india'     && !btn._indiaInited)   { btn._indiaInited  = true; INDIA.init(); }
-        if (tab === 'hormuz'   && !btn._hormuzInited)  { btn._hormuzInited = true; HORMUZ.init(); }
+        if (tab === 'hormuz'    && !btn._hormuzInited)    { btn._hormuzInited   = true; HORMUZ.init(); }
+        if (tab === 'education' && !btn._educationInited) { btn._educationInited = true; EDUCATION.init(); }
       });
     });
 

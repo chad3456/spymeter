@@ -1897,6 +1897,121 @@ function parseRSSItems(xml, feedUrl) {
   return items;
 }
 
+// ─── Defence AI News — HackerNews Algolia + TechCrunch RSS + general defence ──
+const defAiNewsCache = { data: null, ts: 0 };
+const DEF_AI_NEWS_TTL = 600_000; // 10 min
+
+const TECH_DEFENCE_RSS = [
+  { url: 'https://feeds.feedburner.com/TechCrunch/', name: 'TechCrunch' },
+  { url: 'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml', name: 'NYT Tech' },
+  { url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml', name: 'NYT World' },
+  { url: 'https://breakingdefense.com/feed/', name: 'Breaking Defense' },
+  { url: 'https://www.thedrive.com/the-war-zone/feed', name: 'The War Zone' },
+  { url: 'https://www.defenseone.com/rss/all/', name: 'Defense One' },
+  { url: 'https://www.c4isrnet.com/arc/outboundfeeds/rss/', name: 'C4ISRNET' },
+  { url: 'https://www.janes.com/feeds/news', name: "Jane's" },
+];
+const DEF_AI_KW = /\b(drone|UAV|UCAV|autonomous.weapon|robot|AI.weapon|machine.learning.military|hypersonic|missile|cyber.attack|electronic.warfare|satellite.weapon|directed.energy|laser.weapon|DARPA|IARPA|Lockheed|Raytheon|Northrop|defence.AI|defense.AI|autonomous.system|loitering.munition|swarm.drone|quantum.sensor|GPT.military|LLM.defence|neural.network.weapon|DRDO|Pentagon.AI|JADC2|Skyborg|GHOST|Replicator|Navy.drone|Army.robot|stealth.AI)\b/i;
+
+function _parseFeedItems(xml, sourceName, category) {
+  const items = [];
+  const rx = /<item>([\s\S]*?)<\/item>/g;
+  let m;
+  while ((m = rx.exec(xml)) !== null && items.length < 10) {
+    const blk = m[1];
+    const get = t => { const r = new RegExp(`<${t}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${t}>|<${t}[^>]*>([\\s\\S]*?)</${t}>`); const mm = r.exec(blk); return mm ? (mm[1]||mm[2]||'').trim() : ''; };
+    const title = get('title').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'");
+    const link  = get('link') || get('guid');
+    const pub   = get('pubDate') || get('dc:date') || '';
+    const desc  = get('description').replace(/<[^>]+>/g,'').slice(0,200);
+    if (title && (category === 'defence' || DEF_AI_KW.test(title + ' ' + desc))) {
+      items.push({ title, url: link, source: sourceName, date: pub ? new Date(pub).toISOString() : null, category: _classifyArt(title+' '+desc) });
+    }
+  }
+  return items;
+}
+
+function _classifyArt(text) {
+  if (/\b(AI|artificial intelligence|machine learning|autonomous|robot|GPT|LLM|neural)\b/i.test(text)) return 'ai';
+  if (/\b(missile|hypersonic|ICBM|SLBM|cruise missile|ballistic)\b/i.test(text)) return 'missile';
+  if (/\b(drone|UAV|UCAV|loitering munition|swarm)\b/i.test(text)) return 'drone';
+  if (/\b(cyber|hack|malware|ransomware|APT|intrusion)\b/i.test(text)) return 'cyber';
+  if (/\b(satellite|space|orbit|SpaceX|launch vehicle)\b/i.test(text)) return 'space';
+  if (/\b(India|DRDO|HAL|BrahMos|Agni|Tejas)\b/i.test(text)) return 'india';
+  return 'general';
+}
+
+app.get('/api/defence-ai-news', async (req, res) => {
+  const now = Date.now();
+  if (defAiNewsCache.data && now - defAiNewsCache.ts < DEF_AI_NEWS_TTL) return res.json(defAiNewsCache.data);
+
+  const allArticles = [];
+
+  // 1. HackerNews Algolia API — search for defence+AI topics
+  const HN_QUERIES = ['drone military', 'AI weapons defense', 'hypersonic missile', 'autonomous weapons', 'DARPA AI', 'cyber warfare'];
+  const hnFetches = HN_QUERIES.map(q =>
+    axios.get('https://hn.algolia.com/api/v1/search', {
+      params: { query: q, tags: 'story', numericFilters: `created_at_i>${Math.floor((now-86400000*3)/1000)}`, hitsPerPage: 5 },
+      timeout: 6_000
+    }).then(r => (r.data?.hits || []).map(h => ({
+      title: h.title,
+      url: h.url || `https://news.ycombinator.com/item?id=${h.objectID}`,
+      source: 'HackerNews',
+      date: h.created_at || null,
+      category: _classifyArt(h.title + ' ' + (h.story_text || '')),
+    }))).catch(() => [])
+  );
+
+  // 2. RSS feeds
+  const rssFetches = TECH_DEFENCE_RSS.map(feed =>
+    axios.get(feed.url, { timeout: 7_000, responseType: 'text', headers: { Accept: 'application/rss+xml,text/xml,*/*', 'User-Agent': 'SpymeterOSINT/1.0' } })
+      .then(r => _parseFeedItems(r.data, feed.name, feed.name.includes('Defense') || feed.name.includes('War') || feed.name.includes('Jane') || feed.name.includes('C4') ? 'defence' : 'tech'))
+      .catch(() => [])
+  );
+
+  // 3. GDELT — AI + defence queries
+  const GDELT_QUERIES = [
+    'artificial intelligence military autonomous weapon drone 2026',
+    'hypersonic missile test 2026',
+    'defence technology AI procurement 2026',
+    'cyber attack military 2026',
+  ];
+  const gdeltFetches = GDELT_QUERIES.map(q =>
+    axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: { query: q, mode: 'artlist', maxrecords: 6, format: 'json', sort: 'datedesc', timespan: '72h' },
+      timeout: 7_000
+    }).then(r => (r.data?.articles || []).map(a => ({
+      title: a.title, url: a.url, source: a.domain,
+      date: a.seendate ? `${a.seendate.slice(0,4)}-${a.seendate.slice(4,6)}-${a.seendate.slice(6,8)}T${a.seendate.slice(8,10)}:${a.seendate.slice(10,12)}:00Z` : null,
+      category: _classifyArt(a.title),
+    }))).catch(() => [])
+  );
+
+  const results = await Promise.allSettled([...hnFetches, ...rssFetches, ...gdeltFetches]);
+  results.forEach(r => { if (r.status === 'fulfilled') allArticles.push(...r.value); });
+
+  // Deduplicate by title
+  const seen = new Set();
+  const deduped = allArticles.filter(a => {
+    if (!a.title) return false;
+    const key = a.title.toLowerCase().slice(0, 60);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Sort by date descending
+  deduped.sort((a, b) => {
+    const ta = a.date ? new Date(a.date).getTime() : 0;
+    const tb = b.date ? new Date(b.date).getTime() : 0;
+    return tb - ta;
+  });
+
+  const out = { articles: deduped.slice(0, 60), ts: now, count: deduped.length };
+  defAiNewsCache.data = out; defAiNewsCache.ts = now;
+  res.json(out);
+});
+
 app.get('/api/defence-feed', async (req, res) => {
   const now = Date.now();
   if (defCache.data && now - defCache.ts < 600_000) return res.json(defCache.data);
