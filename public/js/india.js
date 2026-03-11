@@ -2,7 +2,7 @@
    Claude AI agent briefs + live airspace + news + airports     */
 
 const INDIA = (() => {
-  let _tab    = 'flights';   // flights | intel | news | defence
+  let _tab    = 'osint';     // osint | flights | intel | defence
   let _data   = {};          // cached /api/india-intel response
   let _timer  = null;
 
@@ -380,7 +380,7 @@ const INDIA = (() => {
       case 'intel':   wrap.innerHTML = _renderIntel(d);    break;
       case 'news':    wrap.innerHTML = _renderNews(d);      break;
       case 'defence': wrap.innerHTML = _renderDefence(d);   break;
-      case 'osint':   wrap.innerHTML = _renderOsint();      break;
+      case 'osint':   if (window.loadIndiaOsintFeed) { window.loadIndiaOsintFeed(); } else { wrap.innerHTML = _renderOsint(); } break;
     }
   }
 

@@ -320,13 +320,12 @@
         <button class="rptab" data-rptab="markets">📈 MKTS</button>
         <button class="rptab" data-rptab="iranisr">🔥 IRN/ISR</button>
         <button class="rptab" data-rptab="reddit">🔴 REDDIT</button>
-        <button class="rptab" data-rptab="polls">🗳 POLLS</button>
         <button class="rptab" data-rptab="sources">👤 SOURCES</button>
         <button class="rptab" data-rptab="intel" style="display:none">◈ INTEL</button>
         <button class="rptab" data-rptab="search">🔍 SEARCH</button>
-        <button class="rptab" data-rptab="polymarket">🎲 ODDS</button>
         <button class="rptab" data-rptab="defence">🛡 DEFENCE</button>
         <button class="rptab" data-rptab="india"   style="color:#ff9933;border-bottom-color:#ff9933">🇮🇳 INDIA</button>
+        <button class="rptab" data-rptab="china"   style="color:#ff4444;border-bottom-color:#ff4444">🇨🇳 CHINA</button>
         <button class="rptab" data-rptab="ai"      style="color:#9b59ff;border-bottom-color:#9b59ff">🤖 AI</button>
         <button class="rptab" data-rptab="telegram" style="color:#29b6f6;border-bottom-color:#29b6f6">📲 OSINT</button>
         <button class="rptab" data-rptab="hormuz"    style="color:#00d4ff;border-bottom-color:#00d4ff">⚓ HORMUZ</button>
@@ -427,16 +426,6 @@
         </div>
       </div>
 
-      <!-- TAB: Geopolitical Polls -->
-      <div class="rp-tab-body" id="rptab-polls" style="display:none">
-        <div class="panel-card">
-          <div class="card-hdr">
-            <span>🗳 PREDICT <span class="badge-live">● LIVE VOTING</span></span>
-            <span id="polls-count" class="polls-count-badge"></span>
-          </div>
-          <div id="polls-list" class="scroll-list" style="max-height:calc(100vh - 200px)"></div>
-        </div>
-      </div>
 
       <!-- TAB: Verified Sources / Journalists -->
       <div class="rp-tab-body" id="rptab-sources" style="display:none">
@@ -784,21 +773,32 @@
       </div>
 
       <!-- TAB: Polymarket — War Odds -->
-      <div class="rp-tab-body" id="rptab-polymarket" style="display:none;padding:0">
-        <!-- Stats bar -->
-        <div id="pm-stats-bar" class="pm-stats-bar" style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06)"></div>
-        <!-- Sort controls -->
-        <div class="pm-sort-bar">
-          <span class="pm-sort-lbl">SORT:</span>
-          <button class="pm-sort-btn active" data-sort="risk" onclick="POLYMARKET.setSort('risk')">⚠ RISK</button>
-          <button class="pm-sort-btn" data-sort="volume" onclick="POLYMARKET.setSort('volume')">💰 VOL</button>
-          <button class="pm-sort-btn" data-sort="expiry" onclick="POLYMARKET.setSort('expiry')">⏱ EXP</button>
-          <span id="pm-live-badge" class="badge-live" style="margin-left:auto">● LIVE</span>
-          <button class="mini-btn" onclick="POLYMARKET.fetchAndRender()" style="margin-left:4px">↻</button>
+      <!-- ── CHINA OSINT DASHBOARD ──────────────────────── -->
+      <div class="rp-tab-body" id="rptab-china" style="display:none;padding:0">
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(255,68,68,0.07);border-bottom:1px solid rgba(255,68,68,0.15)">
+          <span style="font-size:15px">🇨🇳</span>
+          <span style="color:#ff4444;font-size:9px;letter-spacing:2px;font-weight:700">CHINA OSINT FEED</span>
+          <span id="china-news-count" class="badge-static" style="margin-left:auto;color:#ff4444"></span>
+          <button class="mini-btn" onclick="loadChinaFeed()" style="margin-left:4px">↻</button>
         </div>
-        <!-- Card grid — scrollable -->
-        <div id="pm-list" style="overflow-y:auto;height:calc(100vh - 200px);padding:6px">
-          <div class="news-loading">⟳ Loading prediction markets…</div>
+        <!-- Filter pills -->
+        <div style="display:flex;gap:4px;padding:5px 8px;flex-wrap:wrap;border-bottom:1px solid #182030;background:rgba(0,0,0,.15)">
+          <button class="def-pill active" data-cnf="all"        onclick="filterChina('all',this)">ALL</button>
+          <button class="def-pill" data-cnf="military"          onclick="filterChina('military',this)">⚔ MILITARY</button>
+          <button class="def-pill" data-cnf="geopolitics"       onclick="filterChina('geopolitics',this)">🌏 GEO</button>
+          <button class="def-pill" data-cnf="economy"           onclick="filterChina('economy',this)">📈 ECONOMY</button>
+          <button class="def-pill" data-cnf="tech"              onclick="filterChina('tech',this)">💻 TECH</button>
+        </div>
+        <!-- Threat signals row -->
+        <div id="china-threat-row" style="display:flex;gap:6px;padding:6px 8px;border-bottom:1px solid #182030;flex-wrap:wrap">
+          <div class="ind-qs-box"><div id="cn-military-count" class="ind-qs-val" style="color:#ff4444">–</div><div class="ind-qs-lbl">MILITARY</div></div>
+          <div class="ind-qs-box"><div id="cn-geo-count" class="ind-qs-val" style="color:#ffaa00">–</div><div class="ind-qs-lbl">GEO</div></div>
+          <div class="ind-qs-box"><div id="cn-econ-count" class="ind-qs-val" style="color:#00ff88">–</div><div class="ind-qs-lbl">ECONOMY</div></div>
+          <div class="ind-qs-box"><div id="cn-tech-count" class="ind-qs-val" style="color:#00d4ff">–</div><div class="ind-qs-lbl">TECH</div></div>
+        </div>
+        <!-- Feed -->
+        <div id="china-feed" style="overflow-y:auto;height:calc(100vh - 230px);padding:4px 6px">
+          <div class="news-loading">⟳ Loading China OSINT feed…</div>
         </div>
       </div>
 
@@ -861,18 +861,38 @@
 
         <!-- Sub-tabs -->
         <div class="ind-tabs">
-          <button class="ind-tab-btn active" data-tab="flights" onclick="INDIA.setTab('flights')">✈ FLIGHTS</button>
+          <button class="ind-tab-btn active" data-tab="osint"   onclick="INDIA.setTab('osint')" style="color:#ff9933;border-bottom-color:#ff9933">📚 OSINT</button>
+          <button class="ind-tab-btn" data-tab="flights" onclick="INDIA.setTab('flights')">✈ FLIGHTS</button>
           <button class="ind-tab-btn" data-tab="intel"   onclick="INDIA.setTab('intel')">◈ AI INTEL</button>
-          <button class="ind-tab-btn" data-tab="news"    onclick="INDIA.setTab('news')">📡 NEWS</button>
           <button class="ind-tab-btn" data-tab="defence" onclick="INDIA.setTab('defence')">🛡 DEFENCE</button>
-          <button class="ind-tab-btn" data-tab="osint"   onclick="INDIA.setTab('osint')" style="color:#ff9933;border-bottom-color:#ff9933">📚 OSINT DB</button>
+        </div>
+
+        <!-- Filter pills for OSINT tab -->
+        <div id="india-osint-filters" style="display:flex;gap:4px;padding:5px 8px;flex-wrap:wrap;border-bottom:1px solid #182030;background:rgba(0,0,0,.15)">
+          <button class="def-pill active" data-inf="all"          onclick="filterIndia('all',this)">ALL</button>
+          <button class="def-pill" data-inf="defence"             onclick="filterIndia('defence',this)">🛡 DEFENCE</button>
+          <button class="def-pill" data-inf="geopolitics"         onclick="filterIndia('geopolitics',this)">🌏 GEO</button>
+          <button class="def-pill" data-inf="economy"             onclick="filterIndia('economy',this)">📈 ECONOMY</button>
+          <button class="def-pill" data-inf="space"               onclick="filterIndia('space',this)">🚀 SPACE</button>
         </div>
 
         <!-- Dynamic body rendered by india.js -->
-        <div id="india-body" style="overflow-y:auto;height:calc(100vh - 230px);padding:6px 8px">
-          <div class="ind-loading">⟳ India intelligence agent initialising…</div>
+        <div id="india-body" style="overflow-y:auto;height:calc(100vh - 250px);padding:6px 8px">
+          <div class="ind-loading">⟳ India OSINT agent scraping news portals…</div>
         </div>
 
+      </div>
+
+      <!-- ── AI TECH OSINT ──────────────────────────────── -->
+      <div class="rp-tab-body" id="rptab-ai" style="display:none;padding:0">
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(155,89,255,0.07);border-bottom:1px solid rgba(155,89,255,0.15)">
+          <span style="font-size:13px">🤖</span>
+          <span style="color:#9b59ff;font-size:9px;letter-spacing:2px;font-weight:700">AI &amp; TECH OSINT</span>
+          <button class="mini-btn" onclick="loadAIFeed()" style="margin-left:auto">↻</button>
+        </div>
+        <div id="ai-feed" style="overflow-y:auto;height:calc(100vh - 110px);padding:4px 6px">
+          <div class="news-loading">⟳ Loading AI &amp; tech intelligence…</div>
+        </div>
       </div>
 
       <!-- ── TELEGRAM OSINT FEED ───────────────────────── -->
@@ -1188,7 +1208,6 @@
   <script src="js/markets.js"></script>
   <script src="js/sidebar.js"></script>
   <script src="js/conflict.js"></script>
-  <script src="js/polls.js"></script>
   <script src="js/heatmap.js"></script>
   <script src="js/usbases.js"></script>
   <script src="js/cables.js"></script>
@@ -1196,7 +1215,6 @@
   <script src="js/overlays.js"></script>
   <script src="js/leaders.js"></script>
   <script src="js/simulation.js"></script>
-  <script src="js/polymarket.js"></script>
   <script src="js/submarine.js"></script>
   <script src="js/defence.js"></script>
   <script src="js/india.js"></script>
@@ -1208,9 +1226,6 @@
     // ── Right-panel tab switching ──────────────────────────
     document.querySelectorAll('.rptab').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (btn.dataset.rptab === 'defence') { window.location.href = '/defence.html'; return; }
-        if (btn.dataset.rptab === 'india')   { window.location.href = '/india.html';   return; }
-        if (btn.dataset.rptab === 'ai')      { window.location.href = '/ai.html';      return; }
         document.querySelectorAll('.rptab').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.rp-tab-body').forEach(b => b.style.display = 'none');
         btn.classList.add('active');
@@ -1218,16 +1233,16 @@
         const body = document.getElementById('rptab-' + tab);
         if (body) body.style.display = 'block';
         // Lazy-init on first open
-        if (tab === 'polls'      && !btn._pollsInited)  { btn._pollsInited  = true; POLLS.init(); }
-        if (tab === 'rss'        && !btn._rssInited)     { btn._rssInited    = true; POLLS.loadRSSNews(); }
-        if (tab === 'markets'    && !btn._mktInited)     { btn._mktInited    = true; MARKETS.init(); }
-        if (tab === 'iranisr'    && !btn._irnInited)     { btn._irnInited    = true; loadIranIsrNews(); if (window.twttr?.widgets) window.twttr.widgets.load(); }
-        if (tab === 'polymarket' && !btn._pmInited)      { btn._pmInited     = true; POLYMARKET.init(); }
-        if (tab === 'defence'   && !btn._defInited)     { btn._defInited    = true; DEFENCE.init(); }
-        if (tab === 'india'     && !btn._indiaInited)   { btn._indiaInited  = true; INDIA.init(); }
-        if (tab === 'telegram'  && !btn._tgInited)      { btn._tgInited     = true; loadTelegramPanel(); }
-        if (tab === 'hormuz'    && !btn._hormuzInited)    { btn._hormuzInited   = true; HORMUZ.init(); }
-        if (tab === 'education' && !btn._educationInited) { btn._educationInited = true; EDUCATION.init(); }
+        if (tab === 'rss'        && !btn._rssInited)       { btn._rssInited       = true; if(window.POLLS) POLLS.loadRSSNews(); }
+        if (tab === 'markets'    && !btn._mktInited)       { btn._mktInited       = true; MARKETS.init(); }
+        if (tab === 'iranisr'    && !btn._irnInited)       { btn._irnInited       = true; loadIranIsrNews(); if (window.twttr?.widgets) window.twttr.widgets.load(); }
+        if (tab === 'defence'    && !btn._defInited)       { btn._defInited       = true; DEFENCE.init(); }
+        if (tab === 'india'      && !btn._indiaInited)     { btn._indiaInited     = true; INDIA.init(); loadIndiaOsintFeed(); }
+        if (tab === 'china'      && !btn._chinaInited)     { btn._chinaInited     = true; loadChinaFeed(); }
+        if (tab === 'ai'         && !btn._aiInited)        { btn._aiInited        = true; loadAIFeed(); }
+        if (tab === 'telegram'   && !btn._tgInited)        { btn._tgInited        = true; loadTelegramPanel(); }
+        if (tab === 'hormuz'     && !btn._hormuzInited)    { btn._hormuzInited    = true; HORMUZ.init(); }
+        if (tab === 'education'  && !btn._educationInited) { btn._educationInited = true; EDUCATION.init(); }
       });
     });
 
@@ -1259,6 +1274,127 @@
           </a>`;
         }).join('');
       } catch (_) { el.innerHTML = '<div class="news-loading">Unavailable</div>'; }
+    }
+
+    // ── India OSINT Feed ──────────────────────────────────
+    let _indiaArticles = [];
+    let _indiaFilter = 'all';
+
+    async function loadIndiaOsintFeed() {
+      const el = document.getElementById('india-body');
+      if (!el || document.querySelector('.ind-tab-btn[data-tab="osint"]')?.classList.contains('active') === false) return;
+      el.innerHTML = '<div class="ind-loading">⟳ Scraping India news portals…</div>';
+      try {
+        const r = await fetch('/api/india-news');
+        const d = r.ok ? await r.json() : { articles: [] };
+        _indiaArticles = d.articles || [];
+        const cnt = document.getElementById('india-ac-count');
+        if (cnt) cnt.textContent = _indiaArticles.length;
+        _renderIndiaFeed();
+      } catch(_) { el.innerHTML = '<div class="ind-loading">India feed unavailable</div>'; }
+    }
+
+    function filterIndia(cat, btn) {
+      _indiaFilter = cat;
+      document.querySelectorAll('[data-inf]').forEach(b => b.classList.toggle('active', b.dataset.inf === cat));
+      _renderIndiaFeed();
+    }
+
+    function _renderIndiaFeed() {
+      const el = document.getElementById('india-body');
+      if (!el) return;
+      const arts = _indiaFilter === 'all' ? _indiaArticles : _indiaArticles.filter(a => a.categories && a.categories.includes(_indiaFilter));
+      if (!arts.length) { el.innerHTML = '<div class="ind-loading">No articles for this filter</div>'; return; }
+      el.innerHTML = arts.map(a => {
+        const ago = a.pubDate ? UTILS.timeAgo(a.pubDate.slice(0,10).replace(/-/g,'')) || '' : '';
+        const catBadges = (a.categories||[]).map(c => `<span class="badge-static" style="font-size:7px;margin-right:2px">${c}</span>`).join('');
+        return `<a class="news-item" href="${a.url||'#'}" target="_blank" rel="noopener noreferrer">
+          <div class="news-title">${a.title}</div>
+          <div class="news-meta">
+            <span class="news-src" style="color:#ff9933">${a.source}</span>
+            ${ago ? `<span class="news-ts">${ago}</span>` : ''}
+            ${catBadges}
+          </div>
+          ${a.description ? `<div style="font-size:8px;color:#888;margin-top:2px;line-height:1.3">${a.description}</div>` : ''}
+        </a>`;
+      }).join('');
+    }
+
+    // ── China OSINT Feed ──────────────────────────────────
+    let _chinaArticles = [];
+    let _chinaFilter = 'all';
+
+    async function loadChinaFeed() {
+      const el = document.getElementById('china-feed');
+      if (!el) return;
+      el.innerHTML = '<div class="news-loading">⟳ Scraping China OSINT sources…</div>';
+      try {
+        const r = await fetch('/api/china-news');
+        const d = r.ok ? await r.json() : { articles: [] };
+        _chinaArticles = d.articles || [];
+        const cnt = document.getElementById('china-news-count');
+        if (cnt) cnt.textContent = _chinaArticles.length + ' items';
+        // Update counters
+        const mil  = _chinaArticles.filter(a => a.categories?.includes('military')).length;
+        const geo  = _chinaArticles.filter(a => a.categories?.includes('geopolitics')).length;
+        const econ = _chinaArticles.filter(a => a.categories?.includes('economy')).length;
+        const tech = _chinaArticles.filter(a => a.categories?.includes('tech')).length;
+        document.getElementById('cn-military-count').textContent = mil;
+        document.getElementById('cn-geo-count').textContent      = geo;
+        document.getElementById('cn-econ-count').textContent     = econ;
+        document.getElementById('cn-tech-count').textContent     = tech;
+        _renderChinaFeed();
+      } catch(_) { el.innerHTML = '<div class="news-loading">China feed unavailable</div>'; }
+    }
+
+    function filterChina(cat, btn) {
+      _chinaFilter = cat;
+      document.querySelectorAll('[data-cnf]').forEach(b => b.classList.toggle('active', b.dataset.cnf === cat));
+      _renderChinaFeed();
+    }
+
+    function _renderChinaFeed() {
+      const el = document.getElementById('china-feed');
+      if (!el) return;
+      const arts = _chinaFilter === 'all' ? _chinaArticles : _chinaArticles.filter(a => a.categories && a.categories.includes(_chinaFilter));
+      if (!arts.length) { el.innerHTML = '<div class="news-loading">No articles for this filter</div>'; return; }
+      el.innerHTML = arts.map(a => {
+        const ago = a.pubDate ? UTILS.timeAgo(a.pubDate.slice(0,10).replace(/-/g,'')) || '' : '';
+        const catBadges = (a.categories||[]).map(c => `<span class="badge-static" style="font-size:7px;margin-right:2px">${c}</span>`).join('');
+        return `<a class="news-item" href="${a.url||'#'}" target="_blank" rel="noopener noreferrer">
+          <div class="news-title">${a.title}</div>
+          <div class="news-meta">
+            <span class="news-src" style="color:#ff4444">${a.source}</span>
+            ${ago ? `<span class="news-ts">${ago}</span>` : ''}
+            ${catBadges}
+          </div>
+          ${a.description ? `<div style="font-size:8px;color:#888;margin-top:2px;line-height:1.3">${a.description}</div>` : ''}
+        </a>`;
+      }).join('');
+    }
+
+    // ── AI Tech Feed ─────────────────────────────────────
+    async function loadAIFeed() {
+      const el = document.getElementById('ai-feed');
+      if (!el) return;
+      el.innerHTML = '<div class="news-loading">⟳ Scraping AI &amp; tech intelligence…</div>';
+      try {
+        const r = await fetch('/api/ai-news');
+        const d = r.ok ? await r.json() : { articles: [] };
+        const arts = d.articles || [];
+        if (!arts.length) { el.innerHTML = '<div class="news-loading">No recent AI/tech articles</div>'; return; }
+        el.innerHTML = arts.map(a => {
+          const ago = a.pubDate ? UTILS.timeAgo(a.pubDate.slice(0,10).replace(/-/g,'')) || '' : '';
+          return `<a class="news-item" href="${a.url||'#'}" target="_blank" rel="noopener noreferrer">
+            <div class="news-title">${a.title}</div>
+            <div class="news-meta">
+              <span class="news-src" style="color:#9b59ff">${a.source}</span>
+              ${ago ? `<span class="news-ts">${ago}</span>` : ''}
+            </div>
+            ${a.description ? `<div style="font-size:8px;color:#888;margin-top:2px;line-height:1.3">${a.description}</div>` : ''}
+          </a>`;
+        }).join('');
+      } catch(_) { el.innerHTML = '<div class="news-loading">AI feed unavailable</div>'; }
     }
 
     // ── Telegram OSINT Panel ──────────────────────────────

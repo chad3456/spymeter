@@ -51,6 +51,10 @@ const cache = {
   culture:        { data: null, ts: 0 },
   hdx:            {},
   countryIntel:   {},
+  markets:        { data: null, ts: 0 },
+  marketNews:     { data: null, ts: 0 },
+  indiaNews:      { data: null, ts: 0 },
+  chinaNews:      { data: null, ts: 0 },
 };
 
 const TTL = {
@@ -63,6 +67,10 @@ const TTL = {
   REFINERIES:  24 * 60 * 60_000,
   CULTURE:     60 * 60_000,
   HDX:         60 * 60_000,
+  MARKETS:      5 * 60_000,
+  MARKET_NEWS: 15 * 60_000,
+  INDIA_NEWS:  10 * 60_000,
+  CHINA_NEWS:  10 * 60_000,
 };
 
 // ─── Agent status tracker ─────────────────────────────────────────────────────
@@ -1265,6 +1273,373 @@ app.get('/api/military-tracker', (req, res) => {
   if (!cache.militaryTracker)
     return res.json({ status: 'loading', message: 'Military tracker agent initialising' });
   res.json(cache.militaryTracker);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 9B — MARKETS API (Yahoo Finance)
+// ═══════════════════════════════════════════════════════════════════════════════
+const MARKET_TICKERS = [
+  // US
+  { sym:'^GSPC',    label:'S&P 500',       flag:'🇺🇸', group:'us' },
+  { sym:'^DJI',     label:'Dow Jones',     flag:'🇺🇸', group:'us' },
+  { sym:'^IXIC',    label:'Nasdaq',        flag:'🇺🇸', group:'us' },
+  { sym:'^VIX',     label:'VIX Fear',      flag:'🇺🇸', group:'us' },
+  // India
+  { sym:'^NSEI',    label:'Nifty 50',      flag:'🇮🇳', group:'india' },
+  { sym:'^BSESN',   label:'Sensex',        flag:'🇮🇳', group:'india' },
+  { sym:'^INDIAVIX',label:'India VIX',     flag:'🇮🇳', group:'india' },
+  { sym:'RELIANCE.NS',label:'Reliance',    flag:'🇮🇳', group:'india' },
+  { sym:'TCS.NS',   label:'TCS',           flag:'🇮🇳', group:'india' },
+  { sym:'HDFCBANK.NS',label:'HDFC Bank',   flag:'🇮🇳', group:'india' },
+  // China
+  { sym:'000001.SS',label:'Shanghai',      flag:'🇨🇳', group:'china' },
+  { sym:'^HSI',     label:'Hang Seng',     flag:'🇨🇳', group:'china' },
+  { sym:'^HSCE',    label:'H-Shares',      flag:'🇨🇳', group:'china' },
+  { sym:'BABA',     label:'Alibaba',       flag:'🇨🇳', group:'china' },
+  { sym:'BIDU',     label:'Baidu',         flag:'🇨🇳', group:'china' },
+  // Europe / Japan
+  { sym:'^FTSE',    label:'FTSE 100',      flag:'🇬🇧', group:'europe' },
+  { sym:'^GDAXI',   label:'DAX',           flag:'🇩🇪', group:'europe' },
+  { sym:'^FCHI',    label:'CAC 40',        flag:'🇫🇷', group:'europe' },
+  { sym:'^N225',    label:'Nikkei 225',    flag:'🇯🇵', group:'europe' },
+  // Commodities / Oil
+  { sym:'CL=F',     label:'WTI Crude',     flag:'🛢', group:'oil' },
+  { sym:'BZ=F',     label:'Brent Crude',   flag:'🛢', group:'oil' },
+  { sym:'NG=F',     label:'Nat Gas',       flag:'🔥', group:'oil' },
+  { sym:'GC=F',     label:'Gold',          flag:'🥇', group:'oil' },
+  { sym:'SI=F',     label:'Silver',        flag:'⚪', group:'oil' },
+  // Defense
+  { sym:'LMT',      label:'Lockheed',      flag:'🛡', group:'defense' },
+  { sym:'RTX',      label:'RTX Corp',      flag:'🛡', group:'defense' },
+  { sym:'NOC',      label:'Northrop',      flag:'🛡', group:'defense' },
+  { sym:'GD',       label:'Gen Dynamics',  flag:'🛡', group:'defense' },
+  { sym:'BA',       label:'Boeing',        flag:'✈', group:'defense' },
+  { sym:'HII',      label:'Huntington',    flag:'🚢', group:'defense' },
+  // Sectors
+  { sym:'XLF',      label:'Financials',    flag:'📊', group:'sectors' },
+  { sym:'XLE',      label:'Energy',        flag:'📊', group:'sectors' },
+  { sym:'XLK',      label:'Technology',    flag:'📊', group:'sectors' },
+  { sym:'XLI',      label:'Industrials',   flag:'📊', group:'sectors' },
+  // Crypto
+  { sym:'BTC-USD',  label:'Bitcoin',       flag:'₿',  group:'crypto' },
+  { sym:'ETH-USD',  label:'Ethereum',      flag:'Ξ',  group:'crypto' },
+  { sym:'XRP-USD',  label:'XRP',           flag:'🔷', group:'crypto' },
+];
+
+async function fetchYahooQuote(sym) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`;
+  const r = await axios.get(url, {
+    timeout: 8_000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      Accept: 'application/json',
+      Referer: 'https://finance.yahoo.com/',
+    },
+  });
+  const meta = r.data?.chart?.result?.[0]?.meta || {};
+  return {
+    price:  meta.regularMarketPrice  ?? null,
+    change: meta.regularMarketChange ?? null,
+    pct:    meta.regularMarketChangePercent ?? null,
+    state:  meta.marketState || 'CLOSED',
+  };
+}
+
+app.get('/api/markets', async (req, res) => {
+  const now = Date.now();
+  if (cache.markets.data && now - cache.markets.ts < TTL.MARKETS)
+    return res.json(cache.markets.data);
+
+  const results = await Promise.allSettled(MARKET_TICKERS.map(t => fetchYahooQuote(t.sym)));
+  const quotes = MARKET_TICKERS.map((t, i) => {
+    const r = results[i];
+    const q = r.status === 'fulfilled' ? r.value : { price: null, change: null, pct: null, state: 'N/A' };
+    return { ...t, ...q };
+  });
+
+  const data = { quotes, ts: now, source: 'Yahoo Finance (15-min delay)' };
+  cache.markets = { data, ts: now };
+  res.json(data);
+});
+
+// ─── /api/market-news ─────────────────────────────────────────────────────────
+const MARKET_NEWS_FEEDS = [
+  { url: 'https://feeds.reuters.com/reuters/businessNews',        name: 'Reuters Business' },
+  { url: 'https://feeds.reuters.com/reuters/worldNews',           name: 'Reuters World' },
+  { url: 'https://feeds.bbci.co.uk/news/business/rss.xml',       name: 'BBC Business' },
+  { url: 'https://rss.dw.com/rdf/rss-en-world',                  name: 'DW World' },
+];
+const MARKET_NEWS_KEYWORDS = [
+  'market','economy','gdp','inflation','trade','sanction','stock','oil','finance',
+  'war','conflict','geopolitical','bank','rate','export','tariff','supply chain',
+];
+
+app.get('/api/market-news', async (req, res) => {
+  const now = Date.now();
+  if (cache.marketNews.data && now - cache.marketNews.ts < TTL.MARKET_NEWS)
+    return res.json(cache.marketNews.data);
+
+  const feedResults = await Promise.allSettled(
+    MARKET_NEWS_FEEDS.map(f =>
+      axios.get(f.url, {
+        timeout: 8_000,
+        headers: { 'User-Agent': 'SpymeterOSINT/1.0', Accept: 'application/rss+xml,text/xml,*/*' },
+        responseType: 'text',
+      }).then(r => parseRSS(r.data, f.name))
+    )
+  );
+
+  const cutoff = now - 24 * 60 * 60 * 1000;
+  const all = [];
+  for (const r of feedResults) {
+    if (r.status !== 'fulfilled') continue;
+    for (const a of r.value) {
+      if (!a.pubDate || new Date(a.pubDate).getTime() < cutoff) continue;
+      const text = ((a.title || '') + ' ' + (a.description || '')).toLowerCase();
+      if (!MARKET_NEWS_KEYWORDS.some(kw => text.includes(kw))) continue;
+      all.push({
+        title:  a.title,
+        url:    a.link,
+        source: a.source,
+        date:   a.pubDate ? a.pubDate.toISOString().slice(0, 10).replace(/-/g, '') + 'T' + a.pubDate.toISOString().slice(11, 16).replace(':', '') : '',
+        tone:   '0',
+      });
+    }
+  }
+
+  all.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const data = { articles: all.slice(0, 40), ts: now };
+  cache.marketNews = { data, ts: now };
+  res.json(data);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 9C — INDIA OSINT AGENT (every 10 minutes)
+// ═══════════════════════════════════════════════════════════════════════════════
+const INDIA_FEEDS = [
+  { url: 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms',         name: 'Times of India' },
+  { url: 'https://feeds.feedburner.com/ndtvnews-india-news',                   name: 'NDTV India' },
+  { url: 'https://www.thehindu.com/news/national/?service=rss',                name: 'The Hindu' },
+  { url: 'https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml',    name: 'Hindustan Times' },
+  { url: 'https://www.indiatoday.in/rss/home',                                 name: 'India Today' },
+  { url: 'https://feeds.feedburner.com/ndtvnews-latest',                       name: 'NDTV Latest' },
+  { url: 'https://economictimes.indiatimes.com/rssfeedstopstories.cms',        name: 'Economic Times' },
+  { url: 'https://www.business-standard.com/rss/latest.rss',                  name: 'Business Standard' },
+  { url: 'https://www.livemint.com/rss/news',                                  name: 'Livemint' },
+  { url: 'https://feeds.reuters.com/reuters/worldNews',                        name: 'Reuters (India filter)' },
+];
+const INDIA_KEYWORDS = [
+  'india','indian','modi','new delhi','bjp','congress','lok sabha','rajya sabha',
+  'kashmir','ladakh','pakistan','china border','lac','line of actual control',
+  'isro','chandrayaan','gaganyaan','indian army','indian navy','indian air force',
+  'mumbai','delhi','bangalore','chennai','hyderabad','kolkata',
+  'rupee','sensex','nifty','rbi','reserve bank','economy','gdp',
+  'border','troops','military','drone','missile','cyber',
+];
+
+async function indiaOsintAgent() {
+  const now = Date.now();
+  try {
+    const feedResults = await Promise.allSettled(
+      INDIA_FEEDS.map(f =>
+        axios.get(f.url, {
+          timeout: 10_000,
+          headers: { 'User-Agent': 'SpymeterOSINT/1.0', Accept: 'application/rss+xml,text/xml,*/*' },
+          responseType: 'text',
+        }).then(r => parseRSS(r.data, f.name))
+      )
+    );
+
+    const cutoff = now - 24 * 60 * 60 * 1000;
+    const all = [];
+    for (const r of feedResults) {
+      if (r.status !== 'fulfilled') continue;
+      for (const a of r.value) {
+        if (!a.pubDate || new Date(a.pubDate).getTime() < cutoff) continue;
+        const text = ((a.title || '') + ' ' + (a.description || '')).toLowerCase();
+        if (!INDIA_KEYWORDS.some(kw => text.includes(kw))) continue;
+        const cats = [];
+        if (/\b(military|army|navy|air force|missile|border|troops|lac|kashmir)\b/.test(text)) cats.push('defence');
+        if (/\b(economy|gdp|rupee|sensex|nifty|rbi|trade|inflation)\b/.test(text)) cats.push('economy');
+        if (/\b(isro|space|satellite|launch|chandrayaan)\b/.test(text)) cats.push('space');
+        if (/\b(pakistan|china|border|lac|doklam)\b/.test(text)) cats.push('geopolitics');
+        all.push({
+          title:       a.title,
+          url:         a.link,
+          source:      a.source,
+          description: (a.description || '').slice(0, 200),
+          pubDate:     a.pubDate ? a.pubDate.toISOString() : null,
+          categories:  cats,
+        });
+      }
+    }
+
+    all.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+    cache.indiaNews = {
+      data: { articles: all.slice(0, 60), ts: now, total: all.length },
+      ts: now,
+    };
+    console.log(`[IndiaAgent] ${all.length} India OSINT articles scraped`);
+  } catch (err) {
+    console.error('[IndiaAgent]', err.message);
+  }
+}
+
+indiaOsintAgent();
+setInterval(indiaOsintAgent, TTL.INDIA_NEWS);
+
+app.get('/api/india-news', (req, res) => {
+  if (!cache.indiaNews.data) return res.json({ articles: [], ts: Date.now(), status: 'loading' });
+  res.json(cache.indiaNews.data);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 9D — CHINA OSINT AGENT (every 10 minutes)
+// ═══════════════════════════════════════════════════════════════════════════════
+const CHINA_FEEDS = [
+  { url: 'https://www.scmp.com/rss/91/feed',                      name: 'South China Morning Post' },
+  { url: 'https://www.scmp.com/rss/2/feed',                       name: 'SCMP China' },
+  { url: 'https://feeds.reuters.com/reuters/worldNews',           name: 'Reuters (China filter)' },
+  { url: 'https://feeds.bbci.co.uk/news/world/asia/rss.xml',     name: 'BBC Asia' },
+  { url: 'https://www.aljazeera.com/xml/rss/all.xml',             name: 'Al Jazeera' },
+  { url: 'https://rss.dw.com/rdf/rss-en-world',                  name: 'DW World' },
+  { url: 'https://asia.nikkei.com/rss/feed/nar',                  name: 'Nikkei Asia' },
+  { url: 'https://www.rfa.org/english/china/rss2.xml',            name: 'Radio Free Asia' },
+  { url: 'https://www.theguardian.com/world/china/rss',           name: 'Guardian China' },
+];
+const CHINA_KEYWORDS = [
+  'china','chinese','beijing','xi jinping','pla','ccp','communist party',
+  'taiwan','south china sea','hong kong','xinjiang','tibet','uyghur',
+  'pla navy','j-20','df-41','hypersonic','carrier','military exercise',
+  'belt and road','bri','trade war','tariff','rare earth','semiconductor',
+  'shanghai','shenzhen','alibaba','huawei','tiktok','bytedance',
+  'yuan','renminbi','pboc','gdp','economy','export',
+];
+
+async function chinaOsintAgent() {
+  const now = Date.now();
+  try {
+    const feedResults = await Promise.allSettled(
+      CHINA_FEEDS.map(f =>
+        axios.get(f.url, {
+          timeout: 10_000,
+          headers: { 'User-Agent': 'SpymeterOSINT/1.0', Accept: 'application/rss+xml,text/xml,*/*' },
+          responseType: 'text',
+        }).then(r => parseRSS(r.data, f.name))
+      )
+    );
+
+    const cutoff = now - 24 * 60 * 60 * 1000;
+    const all = [];
+    for (const r of feedResults) {
+      if (r.status !== 'fulfilled') continue;
+      for (const a of r.value) {
+        if (!a.pubDate || new Date(a.pubDate).getTime() < cutoff) continue;
+        const text = ((a.title || '') + ' ' + (a.description || '')).toLowerCase();
+        if (!CHINA_KEYWORDS.some(kw => text.includes(kw))) continue;
+        const cats = [];
+        if (/\b(pla|military|navy|air force|missile|taiwan|south china sea|exercise|carrier)\b/.test(text)) cats.push('military');
+        if (/\b(economy|yuan|gdp|trade|tariff|export|manufacturing)\b/.test(text)) cats.push('economy');
+        if (/\b(taiwan|hong kong|xinjiang|tibet|south china sea)\b/.test(text)) cats.push('geopolitics');
+        if (/\b(huawei|semiconductor|tech|ai|space)\b/.test(text)) cats.push('tech');
+        all.push({
+          title:       a.title,
+          url:         a.link,
+          source:      a.source,
+          description: (a.description || '').slice(0, 200),
+          pubDate:     a.pubDate ? a.pubDate.toISOString() : null,
+          categories:  cats,
+        });
+      }
+    }
+
+    all.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+    cache.chinaNews = {
+      data: { articles: all.slice(0, 60), ts: now, total: all.length },
+      ts: now,
+    };
+    console.log(`[ChinaAgent] ${all.length} China OSINT articles scraped`);
+  } catch (err) {
+    console.error('[ChinaAgent]', err.message);
+  }
+}
+
+chinaOsintAgent();
+setInterval(chinaOsintAgent, TTL.CHINA_NEWS);
+
+app.get('/api/china-news', (req, res) => {
+  if (!cache.chinaNews.data) return res.json({ articles: [], ts: Date.now(), status: 'loading' });
+  res.json(cache.chinaNews.data);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 9E — AI & TECH OSINT AGENT (every 15 minutes)
+// ═══════════════════════════════════════════════════════════════════════════════
+const AI_TECH_FEEDS = [
+  { url: 'https://feeds.feedburner.com/TechCrunch/',                name: 'TechCrunch' },
+  { url: 'https://www.wired.com/feed/rss',                          name: 'Wired' },
+  { url: 'https://feeds.arstechnica.com/arstechnica/technology-lab',name: 'Ars Technica AI' },
+  { url: 'https://rss.slashdot.org/Slashdot/slashdotMain',          name: 'Slashdot' },
+  { url: 'https://www.technologyreview.com/feed/',                  name: 'MIT Tech Review' },
+  { url: 'https://venturebeat.com/feed/',                           name: 'VentureBeat' },
+  { url: 'https://feeds.reuters.com/reuters/technologyNews',        name: 'Reuters Tech' },
+  { url: 'https://feeds.bbci.co.uk/news/technology/rss.xml',       name: 'BBC Tech' },
+];
+const AI_KEYWORDS = [
+  'artificial intelligence','machine learning','llm','gpt','gemini','claude','deepseek',
+  'neural network','autonomous','robotics','drone ai','military ai','cyberwar','cyber attack',
+  'semiconductor','chip','nvidia','quantum computing','surveillance','facial recognition',
+  'deepfake','disinformation','hack','zero-day','vulnerability','ransomware',
+  'satellite','space tech','hypersonic','directed energy','autonomous weapon',
+];
+
+const _aiNewsCache = { data: null, ts: 0 };
+const TTL_AI_NEWS = 15 * 60_000;
+
+async function aiTechAgent() {
+  const now = Date.now();
+  try {
+    const feedResults = await Promise.allSettled(
+      AI_TECH_FEEDS.map(f =>
+        axios.get(f.url, {
+          timeout: 10_000,
+          headers: { 'User-Agent': 'SpymeterOSINT/1.0', Accept: 'application/rss+xml,text/xml,*/*' },
+          responseType: 'text',
+        }).then(r => parseRSS(r.data, f.name))
+      )
+    );
+    const cutoff = now - 24 * 60 * 60 * 1000;
+    const all = [];
+    for (const r of feedResults) {
+      if (r.status !== 'fulfilled') continue;
+      for (const a of r.value) {
+        if (!a.pubDate || new Date(a.pubDate).getTime() < cutoff) continue;
+        const text = ((a.title || '') + ' ' + (a.description || '')).toLowerCase();
+        if (!AI_KEYWORDS.some(kw => text.includes(kw))) continue;
+        all.push({
+          title:       a.title,
+          url:         a.link,
+          source:      a.source,
+          description: (a.description || '').slice(0, 200),
+          pubDate:     a.pubDate ? a.pubDate.toISOString() : null,
+        });
+      }
+    }
+    all.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+    _aiNewsCache.data = { articles: all.slice(0, 50), ts: now };
+    _aiNewsCache.ts   = now;
+    console.log(`[AITechAgent] ${all.length} AI/tech OSINT articles scraped`);
+  } catch (err) {
+    console.error('[AITechAgent]', err.message);
+  }
+}
+
+aiTechAgent();
+setInterval(aiTechAgent, TTL_AI_NEWS);
+
+app.get('/api/ai-news', (req, res) => {
+  if (!_aiNewsCache.data) return res.json({ articles: [], ts: Date.now(), status: 'loading' });
+  res.json(_aiNewsCache.data);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
