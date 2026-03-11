@@ -5,11 +5,13 @@
    Refresh interval: 10 minutes                              */
 
 const DEFENCE = (() => {
-  let _filter   = 'all';
-  let _feed     = [];
-  let _gdelt    = [];
-  let _drones   = [];
-  let _timer    = null;
+  let _filter       = 'all';
+  let _feed         = [];
+  let _gdelt        = [];
+  let _drones       = [];
+  let _timer        = null;
+  let _sourcesCount = 0;
+  let _onLoad       = null;
 
   const CAT_MAP = {
     drone: /drone|UAV|UAS|UCAV|loitering|kamikaze|quadcopter|Reaper|Predator|Bayraktar|Shahed/i,
@@ -59,10 +61,12 @@ const DEFENCE = (() => {
   // ── Render Indian drone card ──────────────────────────
   function renderDroneCard(d) {
     return `<a class="def-drone-card" href="${d.url||'https://duorope.github.io/Drones-of-India/'}" target="_blank" rel="noopener noreferrer">
-      <span class="def-drone-name">🇮🇳 ${d.title}</span>
-      ${d.category ? `<span class="def-drone-type">${d.category}</span>` : ''}
-      ${d.status   ? `<span class="def-drone-status">${d.status}</span>` : ''}
-      ${d.developer? `<span class="def-drone-dev">${d.developer}</span>` : ''}
+      <div class="def-drone-name">🇮🇳 ${d.title}</div>
+      <div class="def-drone-badges">
+        ${d.category ? `<span class="def-drone-type">${d.category}</span>` : ''}
+        ${d.status   ? `<span class="def-drone-status">${d.status}</span>` : ''}
+        ${d.developer? `<span class="def-drone-dev">${d.developer}</span>` : ''}
+      </div>
     </a>`;
   }
 
@@ -105,6 +109,16 @@ const DEFENCE = (() => {
         ? gdeltItems.map(renderFeedItem).join('')
         : '<div class="news-loading">No GDELT defence items</div>';
     }
+
+    // onLoad callback — fire with stats
+    if (_onLoad) {
+      const cats = {};
+      [..._feed, ..._gdelt].forEach(i => {
+        const c = i.category || 'general';
+        cats[c] = (cats[c] || 0) + 1;
+      });
+      try { _onLoad({ total: _feed.length + _gdelt.length, drones: _drones.length, cats, sources: _sourcesCount }); } catch (_) {}
+    }
   }
 
   // ── Fetch ─────────────────────────────────────────────
@@ -117,9 +131,10 @@ const DEFENCE = (() => {
     try {
       const r = await fetch('/api/defence-feed');
       const d = r.ok ? await r.json() : {};
-      _feed   = (d.feed  || []).map(i => ({ ...i, category: i.category || categorize((i.title||'') + ' ' + (i.desc||'')) }));
-      _gdelt  = (d.gdelt || []).map(i => ({ ...i, category: i.category || categorize(i.title||'') }));
-      _drones = d.drones || [];
+      _feed         = (d.feed  || []).map(i => ({ ...i, category: i.category || categorize((i.title||'') + ' ' + (i.desc||'')) }));
+      _gdelt        = (d.gdelt || []).map(i => ({ ...i, category: i.category || categorize(i.title||'') }));
+      _drones       = d.drones || [];
+      _sourcesCount = d.sources || 0;
       _render();
     } catch (e) {
       if (feedEl)  feedEl.innerHTML  = '<div class="news-loading">Defence feed unavailable</div>';
@@ -150,5 +165,5 @@ const DEFENCE = (() => {
     _timer = setInterval(_fetch, 600_000); // refresh every 10 min
   }
 
-  return { init, refresh, setFilter };
+  return { init, refresh, setFilter, onLoad(cb) { _onLoad = cb; } };
 })();

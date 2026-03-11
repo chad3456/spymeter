@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPYMETER — AI INTELLIGENCE DASHBOARD</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" />
+  <style>
+    /* ── Reset & Variables ─────────────────────────────── */
+    :root {
+      --bg:        #040608;
+      --bg2:       #07090e;
+      --bg3:       #0c1118;
+      --border:    #182030;
+      --border-hi: #1e3a5f;
+      --accent:    #00d4ff;
+      --accent2:   #00ff88;
+      --warn:      #ffaa00;
+      --danger:    #ff3333;
+      --orange:    #ff9900;
+      --purple:    #9b59ff;
+      --text:      #8ba4c0;
+      --text-hi:   #c8dff0;
+      --text-dim:  #3d5a78;
+      --font-mono: 'Share Tech Mono', monospace;
+      --font-ui:   'Rajdhani', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Classification Banner ─────────────────────────── */
+    #cls-banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+      height: 18px;
+      background: #001800;
+      color: #00ff88;
+      font-size: 8.5px;
+      letter-spacing: 2.5px;
+      display: flex; align-items: center; justify-content: center;
+      border-bottom: 1px solid #003300;
+      font-family: var(--font-mono);
+    }
+
+    /* ── Header ────────────────────────────────────────── */
+    #ai-header {
+      position: sticky; top: 18px; z-index: 200;
+      background: rgba(4,6,8,0.97);
+      border-bottom: 1px solid var(--border-hi);
+      padding: 0 16px;
+      height: 46px;
+      display: flex; align-items: center; gap: 16px;
+      backdrop-filter: blur(8px);
+    }
+    #back-btn {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 9px; color: var(--text-dim);
+      letter-spacing: 1px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      transition: all 0.15s;
+      white-space: nowrap;
+      font-family: var(--font-mono);
+    }
+    #back-btn:hover { color: var(--accent); border-color: var(--accent); background: rgba(0,212,255,0.06); }
+    #ai-title {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-ui);
+      font-size: 17px; font-weight: 700;
+      color: var(--text-hi);
+      letter-spacing: 2px;
+      flex: 1;
+    }
+    #ai-title .title-icon { font-size: 20px; }
+    #ai-title .title-sub  { font-size: 8px; color: var(--text-dim); letter-spacing: 2px; display: block; font-family: var(--font-mono); margin-top: 1px; }
+    .badge-live {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 7.5px; color: var(--accent2); letter-spacing: 1px;
+      padding: 2px 7px; border-radius: 2px;
+      background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.2);
+      animation: pulse-live 2s infinite;
+      font-family: var(--font-mono);
+    }
+    @keyframes pulse-live { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
+    #ai-header-right {
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    #ai-utc-clock { font-size: 10px; color: var(--accent); letter-spacing: 1px; font-family: var(--font-mono); }
+    .hdr-btn {
+      background: rgba(155,89,255,0.07);
+      border: 1px solid rgba(155,89,255,0.3);
+      color: var(--purple); font-family: var(--font-mono); font-size: 9px;
+      padding: 4px 12px; border-radius: 2px; cursor: pointer;
+      letter-spacing: 1px; transition: all 0.15s;
+    }
+    .hdr-btn:hover { background: rgba(155,89,255,0.18); }
+
+    /* ── Stats Bar ─────────────────────────────────────── */
+    #ai-stats-bar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      border-bottom: 2px solid var(--border-hi);
+      margin-top: 64px; /* cls-banner 18px + header 46px */
+    }
+    .ai-stat-box {
+      padding: 10px 12px;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      text-align: center;
+      transition: background 0.15s;
+    }
+    .ai-stat-box:last-child { border-right: none; }
+    .ai-stat-box:hover { background: rgba(155,89,255,0.04); }
+    .ai-stat-val {
+      font-size: 22px;
+      color: var(--purple);
+      font-family: var(--font-mono);
+      line-height: 1;
+      transition: color 0.3s;
+    }
+    .ai-stat-val.cyan   { color: var(--accent); }
+    .ai-stat-val.green  { color: var(--accent2); }
+    .ai-stat-val.orange { color: var(--orange); }
+    .ai-stat-val.warn   { color: var(--warn); }
+    .ai-stat-val.red    { color: var(--danger); }
+    .ai-stat-lbl {
+      font-size: 7px; color: var(--text-dim);
+      letter-spacing: 1.2px; margin-top: 4px;
+      text-transform: uppercase;
+    }
+
+    /* ── Filter Bar ────────────────────────────────────── */
+    #ai-filter-bar {
+      display: flex; align-items: center; gap: 5px;
+      padding: 7px 14px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .filter-label {
+      font-size: 8px; color: var(--text-dim);
+      letter-spacing: 1.5px; margin-right: 4px;
+    }
+    .ai-pill {
+      background: rgba(0,0,0,0.35);
+      border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font-mono);
+      font-size: 9px; padding: 3px 12px;
+      border-radius: 2px; cursor: pointer;
+      transition: all 0.12s; letter-spacing: 0.5px;
+    }
+    .ai-pill:hover { border-color: var(--purple); color: var(--purple); background: rgba(155,89,255,0.06); }
+    .ai-pill.active { background: rgba(155,89,255,0.12); border-color: var(--purple); color: var(--purple); }
+
+    /* ── Main Grid ─────────────────────────────────────── */
+    #ai-grid {
+      display: grid;
+      grid-template-columns: 300px 1fr 270px;
+      min-height: calc(100vh - 160px);
+    }
+    #ai-left {
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      height: calc(100vh - 160px);
+      position: sticky;
+      top: 160px;
+    }
+    #ai-center {
+      background: var(--bg);
+      overflow-y: auto;
+      height: calc(100vh - 160px);
+      position: sticky;
+      top: 160px;
+    }
+    #ai-right {
+      background: var(--bg2);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      height: calc(100vh - 160px);
+      position: sticky;
+      top: 160px;
+    }
+
+    /* ── Panel Cards ───────────────────────────────────── */
+    .panel-card { border-bottom: 1px solid var(--border); }
+    .card-hdr {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 12px;
+      font-size: 8.5px; color: var(--purple);
+      letter-spacing: 1.5px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .card-hdr.cyan { color: var(--accent); }
+    .card-hdr.green { color: var(--accent2); }
+    .card-hdr .mini-btn {
+      margin-left: auto;
+      background: none; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--font-mono);
+      font-size: 10px; padding: 1px 7px; border-radius: 2px;
+      cursor: pointer; transition: all 0.12s;
+    }
+    .card-hdr .mini-btn:hover { border-color: var(--purple); color: var(--purple); }
+    .news-loading {
+      padding: 16px 12px; color: var(--text-dim);
+      font-size: 9px; letter-spacing: 1px;
+      animation: pulse-live 1.5s infinite;
+    }
+    .news-error {
+      padding: 12px; color: var(--danger);
+      font-size: 9px; letter-spacing: 1px;
+    }
+
+    /* ── Facility List (Left Column) ───────────────────── */
+    .facility-row {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+      cursor: default;
+    }
+    .facility-row:hover { background: rgba(155,89,255,0.03); }
+    .facility-top {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 6px; margin-bottom: 4px;
+    }
+    .facility-name {
+      font-size: 10px; color: var(--text-hi);
+      line-height: 1.35;
+      font-family: var(--font-ui); font-weight: 600;
+      flex: 1;
+    }
+    .facility-flag { font-size: 13px; flex-shrink: 0; }
+    .facility-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 3px; }
+    .badge {
+      display: inline-block; font-size: 7px; padding: 1px 5px;
+      border-radius: 2px; letter-spacing: 0.5px;
+      font-family: var(--font-mono);
+    }
+    .badge-tier-hyperscale { background: rgba(255,153,0,0.12); color: var(--orange); border: 1px solid rgba(255,153,0,0.25); }
+    .badge-tier-major      { background: rgba(0,212,255,0.08); color: var(--accent); border: 1px solid rgba(0,212,255,0.2); }
+    .badge-tier-regional   { background: rgba(136,136,136,0.1); color: #888; border: 1px solid rgba(136,136,136,0.2); }
+    .badge-status-active   { background: rgba(0,255,136,0.08); color: var(--accent2); border: 1px solid rgba(0,255,136,0.2); }
+    .facility-meta {
+      display: flex; gap: 8px; font-size: 8px;
+      color: var(--text-dim); flex-wrap: wrap;
+    }
+    .facility-meta span { white-space: nowrap; }
+    .facility-meta .gpu-count { color: var(--purple); }
+    .facility-meta .model-name { color: var(--accent); }
+    .facility-meta .compute-type { color: var(--text-dim); }
+    .facility-city { color: var(--text-dim); }
+
+    /* ── Epoch summary bar ─────────────────────────────── */
+    .epoch-summary {
+      padding: 10px 12px;
+      background: rgba(155,89,255,0.04);
+      border-bottom: 1px solid var(--border);
+    }
+    .epoch-summary-title {
+      font-size: 7.5px; color: var(--purple); letter-spacing: 1.5px;
+      margin-bottom: 6px; text-transform: uppercase;
+    }
+    .epoch-bar-wrap { display: flex; flex-direction: column; gap: 4px; }
+    .epoch-bar-row { display: flex; align-items: center; gap: 6px; }
+    .epoch-bar-lbl { font-size: 7.5px; color: var(--text-dim); width: 55px; flex-shrink: 0; }
+    .epoch-bar-track {
+      flex: 1; height: 5px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 2px; overflow: hidden;
+    }
+    .epoch-bar-fill {
+      height: 100%; border-radius: 2px;
+      background: var(--purple);
+      transition: width 0.6s ease;
+    }
+    .epoch-bar-val { font-size: 7.5px; color: var(--text-hi); width: 45px; text-align: right; flex-shrink: 0; }
+
+    /* ── Regulation Cards (Center) ─────────────────────── */
+    .reg-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      padding: 0;
+    }
+    .reg-card {
+      background: var(--bg);
+      padding: 12px 14px;
+      transition: background 0.1s;
+      position: relative;
+      overflow: hidden;
+    }
+    .reg-card:hover { background: rgba(155,89,255,0.03); }
+    .reg-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .reg-card.severity-high::before   { background: #ff4444; }
+    .reg-card.severity-medium::before { background: #ffaa00; }
+    .reg-card.severity-low::before    { background: #00ff88; }
+    .reg-header {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin-bottom: 7px;
+    }
+    .reg-flag { font-size: 18px; flex-shrink: 0; line-height: 1; }
+    .reg-country {
+      font-size: 10px; color: var(--text-hi);
+      font-family: var(--font-ui); font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .reg-law {
+      font-size: 8px; color: var(--text-dim);
+      letter-spacing: 0.5px; margin-top: 2px;
+      line-height: 1.3;
+    }
+    .reg-status-badges { display: flex; gap: 5px; align-items: center; margin-left: auto; flex-shrink: 0; }
+    .reg-status {
+      display: inline-block; font-size: 6.5px; padding: 1px 5px;
+      border-radius: 2px; letter-spacing: 0.5px; font-family: var(--font-mono);
+      font-weight: 600;
+    }
+    .reg-status.enforced { background: rgba(0,255,136,0.1); color: #00ff88; border: 1px solid rgba(0,255,136,0.25); }
+    .reg-status.active   { background: rgba(0,212,255,0.1); color: #00d4ff; border: 1px solid rgba(0,212,255,0.25); }
+    .reg-status.pending  { background: rgba(255,170,0,0.1); color: #ffaa00; border: 1px solid rgba(255,170,0,0.25); }
+    .reg-status.voluntary{ background: rgba(136,136,136,0.1); color: #888; border: 1px solid rgba(136,136,136,0.25); }
+    .reg-status.draft    { background: rgba(255,170,0,0.07); color: #ffaa00; border: 1px solid rgba(255,170,0,0.2); }
+    .reg-date { font-size: 7px; color: var(--text-dim); }
+    .reg-points {
+      list-style: none; margin-top: 5px;
+    }
+    .reg-points li {
+      font-size: 8px; color: var(--text);
+      padding: 2px 0 2px 10px;
+      position: relative;
+      line-height: 1.4;
+    }
+    .reg-points li::before {
+      content: '›'; position: absolute; left: 0;
+      color: var(--text-dim);
+    }
+    .reg-tiers {
+      display: flex; flex-wrap: wrap; gap: 3px;
+      margin: 5px 0;
+    }
+    .reg-tier {
+      display: inline-block; font-size: 6.5px; padding: 1px 5px;
+      background: rgba(155,89,255,0.07); color: var(--purple);
+      border: 1px solid rgba(155,89,255,0.15);
+      border-radius: 2px;
+    }
+    .reg-severity-bar {
+      height: 3px;
+      border-radius: 1px;
+      margin-top: 8px;
+      width: 100%;
+    }
+    .reg-severity-bar.high   { background: linear-gradient(90deg, #ff4444 0%, rgba(255,68,68,0.2) 100%); }
+    .reg-severity-bar.medium { background: linear-gradient(90deg, #ffaa00 0%, rgba(255,170,0,0.2) 100%); }
+    .reg-severity-bar.low    { background: linear-gradient(90deg, #00ff88 0%, rgba(0,255,136,0.2) 100%); }
+
+    /* ── Live News (under regulations) ─────────────────── */
+    #reg-news-section {
+      padding: 0;
+    }
+    .news-item {
+      display: block;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    .news-item:hover { background: rgba(155,89,255,0.04); }
+    .news-item-title {
+      font-size: 10.5px; color: var(--text-hi);
+      font-family: var(--font-ui); font-weight: 600;
+      line-height: 1.4; margin-bottom: 4px;
+    }
+    .news-item-meta {
+      display: flex; gap: 10px; font-size: 7.5px;
+      color: var(--text-dim);
+    }
+    .news-item-src { color: var(--purple); }
+    .news-item-time { color: var(--text-dim); }
+
+    /* ── Cyber Threats (Right Column) ──────────────────── */
+    .threat-item {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    .threat-item:hover { background: rgba(255,51,51,0.03); }
+    .threat-actor {
+      font-size: 10px; color: var(--danger);
+      font-family: var(--font-ui); font-weight: 700;
+      margin-bottom: 2px;
+      letter-spacing: 0.5px;
+    }
+    .threat-desc {
+      font-size: 8.5px; color: var(--text);
+      line-height: 1.4; margin-bottom: 4px;
+    }
+    .threat-meta { display: flex; gap: 8px; font-size: 7.5px; color: var(--text-dim); flex-wrap: wrap; }
+    .threat-type { color: var(--warn); }
+    .threat-src  { color: var(--text-dim); }
+
+    /* ── AI Risk Watchlist ──────────────────────────────── */
+    .risk-item {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: flex-start; gap: 8px;
+      transition: background 0.1s;
+    }
+    .risk-item:hover { background: rgba(155,89,255,0.04); }
+    .risk-sev {
+      display: inline-block; font-size: 6.5px; padding: 2px 5px;
+      border-radius: 2px; flex-shrink: 0; margin-top: 1px;
+      font-family: var(--font-mono); letter-spacing: 0.5px; font-weight: 600;
+    }
+    .risk-sev.critical { background: rgba(255,51,51,0.12); color: #ff3333; border: 1px solid rgba(255,51,51,0.3); }
+    .risk-sev.high     { background: rgba(255,170,0,0.1);  color: #ffaa00; border: 1px solid rgba(255,170,0,0.25); }
+    .risk-sev.medium   { background: rgba(155,89,255,0.1); color: var(--purple); border: 1px solid rgba(155,89,255,0.25); }
+    .risk-info { flex: 1; }
+    .risk-name { font-size: 9.5px; color: var(--text-hi); line-height: 1.35; margin-bottom: 2px; }
+    .risk-region { font-size: 7.5px; color: var(--text-dim); }
+
+    /* ── Section visibility (filter pills) ─────────────── */
+    .section-datacenters,
+    .section-regulations,
+    .section-cyber,
+    .section-compute { display: block; }
+
+    /* ── Scrollbar ──────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--purple); }
+
+    /* ── Responsive ─────────────────────────────────────── */
+    @media (max-width: 900px) {
+      #ai-grid { grid-template-columns: 1fr; }
+      #ai-left, #ai-center, #ai-right { height: auto; position: relative; top: 0; }
+      #ai-stats-bar { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    /* ── Compute bar chart ──────────────────────────────── */
+    .compute-section { padding: 12px; }
+    .compute-title { font-size: 8px; color: var(--text-dim); letter-spacing: 1.5px; margin-bottom: 8px; text-transform: uppercase; }
+    .compute-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+    .compute-country { font-size: 8px; color: var(--text-hi); width: 85px; flex-shrink: 0; }
+    .compute-track { flex: 1; height: 8px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+    .compute-fill { height: 100%; border-radius: 2px; background: var(--purple); transition: width 0.8s ease; }
+    .compute-fill.usa   { background: #4488ff; }
+    .compute-fill.china { background: #ff4444; }
+    .compute-fill.eu    { background: var(--accent); }
+    .compute-fill.other { background: var(--orange); }
+    .compute-val { font-size: 8px; color: var(--purple); width: 45px; text-align: right; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<!-- Classification banner -->
+<div id="cls-banner">UNCLASSIFIED // OSINT // OPEN SOURCE INTELLIGENCE</div>
+
+<!-- ── Header ──────────────────────────────────────────── -->
+<header id="ai-header">
+  <a href="/" id="back-btn">◈ ← SPYMETER</a>
+
+  <div id="ai-title">
+    <span class="title-icon">🤖</span>
+    <div>
+      AI INTELLIGENCE
+      <span class="title-sub">GLOBAL AI MONITOR</span>
+    </div>
+  </div>
+
+  <div id="ai-header-right">
+    <span class="badge-live">● LIVE</span>
+    <span id="ai-utc-clock">00:00:00 UTC</span>
+    <button class="hdr-btn" onclick="refreshAll()">↺ REFRESH</button>
+  </div>
+</header>
+
+<!-- ── Stats Bar ────────────────────────────────────────── -->
+<div id="ai-stats-bar">
+  <div class="ai-stat-box">
+    <div class="ai-stat-val" id="stat-facilities">—</div>
+    <div class="ai-stat-lbl">TOTAL FACILITIES</div>
+  </div>
+  <div class="ai-stat-box">
+    <div class="ai-stat-val cyan" id="stat-topcountry">—</div>
+    <div class="ai-stat-lbl">TOP COUNTRY</div>
+  </div>
+  <div class="ai-stat-box">
+    <div class="ai-stat-val orange" id="stat-gpuclusters">—</div>
+    <div class="ai-stat-lbl">GPU CLUSTERS</div>
+  </div>
+  <div class="ai-stat-box">
+    <div class="ai-stat-val green" id="stat-regulations">—</div>
+    <div class="ai-stat-lbl">REGULATIONS ACTIVE</div>
+  </div>
+  <div class="ai-stat-box">
+    <div class="ai-stat-val red" id="stat-cyberevents">—</div>
+    <div class="ai-stat-lbl">CYBER EVENTS TODAY</div>
+  </div>
+  <div class="ai-stat-box">
+    <div class="ai-stat-val" id="stat-models">—</div>
+    <div class="ai-stat-lbl">AI MODELS TRACKED</div>
+  </div>
+  <div class="ai-stat-box">
+    <div class="ai-stat-val cyan" id="stat-computeleaders">—</div>
+    <div class="ai-stat-lbl">COMPUTE LEADERS</div>
+  </div>
+</div>
+
+<!-- ── Filter Pills ──────────────────────────────────────── -->
+<div id="ai-filter-bar">
+  <span class="filter-label">FILTER:</span>
+  <button class="ai-pill active" data-filter="all" onclick="setFilter('all')">ALL</button>
+  <button class="ai-pill" data-filter="datacenters" onclick="setFilter('datacenters')">DATACENTERS</button>
+  <button class="ai-pill" data-filter="regulations" onclick="setFilter('regulations')">REGULATIONS</button>
+  <button class="ai-pill" data-filter="cyber" onclick="setFilter('cyber')">CYBER</button>
+  <button class="ai-pill" data-filter="compute" onclick="setFilter('compute')">COMPUTE</button>
+</div>
+
+<!-- ── Main Grid ─────────────────────────────────────────── -->
+<div id="ai-grid">
+
+  <!-- LEFT: AI Datacenters -->
+  <div id="ai-left">
+    <div class="section-datacenters section-compute">
+      <div class="card-hdr">
+        <span>🖥 AI DATACENTERS — EPOCH AI DATA</span>
+        <span id="facility-count" style="margin-left:auto;font-size:7.5px;color:var(--text-dim)"></span>
+      </div>
+
+      <!-- Epoch top-level summary bars -->
+      <div class="epoch-summary">
+        <div class="epoch-summary-title">GLOBAL GPU COMPUTE DISTRIBUTION</div>
+        <div class="epoch-bar-wrap" id="epoch-compute-bars"></div>
+      </div>
+
+      <!-- Country compute share -->
+      <div class="compute-section">
+        <div class="compute-title">GPU SHARE BY COUNTRY / BLOC</div>
+        <div id="compute-country-bars"></div>
+      </div>
+
+      <!-- Facility list -->
+      <div id="facility-list"></div>
+    </div>
+  </div>
+
+  <!-- CENTER: Regulations -->
+  <div id="ai-center">
+    <div class="section-regulations">
+      <div class="card-hdr cyan" style="position:sticky;top:0;z-index:10;">
+        <span>⚖ MAJOR AI REGULATIONS WORLDWIDE</span>
+        <span style="margin-left:auto;font-size:7.5px;color:var(--text-dim)" id="reg-count"></span>
+      </div>
+      <div class="reg-grid" id="reg-grid"></div>
+    </div>
+
+    <!-- Live Regulatory News -->
+    <div id="reg-news-section" class="section-regulations">
+      <div class="card-hdr cyan" style="position:sticky;top:0;z-index:10;">
+        <span>📡 LIVE REGULATORY NEWS</span>
+        <button class="mini-btn" onclick="fetchRegNews()">↺</button>
+      </div>
+      <div id="reg-news-content">
+        <div class="news-loading">◌ FETCHING REGULATORY INTELLIGENCE...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Cyber Threats + AI Risk -->
+  <div id="ai-right">
+    <!-- Cyber Threats -->
+    <div class="section-cyber">
+      <div class="card-hdr" style="color:var(--danger);">
+        <span>⚠ CYBER THREATS</span>
+        <button class="mini-btn" onclick="fetchCyberThreats()">↺</button>
+      </div>
+      <div id="cyber-threats-content">
+        <div class="news-loading">◌ LOADING THREAT DATA...</div>
+      </div>
+    </div>
+
+    <!-- AI Risk Watchlist -->
+    <div class="section-cyber section-regulations">
+      <div class="card-hdr green">
+        <span>🔴 AI RISK WATCHLIST</span>
+      </div>
+      <div id="risk-watchlist"></div>
+    </div>
+  </div>
+
+</div><!-- /ai-grid -->
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════════════════════ */
+const EPOCH_AI_FACILITIES = [
+  { name: 'Microsoft Azure OpenAI US East', country: 'USA', city: 'Ashburn, VA', lat: 39.0, lng: -77.5, gpus: 50000, model: 'GPT-4/o1', compute: 'H100/A100', status: 'active', tier: 'hyperscale', flag: '🇺🇸' },
+  { name: 'Google DeepMind / TPU Pods', country: 'USA', city: 'Council Bluffs, IA', lat: 41.3, lng: -95.9, gpus: 40000, model: 'Gemini Ultra', compute: 'TPUv5', status: 'active', tier: 'hyperscale', flag: '🇺🇸' },
+  { name: 'xAI Colossus Cluster', country: 'USA', city: 'Memphis, TN', lat: 35.1, lng: -90.0, gpus: 100000, model: 'Grok-3', compute: 'H100', status: 'active', tier: 'hyperscale', flag: '🇺🇸' },
+  { name: 'Meta AI Research (RCX1)', country: 'USA', city: 'Eagle Mountain, UT', lat: 40.3, lng: -112.0, gpus: 35000, model: 'Llama 4', compute: 'H100/GH200', status: 'active', tier: 'hyperscale', flag: '🇺🇸' },
+  { name: 'Amazon AWS Trainium Cluster', country: 'USA', city: 'Boardman, OR', lat: 45.8, lng: -119.7, gpus: 30000, model: 'Titan/Bedrock', compute: 'Trainium2', status: 'active', tier: 'hyperscale', flag: '🇺🇸' },
+  { name: 'Anthropic / AWS Claude Cluster', country: 'USA', city: 'N. Virginia', lat: 38.8, lng: -77.2, gpus: 25000, model: 'Claude 3.7', compute: 'H100', status: 'active', tier: 'major', flag: '🇺🇸' },
+  { name: 'Mistral AI Compute', country: 'France', city: 'Paris', lat: 48.9, lng: 2.3, gpus: 8000, model: 'Mistral Large', compute: 'H100', status: 'active', tier: 'major', flag: '🇫🇷' },
+  { name: 'Aleph Alpha', country: 'Germany', city: 'Heidelberg', lat: 49.4, lng: 8.7, gpus: 4000, model: 'Luminous', compute: 'A100', status: 'active', tier: 'regional', flag: '🇩🇪' },
+  { name: 'BAAI / Zhipu Beijing AI Cluster', country: 'China', city: 'Beijing', lat: 39.9, lng: 116.4, gpus: 20000, model: 'GLM-4/Ernie', compute: 'Huawei Ascend 910B', status: 'active', tier: 'hyperscale', flag: '🇨🇳' },
+  { name: 'Alibaba DAMO Academy', country: 'China', city: 'Hangzhou', lat: 30.3, lng: 120.2, gpus: 18000, model: 'Qwen 2.5', compute: 'Ascend/A100', status: 'active', tier: 'hyperscale', flag: '🇨🇳' },
+  { name: 'Tencent AI Lab', country: 'China', city: 'Shenzhen', lat: 22.5, lng: 114.1, gpus: 15000, model: 'Hunyuan', compute: 'Ascend 910', status: 'active', tier: 'major', flag: '🇨🇳' },
+  { name: 'RIKEN R-CCS Fugaku AI', country: 'Japan', city: 'Kobe', lat: 34.7, lng: 135.2, gpus: 6000, model: 'Research', compute: 'A64FX+GPU', status: 'active', tier: 'major', flag: '🇯🇵' },
+  { name: 'Samsung/Naver CLOVA', country: 'South Korea', city: 'Seoul', lat: 37.6, lng: 127.0, gpus: 5000, model: 'HyperCLOVA X', compute: 'H100', status: 'active', tier: 'major', flag: '🇰🇷' },
+  { name: 'AI21 Labs / Cohere', country: 'Israel', city: 'Tel Aviv', lat: 32.1, lng: 34.8, gpus: 3000, model: 'Jurassic/Command', compute: 'A100', status: 'active', tier: 'regional', flag: '🇮🇱' },
+  { name: 'Vector Institute', country: 'Canada', city: 'Toronto', lat: 43.7, lng: -79.4, gpus: 3500, model: 'Research', compute: 'A100', status: 'active', tier: 'regional', flag: '🇨🇦' },
+  { name: 'CDAC Param Ganga', country: 'India', city: 'Roorkee/Pune', lat: 18.5, lng: 73.9, gpus: 2000, model: 'Research/BharatGPT', compute: 'NVIDIA + domestic', status: 'active', tier: 'regional', flag: '🇮🇳' },
+  { name: 'Microsoft Azure EU West', country: 'Netherlands', city: 'Amsterdam', lat: 52.4, lng: 4.9, gpus: 12000, model: 'Azure OpenAI EU', compute: 'H100', status: 'active', tier: 'hyperscale', flag: '🇳🇱' },
+  { name: 'UAE TII Falcon Cluster', country: 'UAE', city: 'Abu Dhabi', lat: 24.5, lng: 54.4, gpus: 4500, model: 'Falcon 180B', compute: 'H100', status: 'active', tier: 'major', flag: '🇦🇪' },
+  { name: 'Yandex YaLM Cluster', country: 'Russia', city: 'Moscow', lat: 55.8, lng: 37.6, gpus: 6000, model: 'YaLM 2.0', compute: 'A100 (pre-sanction)', status: 'active', tier: 'major', flag: '🇷🇺' },
+  { name: 'Sber AI / GigaChat', country: 'Russia', city: 'Moscow', lat: 55.7, lng: 37.4, gpus: 4000, model: 'GigaChat', compute: 'Domestic+A100', status: 'active', tier: 'regional', flag: '🇷🇺' },
+];
+
+const AI_REGULATIONS = [
+  { country: 'European Union', flag: '🇪🇺', law: 'EU AI Act', status: 'ENFORCED', date: '2024-03', risk_tiers: ['Prohibited AI', 'High-Risk', 'Limited Risk', 'Minimal Risk'], key_points: ['Biometric surveillance ban', 'GPAI model obligations >10^25 FLOPs', 'Fines up to €35M or 7% global turnover', 'AI Office established'], severity: 'high' },
+  { country: 'United States', flag: '🇺🇸', law: 'AI Executive Order 14110 + NIST AI RMF', status: 'ACTIVE', date: '2023-10', risk_tiers: ['Safety reporting >10^26 FLOPs', 'NIST standards', 'Sector-specific guidance'], key_points: ['Frontier model safety reporting required', 'DHS/DOD AI safety guidelines', 'State-level patchwork laws growing', 'NIST AI 600-1 framework published'], severity: 'medium' },
+  { country: 'China', flag: '🇨🇳', law: 'Generative AI Regulations + Algorithm Regulations', status: 'ENFORCED', date: '2023-08', risk_tiers: ['Must align with socialist values', 'Security assessment required', 'ICP license required'], key_points: ['CAC oversight of all GenAI services', 'Deepfake regulations since 2022', 'Algorithm recommendation rules active', 'Data localization mandated'], severity: 'high' },
+  { country: 'United Kingdom', flag: '🇬🇧', law: 'UK AI Safety Institute + Pro-Innovation Framework', status: 'ACTIVE', date: '2023-11', risk_tiers: ['Sector regulator approach', 'Voluntary commitments frontier labs', 'Bletchley Declaration'], key_points: ['AISI evaluates frontier models', '9 frontier AI safety commitments from major labs', 'No blanket AI law — sector-specific', 'AI Safety Summit hosted Nov 2023'], severity: 'low' },
+  { country: 'Canada', flag: '🇨🇦', law: 'AIDA (Artificial Intelligence and Data Act)', status: 'PENDING', date: '2024', risk_tiers: ['High-impact AI systems', 'Harm prevention obligations', 'Transparency requirements'], key_points: ['Bill C-27 includes AIDA provisions', 'Definitions of "high-impact" systems', 'AI and Data Commissioner role', 'Penalties up to 3% global revenue'], severity: 'medium' },
+  { country: 'Japan', flag: '🇯🇵', law: 'AI Guidelines + Integrated Innovation Strategy', status: 'VOLUNTARY', date: '2023-04', risk_tiers: ['10 AI principles framework', 'Human-centered approach', 'G7 Hiroshima AI Process'], key_points: ['Non-binding governance framework', 'Ministry of Economy guidelines', 'Hiroshima AI Process co-founder', 'AI basic law under discussion 2024'], severity: 'low' },
+  { country: 'India', flag: '🇮🇳', law: 'MEITY AI Advisory + Digital India Framework', status: 'DRAFT', date: '2024', risk_tiers: ['Consent for AI-generated content', 'Labeling requirements', 'Platform accountability'], key_points: ['Advisory to AI platforms on elections', 'MeitY oversight of AI deployments', 'No comprehensive AI law yet', 'AI National Strategy 2018 updated'], severity: 'low' },
+  { country: 'South Korea', flag: '🇰🇷', law: 'AI Industry Promotion Act', status: 'PENDING', date: '2024', risk_tiers: ['High-risk AI certification', 'Transparency obligations', 'Ethics principles'], key_points: ['National Assembly discussions ongoing', 'Presidential AI Committee formed', 'Focus on promoting AI industry', 'Risk-based classification proposed'], severity: 'low' },
+  { country: 'Brazil', flag: '🇧🇷', law: 'AI Bill (PL 2338/2023)', status: 'PENDING', date: '2024', risk_tiers: ['High-risk AI special regulations', 'Non-discrimination principles', 'Impact assessment required'], key_points: ['Senate AI commission published bill', 'Based on EU AI Act principles', 'Focus on fundamental rights', 'Environmental impact assessments'], severity: 'medium' },
+  { country: 'Singapore', flag: '🇸🇬', law: 'AI Governance Framework 2.0 + Veritas', status: 'ACTIVE', date: '2023-06', risk_tiers: ['Model AI governance framework', 'Veritas assessment toolkit', 'Explainability guidelines'], key_points: ['PDPC published detailed guidance', 'Sector-specific sandbox approach', 'AI Safety Institute (AISI) established', 'ASEAN AI governance interoperability'], severity: 'low' },
+  { country: 'Russia', flag: '🇷🇺', law: 'National AI Strategy + Experimental Legal Regime', status: 'ACTIVE', date: '2023', risk_tiers: ['Sovereign AI development', 'Data localization + state oversight', 'Military AI prioritized'], key_points: ['National AI Center state-backed', 'Experimental legal regimes for AI testing', 'Mandatory use of domestic AI in govt', 'AI in military exempt from civilian rules'], severity: 'high' },
+  { country: 'Israel', flag: '🇮🇱', law: 'Israel Innovation Authority AI Policy', status: 'ACTIVE', date: '2023', risk_tiers: ['Technology neutrality principle', 'Existing laws apply to AI', 'Military AI separate framework'], key_points: ['No standalone AI law', 'AI in military operations (Project Lavender)', 'Privacy authority oversight of AI data', 'Startup ecosystem support policy'], severity: 'medium' },
+  { country: 'Saudi Arabia', flag: '🇸🇦', law: 'SDAIA National AI Strategy + AI Ethics', status: 'ACTIVE', date: '2023', risk_tiers: ['National Data & AI Authority oversight', 'Ethical AI framework', 'Vision 2030 AI integration'], key_points: ['SDAIA established as AI regulator', 'Arab AI Center HQ in Riyadh', 'International AI alliances building', 'Massive compute investments ongoing'], severity: 'low' },
+  { country: 'Australia', flag: '🇦🇺', law: 'Australia AI Ethics Framework + Voluntary Commitments', status: 'ACTIVE', date: '2023', risk_tiers: ['8 AI ethics principles', 'Sector-specific guidance', 'High-risk AI consultation'], key_points: ['CSIRO responsible AI program', 'Industry voluntary commitments', 'AI regulatory review underway', 'Safety case method being developed'], severity: 'low' },
+  { country: 'UAE', flag: '🇦🇪', law: 'UAE AI Strategy 2031 + AI Office', status: 'ACTIVE', date: '2023', risk_tiers: ['Minister of AI overseeing policy', 'National AI licensing', 'Free zone AI regulations'], key_points: ['First country with Minister of AI', 'Dubai AI Campus + Abu Dhabi G42', 'Falcon LLM open-sourced strategy', 'AI in government mandatory pilot'], severity: 'low' },
+];
+
+const AI_RISK_WATCHLIST = [
+  { item: 'Deepfake electoral interference', severity: 'critical', region: 'Global' },
+  { item: 'AI-generated bioweapon research', severity: 'critical', region: 'Global' },
+  { item: 'LLM-assisted cyberattacks (APT)', severity: 'high', region: 'Russia/China' },
+  { item: 'GPU supply chain disruption risk', severity: 'high', region: 'Taiwan/TSMC' },
+  { item: 'AI surveillance state expansion', severity: 'high', region: 'China/Russia' },
+  { item: 'Autonomous drone AI targeting', severity: 'high', region: 'Ukraine/Middle East' },
+  { item: 'Financial AI manipulation risk', severity: 'medium', region: 'Global' },
+  { item: 'AI model theft/IP espionage', severity: 'medium', region: 'China/APT groups' },
+  { item: 'Critical infra AI vulnerabilities', severity: 'medium', region: 'US/EU' },
+  { item: 'AI alignment failure risk', severity: 'medium', region: 'Frontier labs' },
+];
+
+/* ═══════════════════════════════════════════════════════════
+   UTILITIES
+═══════════════════════════════════════════════════════════ */
+function fmtGPU(n) {
+  if (n >= 1000) return (n / 1000).toFixed(0) + 'K';
+  return n.toString();
+}
+
+function fmtNum(n) {
+  return n.toLocaleString();
+}
+
+function relTime(isoStr) {
+  const now = Date.now();
+  const then = new Date(isoStr).getTime();
+  if (isNaN(then)) return isoStr;
+  const diff = Math.floor((now - then) / 1000);
+  if (diff < 60) return diff + 's ago';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UTC CLOCK
+═══════════════════════════════════════════════════════════ */
+function tickClock() {
+  const now = new Date();
+  const hh = String(now.getUTCHours()).padStart(2, '0');
+  const mm = String(now.getUTCMinutes()).padStart(2, '0');
+  const ss = String(now.getUTCSeconds()).padStart(2, '0');
+  const el = document.getElementById('ai-utc-clock');
+  if (el) el.textContent = hh + ':' + mm + ':' + ss + ' UTC';
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+/* ═══════════════════════════════════════════════════════════
+   STATS BAR
+═══════════════════════════════════════════════════════════ */
+function populateStats() {
+  const total = EPOCH_AI_FACILITIES.length;
+  document.getElementById('stat-facilities').textContent = total;
+
+  // Top country by GPU count
+  const countryGPU = {};
+  for (const f of EPOCH_AI_FACILITIES) {
+    countryGPU[f.country] = (countryGPU[f.country] || 0) + f.gpus;
+  }
+  const topCountry = Object.entries(countryGPU).sort((a, b) => b[1] - a[1])[0];
+  document.getElementById('stat-topcountry').textContent = topCountry ? topCountry[0] : '—';
+
+  // GPU clusters (hyperscale only)
+  const clusters = EPOCH_AI_FACILITIES.filter(f => f.tier === 'hyperscale').length;
+  document.getElementById('stat-gpuclusters').textContent = clusters;
+
+  // Regulations active (ENFORCED or ACTIVE)
+  const activeRegs = AI_REGULATIONS.filter(r => r.status === 'ENFORCED' || r.status === 'ACTIVE').length;
+  document.getElementById('stat-regulations').textContent = activeRegs;
+
+  // Cyber events — will update from API, placeholder for now
+  document.getElementById('stat-cyberevents').textContent = '—';
+
+  // Models tracked (unique model names)
+  const models = new Set(EPOCH_AI_FACILITIES.map(f => f.model.split('/')[0]));
+  document.getElementById('stat-models').textContent = models.size;
+
+  // Compute leaders (unique countries with hyperscale)
+  const leaders = new Set(EPOCH_AI_FACILITIES.filter(f => f.tier === 'hyperscale').map(f => f.country));
+  document.getElementById('stat-computeleaders').textContent = leaders.size;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FACILITY LIST
+═══════════════════════════════════════════════════════════ */
+function renderFacilities() {
+  const list = document.getElementById('facility-list');
+  const sorted = [...EPOCH_AI_FACILITIES].sort((a, b) => b.gpus - a.gpus);
+
+  let html = '';
+  for (const f of sorted) {
+    const tierClass = 'badge-tier-' + f.tier;
+    const statusClass = 'badge-status-' + f.status;
+    html += `
+      <div class="facility-row">
+        <div class="facility-top">
+          <div class="facility-name">${escHtml(f.name)}</div>
+          <span class="facility-flag">${f.flag}</span>
+        </div>
+        <div class="facility-badges">
+          <span class="badge ${tierClass}">${f.tier.toUpperCase()}</span>
+          <span class="badge ${statusClass}">${f.status.toUpperCase()}</span>
+        </div>
+        <div class="facility-meta">
+          <span class="facility-city">📍 ${escHtml(f.city)}</span>
+          <span class="gpu-count">⬡ ${fmtGPU(f.gpus)} GPUs</span>
+          <span class="model-name">◈ ${escHtml(f.model)}</span>
+          <span class="compute-type">${escHtml(f.compute)}</span>
+        </div>
+      </div>`;
+  }
+  list.innerHTML = html;
+  document.getElementById('facility-count').textContent = sorted.length + ' facilities';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EPOCH COMPUTE BARS
+═══════════════════════════════════════════════════════════ */
+function renderComputeBars() {
+  // Tier distribution
+  const tierCounts = { hyperscale: 0, major: 0, regional: 0 };
+  const tierGPUs   = { hyperscale: 0, major: 0, regional: 0 };
+  for (const f of EPOCH_AI_FACILITIES) {
+    tierCounts[f.tier]++;
+    tierGPUs[f.tier] += f.gpus;
+  }
+  const totalGPUs = EPOCH_AI_FACILITIES.reduce((s, f) => s + f.gpus, 0);
+
+  const barsEl = document.getElementById('epoch-compute-bars');
+  const tiers = [
+    { lbl: 'Hyperscale', key: 'hyperscale' },
+    { lbl: 'Major',      key: 'major' },
+    { lbl: 'Regional',   key: 'regional' },
+  ];
+  let html = '';
+  for (const t of tiers) {
+    const pct = totalGPUs > 0 ? (tierGPUs[t.key] / totalGPUs * 100).toFixed(1) : 0;
+    html += `
+      <div class="epoch-bar-row">
+        <span class="epoch-bar-lbl">${t.lbl}</span>
+        <div class="epoch-bar-track"><div class="epoch-bar-fill" style="width:${pct}%"></div></div>
+        <span class="epoch-bar-val">${fmtGPU(tierGPUs[t.key])}</span>
+      </div>`;
+  }
+  barsEl.innerHTML = html;
+
+  // Country bars
+  const countryGPU = {};
+  for (const f of EPOCH_AI_FACILITIES) {
+    countryGPU[f.country] = (countryGPU[f.country] || 0) + f.gpus;
+  }
+  const sorted = Object.entries(countryGPU).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const maxVal = sorted[0] ? sorted[0][1] : 1;
+
+  const countryBarsEl = document.getElementById('compute-country-bars');
+  let cHtml = '';
+  const colorMap = { 'USA': 'usa', 'China': 'china', 'European Union': 'eu', 'Netherlands': 'eu', 'France': 'eu', 'Germany': 'eu' };
+  for (const [country, gpus] of sorted) {
+    const pct = (gpus / maxVal * 100).toFixed(1);
+    const cls = colorMap[country] || 'other';
+    cHtml += `
+      <div class="compute-row">
+        <span class="compute-country">${escHtml(country)}</span>
+        <div class="compute-track"><div class="compute-fill ${cls}" style="width:${pct}%"></div></div>
+        <span class="compute-val">${fmtGPU(gpus)}</span>
+      </div>`;
+  }
+  countryBarsEl.innerHTML = cHtml;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REGULATIONS
+═══════════════════════════════════════════════════════════ */
+function statusClass(s) {
+  return s.toLowerCase();
+}
+
+function renderRegulations() {
+  const grid = document.getElementById('reg-grid');
+  let html = '';
+  for (const r of AI_REGULATIONS) {
+    const sc = statusClass(r.status);
+    const tiers = r.risk_tiers.map(t => `<span class="reg-tier">${escHtml(t)}</span>`).join('');
+    const points = r.key_points.map(p => `<li>${escHtml(p)}</li>`).join('');
+    html += `
+      <div class="reg-card severity-${r.severity}">
+        <div class="reg-header">
+          <span class="reg-flag">${r.flag}</span>
+          <div style="flex:1">
+            <div class="reg-country">${escHtml(r.country)}</div>
+            <div class="reg-law">${escHtml(r.law)}</div>
+          </div>
+          <div class="reg-status-badges">
+            <span class="reg-status ${sc}">${r.status}</span>
+            <span class="reg-date">${r.date}</span>
+          </div>
+        </div>
+        <div class="reg-tiers">${tiers}</div>
+        <ul class="reg-points">${points}</ul>
+        <div class="reg-severity-bar ${r.severity}"></div>
+      </div>`;
+  }
+  grid.innerHTML = html;
+  document.getElementById('reg-count').textContent = AI_REGULATIONS.length + ' jurisdictions';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RISK WATCHLIST
+═══════════════════════════════════════════════════════════ */
+function renderRiskWatchlist() {
+  const el = document.getElementById('risk-watchlist');
+  let html = '';
+  for (const r of AI_RISK_WATCHLIST) {
+    html += `
+      <div class="risk-item">
+        <span class="risk-sev ${r.severity}">${r.severity.toUpperCase()}</span>
+        <div class="risk-info">
+          <div class="risk-name">${escHtml(r.item)}</div>
+          <div class="risk-region">📍 ${escHtml(r.region)}</div>
+        </div>
+      </div>`;
+  }
+  el.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   API FETCHES
+═══════════════════════════════════════════════════════════ */
+async function fetchCyberThreats() {
+  const el = document.getElementById('cyber-threats-content');
+  el.innerHTML = '<div class="news-loading">◌ LOADING THREAT DATA...</div>';
+  try {
+    const res = await fetch('/api/cyber-threats');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const threats = Array.isArray(data) ? data : (data.threats || data.items || []);
+    if (!threats.length) {
+      el.innerHTML = '<div class="news-loading">NO ACTIVE THREATS</div>';
+      return;
+    }
+    let html = '';
+    let count = 0;
+    for (const t of threats) {
+      const actor = t.actor || t.name || t.title || 'Unknown Actor';
+      const desc  = t.description || t.desc || t.summary || '';
+      const type  = t.type || t.category || t.threat_type || '';
+      const src   = t.source || t.src || '';
+      const ts    = t.timestamp || t.date || t.published || '';
+      html += `
+        <div class="threat-item">
+          <div class="threat-actor">${escHtml(actor)}</div>
+          ${desc ? `<div class="threat-desc">${escHtml(desc)}</div>` : ''}
+          <div class="threat-meta">
+            ${type ? `<span class="threat-type">${escHtml(type)}</span>` : ''}
+            ${src  ? `<span class="threat-src">${escHtml(src)}</span>` : ''}
+            ${ts   ? `<span>${relTime(ts)}</span>` : ''}
+          </div>
+        </div>`;
+      count++;
+    }
+    el.innerHTML = html;
+    document.getElementById('stat-cyberevents').textContent = count;
+  } catch (e) {
+    el.innerHTML = `<div class="news-error">⚠ THREAT FEED UNAVAILABLE<br><span style="font-size:8px;color:var(--text-dim)">${escHtml(e.message)}</span></div>`;
+  }
+}
+
+async function fetchRegNews() {
+  const el = document.getElementById('reg-news-content');
+  el.innerHTML = '<div class="news-loading">◌ FETCHING REGULATORY INTELLIGENCE...</div>';
+  try {
+    const res = await fetch('/api/ai-regulations-news');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const articles = Array.isArray(data) ? data : (data.articles || data.items || data.results || []);
+    if (!articles.length) {
+      el.innerHTML = '<div class="news-loading">NO NEWS AVAILABLE</div>';
+      return;
+    }
+    let html = '';
+    for (const a of articles) {
+      const title = a.title || a.headline || 'Untitled';
+      const src   = a.source || a.publisher || a.feed || '';
+      const ts    = a.published || a.timestamp || a.date || '';
+      const url   = a.url || a.link || '#';
+      html += `
+        <a class="news-item" href="${escHtml(url)}" target="_blank" rel="noopener">
+          <div class="news-item-title">${escHtml(title)}</div>
+          <div class="news-item-meta">
+            ${src ? `<span class="news-item-src">${escHtml(src)}</span>` : ''}
+            ${ts  ? `<span class="news-item-time">${relTime(ts)}</span>` : ''}
+          </div>
+        </a>`;
+    }
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = `<div class="news-error">⚠ NEWS FEED UNAVAILABLE<br><span style="font-size:8px;color:var(--text-dim)">${escHtml(e.message)}</span></div>`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FILTER PILLS
+═══════════════════════════════════════════════════════════ */
+function setFilter(f) {
+  // Update active pill
+  document.querySelectorAll('.ai-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.filter === f);
+  });
+
+  // Section visibility map
+  const show = {
+    all:          ['section-datacenters', 'section-regulations', 'section-cyber', 'section-compute'],
+    datacenters:  ['section-datacenters'],
+    regulations:  ['section-regulations'],
+    cyber:        ['section-cyber'],
+    compute:      ['section-compute', 'section-datacenters'],
+  };
+
+  const allSections = ['section-datacenters', 'section-regulations', 'section-cyber', 'section-compute'];
+  const toShow = show[f] || allSections;
+
+  document.querySelectorAll('.section-datacenters, .section-regulations, .section-cyber, .section-compute')
+    .forEach(el => {
+      // Show element if it has ANY of the toShow classes
+      const visible = toShow.some(cls => el.classList.contains(cls));
+      el.style.display = visible ? '' : 'none';
+    });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   AUTO-REFRESH
+═══════════════════════════════════════════════════════════ */
+function refreshAll() {
+  fetchCyberThreats();
+  fetchRegNews();
+}
+
+// Auto-refresh every 10 minutes
+setInterval(refreshAll, 10 * 60 * 1000);
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', function () {
+  populateStats();
+  renderFacilities();
+  renderComputeBars();
+  renderRegulations();
+  renderRiskWatchlist();
+  fetchCyberThreats();
+  fetchRegNews();
+});
+</script>
+</body>
+</html>

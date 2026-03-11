@@ -129,6 +129,32 @@ const AIRCRAFT = (() => {
   let activeCountries = new Set();
   let selectedIcao = null;
 
+  // ── Performance: icon cache + viewport culling ────────
+  const _iconCache = new Map();   // key: "type|color|hdg5" → L.divIcon
+  const MAX_MARKERS = 400;        // hard cap; military always shown
+
+  function _getCachedIcon(type, color, heading) {
+    const hdgQ = Math.round((heading || 0) / 5) * 5; // quantise to 5°
+    const key  = `${type}|${color}|${hdgQ}`;
+    if (!_iconCache.has(key)) {
+      const html = makeMarkerHTML(type, color, hdgQ, '');
+      _iconCache.set(key, L.divIcon({ html, className: '', iconSize: [20, 20], iconAnchor: [10, 10] }));
+    }
+    return _iconCache.get(key);
+  }
+
+  function _inViewport(lat, lon) {
+    if (!map) return true;
+    try {
+      const b   = map.getBounds();
+      const buf = 0.25; // 25% buffer beyond viewport
+      const dLat = (b.getNorth() - b.getSouth()) * buf;
+      const dLon = (b.getEast()  - b.getWest())  * buf;
+      return lat >= b.getSouth() - dLat && lat <= b.getNorth() + dLat &&
+             lon >= b.getWest()  - dLon && lon <= b.getEast()  + dLon;
+    } catch (_) { return true; }
+  }
+
   // OpenSky state vector field indices
   const I = {
     icao: 0, callsign: 1, origin: 2, lat: 6, lon: 5,
@@ -301,22 +327,35 @@ const AIRCRAFT = (() => {
     if (activeCountries.size > 0 && !activeCountries.has(country)) return;
 
     const cs      = (s[I.callsign] || '').trim();
+    const mil     = isMilitary(cs);
+
+    // Viewport culling — skip off-screen civilian aircraft
+    if (!mil && !_inViewport(lat, lon)) {
+      if (markers[icao]) { try { layer && layer.removeLayer(markers[icao]); } catch (_) {} delete markers[icao]; }
+      return;
+    }
+
     const type    = detectType(cs, s[I.on_ground]);
     const meta    = TYPE_META[type] || TYPE_META.civilian;
-    // Priority: military type color → airline brand color → country color → default
-    const color   = isMilitary(cs)
+    const color   = mil
       ? meta.color
       : (getAirlineColor(cs) || UTILS.countryColor(country) || meta.color);
     const heading = s[I.heading] || 0;
 
-    const html    = makeMarkerHTML(type, color, heading, cs || icao);
-    const divIcon = L.divIcon({ html, className: '', iconSize: [20, 20], iconAnchor: [10, 10] });
+    // Use cached icon (avoids recreating identical SVG strings)
+    const divIcon = _getCachedIcon(type, color, heading);
 
     if (markers[icao]) {
       markers[icao].setLatLng([lat, lon]);
-      markers[icao].setIcon(divIcon);
+      // Only update icon if heading changed significantly (>5°)
+      const prevHdg = markers[icao]._prevHdg || 0;
+      if (Math.abs(heading - prevHdg) >= 5) {
+        markers[icao].setIcon(divIcon);
+        markers[icao]._prevHdg = heading;
+      }
     } else {
-      const m = L.marker([lat, lon], { icon: divIcon, zIndexOffset: isMilitary(cs) ? 300 : 0 });
+      const m = L.marker([lat, lon], { icon: divIcon, zIndexOffset: mil ? 300 : 0 });
+      m._prevHdg = heading;
       m.bindPopup(makePopup(s), { maxWidth: 260, className: 'osint-popup' });
       m.on('click', () => {
         selectedIcao = icao;
@@ -346,27 +385,48 @@ const AIRCRAFT = (() => {
     if (!states || !Array.isArray(states)) return;
     data = states;
     dataTs = Date.now();
-    const icaos = [];
+
     let milCount = 0, droneCount = 0;
     const countryCounts = {};
 
+    // Stats pass (all states, no marker work)
+    const validStates = [];
     states.forEach(s => {
       if (!s[I.lat] || !s[I.lon]) return;
-      icaos.push(s[I.icao]);
-      if (enabled) updateMarker(s);
-
+      validStates.push(s);
       const cs   = (s[I.callsign] || '').trim();
       const type = detectType(cs, s[I.on_ground]);
       if (['fighter','bomber','tanker','military_transport'].includes(type)) milCount++;
       if (type === 'drone') droneCount++;
-
       const c = s[I.origin] || 'Unknown';
       countryCounts[c] = (countryCounts[c] || 0) + 1;
     });
 
-    purgeStale(icaos);
+    if (enabled) {
+      // Sort: military/drone first, then airborne civilian, then grounded
+      const ranked = validStates.slice().sort((a, b) => {
+        const aMil = isMilitary((a[I.callsign]||'').trim()) ? 2 : (!a[I.on_ground] ? 1 : 0);
+        const bMil = isMilitary((b[I.callsign]||'').trim()) ? 2 : (!b[I.on_ground] ? 1 : 0);
+        return bMil - aMil;
+      });
 
-    const total = icaos.length;
+      // Render up to MAX_MARKERS (military always included)
+      const toRender = new Set();
+      let civilian = 0;
+      ranked.forEach(s => {
+        const mil = isMilitary((s[I.callsign]||'').trim());
+        if (mil || civilian < MAX_MARKERS) {
+          toRender.add(s[I.icao]);
+          if (!mil) civilian++;
+          updateMarker(s);
+        }
+      });
+
+      // Remove markers for aircraft outside the render set
+      purgeStale([...toRender]);
+    }
+
+    const total = validStates.length;
     const sv = document.getElementById('sv-aircraft');
     if (sv) sv.textContent = total.toLocaleString();
 
@@ -406,7 +466,12 @@ const AIRCRAFT = (() => {
   function init(mapInstance) {
     map   = mapInstance;
     layer = L.layerGroup();  // don't add to map until enabled
-    // No fetch on init — aircraft layer is off by default
+    // Re-cull markers on map move (viewport changed) — debounced 300ms
+    let _moveTimer = null;
+    map.on('moveend zoomend', () => {
+      clearTimeout(_moveTimer);
+      _moveTimer = setTimeout(() => { if (enabled && data.length) processStates(data); }, 300);
+    });
     setInterval(() => { if (enabled) fetchData(); }, 15_000);
   }
 

@@ -51,7 +51,8 @@ const SUBMARINE = (() => {
   // ── Fetch and render ─────────────────────────────────
   async function _fetch() {
     try {
-      const r = await fetch('/api/submarine');
+      // Try enhanced endpoint first (more news sources + Telegram OSINT)
+      const r = await fetch('/api/submarine-enhanced');
       if (!r.ok) return;
       data = await r.json();
       if (enabled) _render();

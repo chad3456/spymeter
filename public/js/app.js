@@ -243,8 +243,11 @@ const APP = (() => {
 
     clearInterval(globeTimer);
     globeTimer = setInterval(() => {
-      if (document.getElementById('globe-container').style.display !== 'none') updateGlobePoints();
-    }, 15_000);
+      if (document.getElementById('globe-container').style.display !== 'none') {
+        // Only update hexbin (expensive) every 30s; animation handles point movement
+        updateGlobePoints();
+      }
+    }, 30_000);  // was 15s — hexbin doesn't need to update that often
   }
 
   function _injectGlobeControls(container) {
@@ -306,6 +309,7 @@ const APP = (() => {
   }
 
   // ── Dead-reckoning animation (smooth aircraft movement) ──
+  const GLOBE_MAX_PTS = 500;   // WebGL point cap for performance
   function startGlobeAnimation() {
     if (globeAnimTimer) return;
     globeAnimTimer = setInterval(() => {
@@ -315,11 +319,17 @@ const APP = (() => {
       const fetchTs = AIRCRAFT.getTs() || Date.now();
       const dt      = Math.min((Date.now() - fetchTs) / 1000, 30); // cap at 30s
 
-      const pts = states.filter(s => s[6] && s[5]).map(s => {
+      // Pre-sort: military first, then airborne, then ground — then slice
+      const sorted = states.filter(s => s[6] && s[5]).sort((a, b) => {
+        const aMil = AIRCRAFT.isMilitary((a[1]||'').trim()) ? 2 : (!a[8] ? 1 : 0);
+        const bMil = AIRCRAFT.isMilitary((b[1]||'').trim()) ? 2 : (!b[8] ? 1 : 0);
+        return bMil - aMil;
+      }).slice(0, GLOBE_MAX_PTS);
+
+      const pts = sorted.map(s => {
         let lat = s[6], lng = s[5];
-        const vel = s[9] || 0;   // m/s
-        const hdg = s[10] || 0;  // degrees
-        // Project forward: dead reckoning (only for airborne aircraft)
+        const vel = s[9] || 0;
+        const hdg = s[10] || 0;
         if (vel > 5 && !s[8]) {
           const h = hdg * Math.PI / 180;
           lat += (vel * Math.cos(h) / 111111) * dt;
@@ -334,7 +344,6 @@ const APP = (() => {
           color: t==='drone' ? '#ff2200' : mil ? '#ff9900' : UTILS.countryColor(s[2]||''),
           label: `${cs||s[0]} [${s[2]||'?'}] ${s[7] ? Math.round(s[7]*3.281).toLocaleString() : '?'}ft`,
           size:  t==='drone' ? 1.0 : mil ? 0.85 : 0.55,
-          mil,
         };
       });
 
@@ -345,12 +354,12 @@ const APP = (() => {
           .pointColor(d => d.color)
           .pointRadius(d => d.size)
           .pointLabel(d => d.label)
-          .pointsMerge(false).pointResolution(6);
+          .pointsMerge(false).pointResolution(4);  // lower resolution = faster
 
         const acBadge = document.getElementById('globe-ac-count');
-        if (acBadge && !godEyeActive) acBadge.textContent = `${pts.length} AC`;
+        if (acBadge && !godEyeActive) acBadge.textContent = `${pts.length}/${states.length} AC`;
       }
-    }, 2000);   // update interpolated positions every 2s
+    }, 3000);   // 3s (was 2s) — enough for smooth motion, less CPU
   }
 
   function updateGlobePoints() {

@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPYMETER — INDIA INTELLIGENCE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" />
+  <style>
+    :root {
+      --bg:#040608; --bg2:#07090e; --bg3:#0c1118;
+      --border:#182030; --border-hi:#1e3a5f;
+      --accent:#00d4ff; --accent2:#00ff88; --warn:#ffaa00;
+      --orange:#ff9900; --danger:#ff3333; --purple:#9b59ff;
+      --india1:#ff9933; --india2:#ffffff; --india3:#138808;
+      --text:#8ba4c0; --text-hi:#c8dff0; --text-dim:#3d5a78;
+      --font-mono:'Share Tech Mono',monospace;
+      --font-ui:'Rajdhani',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:12px;min-height:100vh;overflow-x:hidden}
+    a{color:inherit;text-decoration:none}
+
+    /* Classification banner */
+    #cls-banner{
+      position:fixed;top:0;left:0;right:0;z-index:9999;height:18px;
+      background:#001800;color:#00ff88;font-size:8.5px;letter-spacing:2.5px;
+      display:flex;align-items:center;justify-content:center;border-bottom:1px solid #003300;
+    }
+
+    /* Stats bar */
+    #india-stats{
+      display:grid;grid-template-columns:repeat(7,1fr);
+      border-bottom:2px solid var(--india1);
+      margin-top:18px;
+    }
+    .stat-box{
+      padding:10px 12px;background:var(--bg2);border-right:1px solid var(--border);text-align:center;
+    }
+    .stat-box:last-child{border-right:none}
+    .stat-box:hover{background:rgba(255,153,51,0.04)}
+    .stat-val{font-size:22px;color:var(--accent);font-family:var(--font-mono);line-height:1}
+    .stat-val.orange{color:var(--india1)}
+    .stat-val.green{color:var(--india3)}
+    .stat-val.blue{color:var(--accent)}
+    .stat-val.purple{color:var(--purple)}
+    .stat-lbl{font-size:7px;color:var(--text-dim);letter-spacing:1.2px;margin-top:3px;text-transform:uppercase}
+
+    /* Header */
+    #india-header{
+      position:sticky;top:18px;z-index:200;
+      background:rgba(4,6,8,0.97);border-bottom:1px solid var(--india1);
+      padding:0 16px;height:46px;display:flex;align-items:center;gap:14px;
+      backdrop-filter:blur(8px);
+    }
+    #back-btn{
+      font-size:9px;color:var(--text-dim);padding:4px 10px;
+      border:1px solid var(--border);border-radius:2px;letter-spacing:1px;transition:all .15s;
+    }
+    #back-btn:hover{color:var(--india1);border-color:var(--india1)}
+    #india-title{
+      display:flex;align-items:center;gap:10px;flex:1;
+      font-family:var(--font-ui);font-size:17px;font-weight:700;color:var(--text-hi);letter-spacing:2px;
+    }
+    .title-sub{font-size:8px;color:var(--text-dim);display:block;font-family:var(--font-mono);margin-top:1px;letter-spacing:1.5px}
+    .badge-live{
+      display:inline-flex;align-items:center;gap:3px;font-size:7.5px;color:var(--india1);
+      padding:2px 7px;border-radius:2px;background:rgba(255,153,51,0.1);border:1px solid rgba(255,153,51,0.25);
+      animation:pulse 2s infinite;
+    }
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    #india-header-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+    #india-utc{font-size:10px;color:var(--accent);letter-spacing:1px}
+    .hdr-btn{
+      background:rgba(255,153,51,0.08);border:1px solid var(--india1);
+      color:var(--india1);font-family:var(--font-mono);font-size:9px;
+      padding:4px 12px;border-radius:2px;cursor:pointer;letter-spacing:1px;transition:all .15s;
+    }
+    .hdr-btn:hover{background:rgba(255,153,51,0.18)}
+
+    /* Filter bar */
+    #india-filter{
+      display:flex;align-items:center;gap:5px;padding:7px 14px;
+      background:var(--bg2);border-bottom:1px solid var(--border);flex-wrap:wrap;
+    }
+    .filter-lbl{font-size:8px;color:var(--text-dim);letter-spacing:1.5px;margin-right:4px}
+    .india-pill{
+      background:rgba(0,0,0,.35);border:1px solid var(--border);
+      color:var(--text);font-family:var(--font-mono);font-size:9px;
+      padding:3px 11px;border-radius:2px;cursor:pointer;transition:all .12s;
+    }
+    .india-pill:hover,.india-pill.active{background:rgba(255,153,51,.1);border-color:var(--india1);color:var(--india1)}
+    .pill-n{
+      display:inline-block;background:rgba(255,255,255,.08);border-radius:8px;
+      padding:0 5px;font-size:8px;margin-left:3px;min-width:16px;text-align:center;
+    }
+
+    /* Main grid */
+    #india-grid{display:grid;grid-template-columns:290px 1fr 270px;min-height:calc(100vh - 185px)}
+    #india-left,#india-right{
+      background:var(--bg2);border-right:1px solid var(--border);
+      overflow-y:auto;height:calc(100vh - 185px);position:sticky;top:185px;
+    }
+    #india-right{border-right:none;border-left:1px solid var(--border)}
+    #india-center{background:var(--bg);overflow-y:auto;height:calc(100vh - 185px);position:sticky;top:185px}
+
+    /* Panel cards */
+    .pcard{border-bottom:1px solid var(--border)}
+    .phdr{
+      display:flex;align-items:center;gap:6px;padding:8px 12px;
+      font-size:8.5px;color:var(--india1);letter-spacing:1.5px;
+      border-bottom:1px solid var(--border);background:rgba(0,0,0,.2);
+      position:sticky;top:0;z-index:10;
+    }
+    .phdr .mini-btn{
+      margin-left:auto;background:none;border:1px solid var(--border);
+      color:var(--text-dim);font-family:var(--font-mono);font-size:10px;
+      padding:1px 7px;border-radius:2px;cursor:pointer;transition:all .12s;
+    }
+    .phdr .mini-btn:hover{border-color:var(--india1);color:var(--india1)}
+    .news-loading{padding:14px 12px;color:var(--text-dim);font-size:9px;animation:pulse 1.5s infinite}
+
+    /* Feed items */
+    a.india-item{display:block;padding:10px 14px;border-bottom:1px solid var(--border);transition:background .1s}
+    a.india-item:hover{background:rgba(255,153,51,.03)}
+    .item-cat{
+      display:inline-block;font-size:7.5px;padding:2px 8px;border-radius:2px;margin-bottom:4px;letter-spacing:.5px;
+    }
+    .item-title{font-size:11.5px;color:var(--text-hi);line-height:1.45;margin-bottom:4px;font-family:var(--font-ui);font-weight:600}
+    .item-desc{font-size:9px;color:var(--text);line-height:1.4;margin-bottom:4px;
+      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .item-meta{display:flex;gap:8px;font-size:8px;color:var(--text-dim)}
+    .item-ts{margin-left:auto}
+
+    /* Category bar chart */
+    .cat-row{padding:5px 12px 6px}
+    .cat-top{display:flex;justify-content:space-between;font-size:8.5px;color:var(--text);margin-bottom:3px}
+    .cat-track{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+    .cat-fill{height:100%;border-radius:2px;transition:width .5s ease}
+
+    /* Domain grid */
+    #india-domains{
+      display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+      background:var(--border);border-bottom:2px solid var(--india1);
+    }
+    .domain-card{
+      background:var(--bg2);padding:9px 11px;cursor:pointer;
+      border:none;outline:none;font-family:var(--font-mono);text-align:left;transition:background .12s;
+    }
+    .domain-card:hover{background:rgba(255,153,51,.04)}
+    .domain-card.active{background:rgba(255,153,51,.08);border-bottom:2px solid var(--india1)}
+    .domain-icon{font-size:16px;display:block;margin-bottom:3px}
+    .domain-count{font-size:17px;color:var(--text-hi);display:block;line-height:1}
+    .domain-label{font-size:7.5px;color:var(--text-dim);letter-spacing:1px}
+
+    /* Source rows */
+    .src-row{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--border);font-size:8.5px}
+    .badge-live{display:inline-block;font-size:6.5px;padding:1px 5px;background:rgba(0,255,136,.08);color:var(--accent2);border:1px solid rgba(0,255,136,.2);border-radius:2px}
+    .badge-static{display:inline-block;font-size:6.5px;padding:1px 5px;background:rgba(61,90,120,.3);color:var(--text-dim);border:1px solid var(--border);border-radius:2px}
+
+    /* Scrollbar */
+    ::-webkit-scrollbar{width:4px;height:4px}
+    ::-webkit-scrollbar-track{background:var(--bg2)}
+    ::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:2px}
+    ::-webkit-scrollbar-thumb:hover{background:var(--india1)}
+
+    /* Footer */
+    #india-footer{
+      background:var(--bg2);border-top:1px solid var(--india1);
+      padding:7px 16px;display:flex;align-items:center;gap:14px;
+      font-size:7.5px;color:var(--text-dim);
+    }
+    .footer-logo{color:var(--india1);letter-spacing:2px;font-size:9px}
+
+    /* Tricolour accent line */
+    .tricolour-bar{height:3px;background:linear-gradient(to right,var(--india1) 33%,var(--india2) 33% 66%,var(--india3) 66%)}
+
+    @media(max-width:900px){
+      #india-stats{grid-template-columns:repeat(4,1fr)}
+      #india-grid{grid-template-columns:1fr}
+      #india-left,#india-right,#india-center{height:auto;position:static}
+      #india-right{border-left:none;border-top:1px solid var(--border)}
+    }
+  </style>
+</head>
+<body>
+
+<div id="cls-banner">SPYMETER // INDIA INTELLIGENCE // OSINT // OPEN SOURCE DATA // UNCLASSIFIED</div>
+
+<!-- Stats bar -->
+<div id="india-stats" style="margin-top:18px">
+  <div class="stat-box"><div class="stat-val blue" id="s-total">—</div><div class="stat-lbl">INTEL ITEMS</div></div>
+  <div class="stat-box"><div class="stat-val orange" id="s-sources">—</div><div class="stat-lbl">SOURCES</div></div>
+  <div class="stat-box"><div class="stat-val orange" id="s-defence">—</div><div class="stat-lbl">DEFENCE</div></div>
+  <div class="stat-box"><div class="stat-val purple" id="s-ai">—</div><div class="stat-lbl">AI / TECH</div></div>
+  <div class="stat-box"><div class="stat-val blue" id="s-space">—</div><div class="stat-lbl">SPACE / ISRO</div></div>
+  <div class="stat-box"><div class="stat-val green" id="s-mfg">—</div><div class="stat-lbl">MANUFACTURING</div></div>
+  <div class="stat-box"><div class="stat-val" id="s-economy">—</div><div class="stat-lbl">ECONOMY</div></div>
+</div>
+
+<!-- Header -->
+<header id="india-header">
+  <a href="/" id="back-btn">◈ ← SPYMETER</a>
+  <div id="india-title">
+    <span style="font-size:22px">🇮🇳</span>
+    <div>
+      INDIA <span style="color:var(--india1)">INTELLIGENCE</span>
+      <span class="title-sub">DEFENCE · AI · MANUFACTURING · SPACE · ECONOMY · OSINT AGGREGATOR</span>
+    </div>
+    <span class="badge-live">● LIVE</span>
+  </div>
+  <div id="india-header-right">
+    <span id="india-last-upd" style="font-size:8px;color:var(--text-dim)"></span>
+    <span id="india-utc">--:--:-- UTC</span>
+    <button class="hdr-btn" onclick="loadFeed()">↻ REFRESH</button>
+  </div>
+</header>
+
+<div class="tricolour-bar"></div>
+
+<!-- Filter bar -->
+<div id="india-filter">
+  <span class="filter-lbl">FILTER:</span>
+  <button class="india-pill active" data-cat="all"     onclick="setFilter('all')">ALL <span class="pill-n" id="pn-all">—</span></button>
+  <button class="india-pill"        data-cat="defence" onclick="setFilter('defence')">🛡 DEFENCE <span class="pill-n" id="pn-defence">—</span></button>
+  <button class="india-pill"        data-cat="ai"      onclick="setFilter('ai')">🤖 AI/TECH <span class="pill-n" id="pn-ai">—</span></button>
+  <button class="india-pill"        data-cat="space"   onclick="setFilter('space')">🚀 SPACE <span class="pill-n" id="pn-space">—</span></button>
+  <button class="india-pill"        data-cat="mfg"     onclick="setFilter('mfg')">🏭 MFG <span class="pill-n" id="pn-mfg">—</span></button>
+  <button class="india-pill"        data-cat="tech"    onclick="setFilter('tech')">💡 TECH <span class="pill-n" id="pn-tech">—</span></button>
+  <button class="india-pill"        data-cat="economy" onclick="setFilter('economy')">📈 ECONOMY <span class="pill-n" id="pn-economy">—</span></button>
+  <button class="india-pill"        data-cat="general" onclick="setFilter('general')">🌐 GENERAL <span class="pill-n" id="pn-general">—</span></button>
+</div>
+
+<!-- Main grid -->
+<div id="india-grid">
+
+  <!-- LEFT: Category breakdown + Sources -->
+  <aside id="india-left">
+    <div class="pcard">
+      <div class="phdr">📊 CATEGORY BREAKDOWN</div>
+      <div id="india-cats"><div class="news-loading">⟳ Loading…</div></div>
+    </div>
+    <div class="pcard">
+      <div class="phdr">🔬 TECH WATCHLIST</div>
+      <div id="india-tech-watch"><div class="news-loading">⟳ Scanning…</div></div>
+    </div>
+    <div class="pcard">
+      <div class="phdr">ℹ OSINT SOURCES <span style="margin-left:auto;font-size:7px;color:var(--text-dim)">30+ feeds</span></div>
+      <div class="src-row"><span class="badge-live">LIVE</span>PIB (Press Information Bureau)</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>Indian Navy Official</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>Economic Times Defence</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>The Hindu Defence</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>Indian Defence Review</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>Force India Magazine</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>IDSA (Defence Studies)</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>Analytics India Magazine</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>Inc42 / YourStory (Tech)</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>ISRO Space News</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>Make in India / PIB Industry</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>The Print / The Wire</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>LiveMint / Business Std.</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>ORF (Observer Research Fdn.)</div>
+      <div class="src-row"><span class="badge-live">LIVE</span>SP's Aviation</div>
+      <div class="src-row"><span class="badge-live">GDELT</span>GDELT — 12 India queries</div>
+      <div style="padding:7px 12px;font-size:7.5px;color:var(--text-dim);border-top:1px solid var(--border)">
+        All open-source · Refreshes every 10 min · No classified data
+      </div>
+    </div>
+  </aside>
+
+  <!-- CENTRE: Domain cards + Live feed -->
+  <main id="india-center">
+
+    <!-- Domain quick select -->
+    <div id="india-domains">
+      <button class="domain-card active" data-cat="all" onclick="selectDomain(this,'all')">
+        <span class="domain-icon">🇮🇳</span>
+        <span class="domain-count" id="dd-all">—</span>
+        <span class="domain-label">ALL DOMAINS</span>
+      </button>
+      <button class="domain-card" data-cat="defence" onclick="selectDomain(this,'defence')">
+        <span class="domain-icon">🛡</span>
+        <span class="domain-count" id="dd-defence">—</span>
+        <span class="domain-label">DEFENCE / DRDO</span>
+      </button>
+      <button class="domain-card" data-cat="ai" onclick="selectDomain(this,'ai')">
+        <span class="domain-icon">🤖</span>
+        <span class="domain-count" id="dd-ai">—</span>
+        <span class="domain-label">AI / AUTONOMOUS</span>
+      </button>
+      <button class="domain-card" data-cat="space" onclick="selectDomain(this,'space')">
+        <span class="domain-icon">🚀</span>
+        <span class="domain-count" id="dd-space">—</span>
+        <span class="domain-label">SPACE / ISRO</span>
+      </button>
+      <button class="domain-card" data-cat="mfg" onclick="selectDomain(this,'mfg')">
+        <span class="domain-icon">🏭</span>
+        <span class="domain-count" id="dd-mfg">—</span>
+        <span class="domain-label">MANUFACTURING</span>
+      </button>
+      <button class="domain-card" data-cat="tech" onclick="selectDomain(this,'tech')">
+        <span class="domain-icon">💡</span>
+        <span class="domain-count" id="dd-tech">—</span>
+        <span class="domain-label">TECH / STARTUP</span>
+      </button>
+    </div>
+
+    <!-- Live feed -->
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;font-size:8.5px;color:var(--india1);letter-spacing:1.5px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.2)">
+      📡 LIVE INDIA INTELLIGENCE
+      <span class="badge-live">● MULTI-SOURCE</span>
+      <span id="feed-count" style="margin-left:auto;font-size:8px;color:var(--text-dim)"></span>
+    </div>
+    <div id="india-feed"><div class="news-loading">⟳ Fetching from 30+ sources…</div></div>
+
+  </main>
+
+  <!-- RIGHT: Key programmes + Telegram -->
+  <aside id="india-right">
+
+    <!-- Key India Defence Programmes -->
+    <div class="pcard">
+      <div class="phdr">🛡 KEY PROGRAMMES <span class="badge-static" style="font-size:6px;margin-left:auto">OSINT</span></div>
+      <div id="india-programmes">
+        <!-- Populated by JS with curated programme data -->
+      </div>
+    </div>
+
+    <!-- Telegram OSINT related to India -->
+    <div class="pcard">
+      <div class="phdr">📲 TELEGRAM OSINT <span class="badge-live" style="margin-left:auto">● LIVE</span></div>
+      <div id="india-telegram"><div class="news-loading">⟳ Fetching Telegram channels…</div></div>
+    </div>
+
+  </aside>
+
+</div><!-- /#india-grid -->
+
+<footer id="india-footer">
+  <span class="footer-logo">◈ SPYMETER</span>
+  <span>INDIA INTELLIGENCE MODULE</span>
+  <span style="margin-left:auto">Open-source data only · No classified information · OSINT aggregation</span>
+</footer>
+
+<script>
+/* ── State ─────────────────────────────────────────────── */
+let _allItems = [], _filter = 'all';
+
+const CAT_META = {
+  defence: { label:'🛡 DEFENCE',    color:'#ff9933', bg:'rgba(255,153,51,.12)' },
+  ai:      { label:'🤖 AI/TECH',    color:'#9b59ff', bg:'rgba(155,89,255,.12)' },
+  space:   { label:'🚀 SPACE',      color:'#00d4ff', bg:'rgba(0,212,255,.12)'  },
+  mfg:     { label:'🏭 MFG',        color:'#00ff88', bg:'rgba(0,255,136,.10)'  },
+  tech:    { label:'💡 TECH',       color:'#ffaa00', bg:'rgba(255,170,0,.10)'  },
+  economy: { label:'📈 ECONOMY',    color:'#4488ff', bg:'rgba(68,136,255,.10)' },
+  general: { label:'🌐 GENERAL',    color:'#888888', bg:'rgba(136,136,136,.08)'},
+};
+
+/* ── Curated key India programmes ─────────────────────── */
+const KEY_PROGRAMMES = [
+  { icon:'✈', name:'Tejas Mk-2 / AMCA',       status:'Development', color:'#ff9933', note:'HAL — 5th gen AMCA IOC ~2035' },
+  { icon:'🚀', name:'BrahMos-NG',              status:'Testing',     color:'#ff6600', note:'DRDO/NPO — hypersonic version' },
+  { icon:'🚁', name:'MALE UAV (Rustom-2)',      status:'Trials',      color:'#00d4ff', note:'DRDO — long-endurance drone' },
+  { icon:'🌊', name:'INS Arihant / S4',         status:'Active',      color:'#4488ff', note:'SSBN — nuclear deterrent patrol' },
+  { icon:'🛡', name:'Akash NG / XR SAM',        status:'Production',  color:'#ff9900', note:'DRDO — long-range SAM system' },
+  { icon:'☢', name:'Agni-VI ICBM',             status:'Development', color:'#ff4444', note:'DRDO — 10,000km+ range ICBM' },
+  { icon:'🚀', name:'GSLV Mk-III / LVM3',       status:'Operational', color:'#00ff88', note:'ISRO — heavy lift launch vehicle' },
+  { icon:'🛸', name:'Chandrayaan-4',            status:'Planned',     color:'#00d4ff', note:'ISRO — lunar sample return ~2028' },
+  { icon:'🤖', name:'iDEX AI Autonomous Drone', status:'Startup',     color:'#9b59ff', note:'DRDO — swarm drone programme' },
+  { icon:'💡', name:'India Semiconductor Mission',status:'Active',    color:'#ffaa00', note:'₹76,000 Cr ISMC/Tata fab PLI' },
+  { icon:'🏭', name:'Defence Export Target',    status:'₹50,000 Cr',  color:'#00ff88', note:'Govt target by 2028-29' },
+  { icon:'🌐', name:'Quantum Computing Mission',status:'Funded',      color:'#9b59ff', note:'₹6,000 Cr NM-QTA programme' },
+];
+
+function renderProgrammes() {
+  const el = document.getElementById('india-programmes');
+  if (!el) return;
+  el.innerHTML = KEY_PROGRAMMES.map(p => `
+    <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border)">
+      <span style="font-size:14px;flex-shrink:0">${p.icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;color:${p.color};font-family:var(--font-ui);font-weight:600;margin-bottom:1px">${p.name}</div>
+        <div style="font-size:8px;color:var(--text-dim)">${p.note}</div>
+      </div>
+      <span style="font-size:7px;padding:1px 5px;background:${p.color}22;color:${p.color};border:1px solid ${p.color}44;border-radius:2px;white-space:nowrap;flex-shrink:0">${p.status}</span>
+    </div>
+  `).join('');
+}
+
+/* ── Time ago ────────────────────────────────────────── */
+function timeAgo(ts) {
+  if (!ts) return '';
+  try {
+    const diff = Date.now() - new Date(ts).getTime();
+    if (diff < 0) return 'just now';
+    if (diff < 3_600_000) return Math.round(diff/60000) + 'm ago';
+    if (diff < 86_400_000) return Math.round(diff/3_600_000) + 'h ago';
+    return Math.round(diff/86_400_000) + 'd ago';
+  } catch(_) { return ''; }
+}
+
+/* ── Render feed item ────────────────────────────────── */
+function renderItem(item) {
+  const cat  = CAT_META[item.cat] || CAT_META.general;
+  const ts   = timeAgo(item.ts || item.pub);
+  const safe = (item.title||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const url  = item.url || '#';
+  return `<a class="india-item" href="${url}" target="_blank" rel="noopener noreferrer">
+    <div class="item-cat" style="background:${cat.bg};color:${cat.color}">${cat.label}</div>
+    <div class="item-title">${safe}</div>
+    ${item.desc ? `<div class="item-desc">${item.desc.replace(/</g,'&lt;').slice(0,180)}</div>` : ''}
+    <div class="item-meta">
+      <span>${item.source||''}</span>
+      ${ts ? `<span class="item-ts">${ts}</span>` : ''}
+    </div>
+  </a>`;
+}
+
+/* ── Filter ──────────────────────────────────────────── */
+function setFilter(cat) {
+  _filter = cat;
+  document.querySelectorAll('.india-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+  renderFeed();
+}
+
+function selectDomain(el, cat) {
+  document.querySelectorAll('.domain-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  setFilter(cat);
+}
+
+function renderFeed() {
+  const el = document.getElementById('india-feed');
+  if (!el) return;
+  const items = _filter === 'all' ? _allItems : _allItems.filter(i => i.cat === _filter);
+  document.getElementById('feed-count').textContent = items.length + ' items';
+  el.innerHTML = items.length
+    ? items.map(renderItem).join('')
+    : `<div class="news-loading">No ${_filter} items found</div>`;
+}
+
+/* ── Category breakdown bars ─────────────────────────── */
+function renderCats(cats) {
+  const el = document.getElementById('india-cats');
+  if (!el) return;
+  const max = Math.max(...Object.values(cats), 1);
+  el.innerHTML = Object.entries(CAT_META).map(([cat, meta]) => {
+    const n = cats[cat] || 0;
+    const pct = Math.round((n / max) * 100);
+    return `<div class="cat-row">
+      <div class="cat-top"><span>${meta.label}</span><span style="color:var(--text-hi)">${n}</span></div>
+      <div class="cat-track"><div class="cat-fill" style="width:${pct}%;background:${meta.color}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Tech keyword watchlist ──────────────────────────── */
+const TECH_KW = [
+  { re: /Tejas|AMCA|fifth.gen/i,           label: 'Tejas/AMCA Programme',     color: '#ff9933' },
+  { re: /BrahMos|hypersonic/i,             label: 'BrahMos/Hypersonic',        color: '#ff6600' },
+  { re: /DRDO|defence research/i,          label: 'DRDO R&D',                  color: '#ff9933' },
+  { re: /drone|UAV|MALE/i,                 label: 'Drone/UAV Programme',       color: '#00d4ff' },
+  { re: /ISRO|satellite|launch/i,          label: 'ISRO/Space Launch',         color: '#00d4ff' },
+  { re: /Make in India|Aatmanirbhar/i,     label: 'Make in India / AtmaNirbhar', color: '#00ff88' },
+  { re: /AI\b|artificial intelligence/i,   label: 'AI / Deep Tech',            color: '#9b59ff' },
+  { re: /semiconductor|chip|fab/i,         label: 'Semiconductor/Fab',         color: '#ffaa00' },
+  { re: /nuclear|N-programme|DAE/i,        label: 'Nuclear Programme',         color: '#ff4444' },
+  { re: /submarine|INS|SSBN/i,            label: 'Submarine / Naval',          color: '#4488ff' },
+];
+function renderTechWatch(items) {
+  const el = document.getElementById('india-tech-watch');
+  if (!el) return;
+  const allText = items.map(i => (i.title||'') + ' ' + (i.desc||'')).join(' ');
+  const hits = TECH_KW.map(k => ({ label: k.label, color: k.color, count: (allText.match(new RegExp(k.re.source,'gi'))||[]).length }))
+    .filter(h => h.count > 0).sort((a,b) => b.count - a.count);
+  el.innerHTML = hits.length
+    ? hits.map(h => `<div style="display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--border)">
+        <div style="width:7px;height:7px;border-radius:50%;background:${h.color};flex-shrink:0"></div>
+        <div style="flex:1;font-size:9px;color:var(--text-hi)">${h.label}</div>
+        <div style="font-size:10px;color:${h.color}">${h.count}</div>
+      </div>`).join('')
+    : '<div class="news-loading">No trending keywords</div>';
+}
+
+/* ── Load Telegram OSINT (India-relevant) ────────────── */
+const INDIA_TG_KW = /India|DRDO|HAL|ISRO|BrahMos|Tejas|Arihant|Agni|IAF|Indian Navy|Indian Army|Modi|Rajnath|Defence Ministry|BEL|Make in India/i;
+async function loadTelegram() {
+  const el = document.getElementById('india-telegram');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/telegram-feed');
+    const d = r.ok ? await r.json() : {};
+    const msgs = (d.messages || []).filter(m => INDIA_TG_KW.test(m.text));
+    if (!msgs.length) { el.innerHTML = '<div class="news-loading">No India-related Telegram updates</div>'; return; }
+    el.innerHTML = msgs.slice(0, 15).map(m => {
+      const ts = timeAgo(m.ts);
+      const safe = m.text.replace(/</g,'&lt;').slice(0, 280);
+      return `<a href="${m.url}" target="_blank" rel="noopener" style="display:block;padding:8px 12px;border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background='rgba(255,153,51,.03)'" onmouseout="this.style.background=''">
+        <div style="font-size:8px;color:var(--india1);margin-bottom:3px">📲 @${m.slug} ${ts ? '· '+ts : ''}</div>
+        <div style="font-size:9.5px;color:var(--text-hi);line-height:1.4">${safe}</div>
+      </a>`;
+    }).join('');
+  } catch(_) {
+    el.innerHTML = '<div class="news-loading">Telegram feed unavailable</div>';
+  }
+}
+
+/* ── Main load ───────────────────────────────────────── */
+async function loadFeed() {
+  document.getElementById('india-feed').innerHTML = '<div class="news-loading">⟳ Fetching from 30+ sources…</div>';
+  try {
+    const r = await fetch('/api/india-intel');
+    const d = r.ok ? await r.json() : {};
+    _allItems = d.items || [];
+    const cats = d.cats || {};
+    const total = d.total || _allItems.length;
+
+    // Stats bar
+    document.getElementById('s-total').textContent   = total;
+    document.getElementById('s-sources').textContent = d.sources || 42;
+    document.getElementById('s-defence').textContent  = cats.defence || 0;
+    document.getElementById('s-ai').textContent      = (cats.ai || 0) + (cats.tech || 0);
+    document.getElementById('s-space').textContent   = cats.space || 0;
+    document.getElementById('s-mfg').textContent     = cats.mfg || 0;
+    document.getElementById('s-economy').textContent = cats.economy || 0;
+
+    // Domain grid counts
+    document.getElementById('dd-all').textContent     = total;
+    document.getElementById('dd-defence').textContent = cats.defence || 0;
+    document.getElementById('dd-ai').textContent      = (cats.ai||0)+(cats.tech||0);
+    document.getElementById('dd-space').textContent   = cats.space || 0;
+    document.getElementById('dd-mfg').textContent     = cats.mfg || 0;
+    document.getElementById('dd-tech').textContent    = cats.tech || 0;
+
+    // Filter pill counts
+    ['all','defence','ai','space','mfg','tech','economy','general'].forEach(cat => {
+      const el = document.getElementById('pn-'+cat);
+      if (el) el.textContent = cat === 'all' ? total : (cats[cat] || 0);
+    });
+
+    renderCats(cats);
+    renderTechWatch(_allItems);
+    renderFeed();
+
+    document.getElementById('india-last-upd').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    document.getElementById('india-feed').innerHTML = '<div class="news-loading">Feed unavailable — check server connection</div>';
+  }
+}
+
+/* ── UTC clock ───────────────────────────────────────── */
+function tickClock() {
+  const n = new Date(), p = v => String(v).padStart(2,'0');
+  document.getElementById('india-utc').textContent = p(n.getUTCHours())+':'+p(n.getUTCMinutes())+':'+p(n.getUTCSeconds())+' UTC';
+}
+setInterval(tickClock, 1000); tickClock();
+
+/* ── Boot ────────────────────────────────────────────── */
+renderProgrammes();
+loadFeed();
+loadTelegram();
+// Auto-refresh every 10 min
+setInterval(() => { loadFeed(); loadTelegram(); }, 600_000);
+</script>
+</body>
+</html>

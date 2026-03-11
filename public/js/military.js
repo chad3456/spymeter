@@ -8,6 +8,26 @@ const MILITARY = (() => {
   let nuclearEnabled = false;
   let gpsjamEnabled  = false;
 
+  // Country name → ISO2 code + flag for instability panel
+  const COUNTRY_CODE_MAP = {
+    'USA':'US','Russia':'RU','China':'CN','India':'IN','Pakistan':'PK',
+    'UK':'GB','France':'FR','Germany':'DE','Japan':'JP','South Korea':'KR',
+    'Israel':'IL','Iran':'IR','Turkey':'TR','Saudi Arabia':'SA','UAE':'AE',
+    'Australia':'AU','Canada':'CA','Ukraine':'UA','NATO':'—',
+    'North Korea':'KP','Taiwan':'TW','Iraq':'IQ','Syria':'SY','Libya':'LY',
+    'Egypt':'EG','Qatar':'QA','Kuwait':'KW','Bahrain':'BH','Djibouti':'DJ',
+    'Philippines':'PH','Guam':'GU','Singapore':'SG','Spain':'ES','Italy':'IT',
+    'Romania':'RO','Poland':'PL','Lithuania':'LT','Estonia':'EE','Bulgaria':'BG',
+    'Kazakhstan':'KZ','Kyrgyzstan':'KG','Uzbekistan':'UZ','Tajikistan':'TJ',
+  };
+  const COUNTRY_FLAG_MAP = {
+    'USA':'🇺🇸','Russia':'🇷🇺','China':'🇨🇳','India':'🇮🇳','Pakistan':'🇵🇰',
+    'UK':'🇬🇧','France':'🇫🇷','Germany':'🇩🇪','Japan':'🇯🇵','South Korea':'🇰🇷',
+    'Israel':'🇮🇱','Iran':'🇮🇷','Turkey':'🇹🇷','Saudi Arabia':'🇸🇦','UAE':'🇦🇪',
+    'Australia':'🇦🇺','Canada':'🇨🇦','Ukraine':'🇺🇦','NATO':'🛡',
+    'North Korea':'🇰🇵','Taiwan':'🇹🇼','Iraq':'🇮🇶','Syria':'🇸🇾',
+  };
+
   /* ── Public OSINT military base dataset ──────────────── */
   const BASES = [
     // ── USA ──
@@ -204,14 +224,20 @@ const MILITARY = (() => {
   }
 
   function makeBasePopup(b) {
+    const code = COUNTRY_CODE_MAP[b.country] || '';
+    const flag = COUNTRY_FLAG_MAP[b.country] || '🌐';
+    const intelBtn = code && code !== '—'
+      ? `<button onclick="if(window.INSTABILITY)INSTABILITY.show('${code}','${flag}','${b.country}')" style="margin-top:6px;width:100%;background:rgba(0,212,255,0.08);border:1px solid #1e3a5f;color:#00d4ff;font-family:monospace;font-size:9px;padding:4px;cursor:pointer;letter-spacing:1px">◈ COUNTRY INTELLIGENCE →</button>`
+      : '';
     return `
       <div class="popup-box">
         <div class="popup-title">${typeIcon(b.type)} ${b.name}</div>
-        <div class="popup-row"><span class="popup-key">COUNTRY</span><span class="popup-val" style="color:${baseColor(b.country)}">${b.country}</span></div>
+        <div class="popup-row"><span class="popup-key">COUNTRY</span><span class="popup-val" style="color:${baseColor(b.country)}">${flag} ${b.country}</span></div>
         <div class="popup-row"><span class="popup-key">TYPE</span><span class="popup-val orange">${b.type.toUpperCase()}</span></div>
         <div class="popup-row"><span class="popup-key">LAT/LNG</span><span class="popup-val">${b.lat.toFixed(2)}, ${b.lng.toFixed(2)}</span></div>
         <div class="popup-row"><span class="popup-key">NOTES</span></div>
         <div style="font-size:10px;color:#8ba4c0;padding:2px 0">${b.notes}</div>
+        ${intelBtn}
       </div>`;
   }
 

@@ -25,11 +25,15 @@
   <div id="market-ticker">
     <div class="ticker-filter">
       <span class="ticker-label">📈 MARKETS</span>
-      <button class="tkbtn active" data-tkf="all"   onclick="MARKETS.setFilter('all')">ALL</button>
-      <button class="tkbtn"        data-tkf="us"    onclick="MARKETS.setFilter('us')">🇺🇸 US</button>
-      <button class="tkbtn"        data-tkf="india" onclick="MARKETS.setFilter('india')">🇮🇳 INDIA</button>
-      <button class="tkbtn"        data-tkf="china" onclick="MARKETS.setFilter('china')">🇨🇳 CHINA</button>
-      <button class="tkbtn"        data-tkf="oil"   onclick="MARKETS.setFilter('oil')">🛢 OIL</button>
+      <button class="tkbtn active" data-tkf="all"     onclick="MARKETS.setFilter('all')">ALL</button>
+      <button class="tkbtn"        data-tkf="us"      onclick="MARKETS.setFilter('us')">🇺🇸 US</button>
+      <button class="tkbtn"        data-tkf="india"   onclick="MARKETS.setFilter('india')">🇮🇳 INDIA</button>
+      <button class="tkbtn"        data-tkf="china"   onclick="MARKETS.setFilter('china')">🇨🇳 CHINA</button>
+      <button class="tkbtn"        data-tkf="europe"  onclick="MARKETS.setFilter('europe')">🌍 EU/JP</button>
+      <button class="tkbtn"        data-tkf="oil"     onclick="MARKETS.setFilter('oil')">🛢 COMMOD</button>
+      <button class="tkbtn"        data-tkf="sectors" onclick="MARKETS.setFilter('sectors')">📊 SECTORS</button>
+      <button class="tkbtn"        data-tkf="defense" onclick="MARKETS.setFilter('defense')">🛡 DEFENSE</button>
+      <button class="tkbtn"        data-tkf="crypto"  onclick="MARKETS.setFilter('crypto')">₿ CRYPTO</button>
       <span class="ticker-ts-lbl">Updated <span id="ticker-ts">—</span> <span class="badge-static">15m delay</span></span>
     </div>
     <div class="ticker-scroll-wrap">
@@ -51,6 +55,15 @@
     </div>
 
     <div class="tb-center">
+      <div id="preset-bar">
+        <span style="font-size:7px;color:#3d5a78;letter-spacing:1px;margin-right:4px">PRESET:</span>
+        <button class="preset-btn" onclick="applyLayerPreset('military')" title="Military: Bases + Nuclear + Aircraft + Waterways">⬡ MIL</button>
+        <button class="preset-btn" onclick="applyLayerPreset('finance')"  title="Finance: Cables + Datacenters + Markets">💹 FIN</button>
+        <button class="preset-btn" onclick="applyLayerPreset('infra')"    title="Infrastructure: Cables + Datacenters + Spaceports">🏗 INFRA</button>
+        <button class="preset-btn" onclick="applyLayerPreset('intel')"    title="Intelligence: Conflicts + Crises + Protests">◈ INTEL</button>
+        <button class="preset-btn" onclick="applyLayerPreset('minimal')"  title="Minimal: Conflicts + Hotspots only">◦ MIN</button>
+        <button class="preset-btn" onclick="applyLayerPreset('clear')"    title="Clear all layers">✕ CLR</button>
+      </div>
       <div id="layer-bar">
         <button class="lbtn" data-layer="aircraft"   title="ADSBExchange/ADSB.fi — REAL-TIME">✈ AIRCRAFT</button>
         <button class="lbtn active" data-layer="satellites" title="CelesTrak TLE — REAL-TIME">◉ SATS</button>
@@ -309,11 +322,13 @@
         <button class="rptab" data-rptab="reddit">🔴 REDDIT</button>
         <button class="rptab" data-rptab="polls">🗳 POLLS</button>
         <button class="rptab" data-rptab="sources">👤 SOURCES</button>
-        <button class="rptab" data-rptab="intel">◈ INTEL</button>
+        <button class="rptab" data-rptab="intel" style="display:none">◈ INTEL</button>
         <button class="rptab" data-rptab="search">🔍 SEARCH</button>
         <button class="rptab" data-rptab="polymarket">🎲 ODDS</button>
         <button class="rptab" data-rptab="defence">🛡 DEFENCE</button>
         <button class="rptab" data-rptab="india"   style="color:#ff9933;border-bottom-color:#ff9933">🇮🇳 INDIA</button>
+        <button class="rptab" data-rptab="ai"      style="color:#9b59ff;border-bottom-color:#9b59ff">🤖 AI</button>
+        <button class="rptab" data-rptab="telegram" style="color:#29b6f6;border-bottom-color:#29b6f6">📲 OSINT</button>
         <button class="rptab" data-rptab="hormuz"    style="color:#00d4ff;border-bottom-color:#00d4ff">⚓ HORMUZ</button>
         <button class="rptab" data-rptab="education" style="color:#a0d4ff;border-bottom-color:#a0d4ff">📚 ARMS DB</button>
       </div>
@@ -860,6 +875,28 @@
 
       </div>
 
+      <!-- ── TELEGRAM OSINT FEED ───────────────────────── -->
+      <div class="rp-tab-body" id="rptab-telegram" style="display:none;padding:0">
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:8.5px;color:#29b6f6;letter-spacing:1.5px;border-bottom:1px solid #182030;background:rgba(0,0,0,.3)">
+          📲 TELEGRAM OSINT CHANNELS
+          <span style="display:inline-flex;align-items:center;gap:3px;font-size:7px;color:#00ff88;padding:1px 6px;border:1px solid rgba(0,255,136,.2);border-radius:2px;animation:pulse-live 2s infinite">● LIVE</span>
+          <button class="mini-btn" onclick="loadTelegramPanel()" style="margin-left:auto">↻</button>
+        </div>
+        <div style="display:flex;gap:4px;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid #182030;background:rgba(0,0,0,.15)">
+          <button class="def-pill active" data-tgf="all"       onclick="filterTgPanel('all')">ALL</button>
+          <button class="def-pill"        data-tgf="conflict"  onclick="filterTgPanel('conflict')">⚔ CONFLICT</button>
+          <button class="def-pill"        data-tgf="iran"      onclick="filterTgPanel('iran')">🇮🇷 IRAN</button>
+          <button class="def-pill"        data-tgf="naval"     onclick="filterTgPanel('naval')">⚓ NAVAL</button>
+          <button class="def-pill"        data-tgf="osint"     onclick="filterTgPanel('osint')">👁 OSINT</button>
+        </div>
+        <div id="tg-panel-feed" style="overflow-y:auto;height:calc(100vh - 310px)">
+          <div class="news-loading">⟳ Loading Telegram OSINT channels…</div>
+        </div>
+        <div style="padding:5px 10px;font-size:7.5px;color:#3d5a78;border-top:1px solid #182030">
+          Public channels only · OSINTdefender · TheInsiderPaper · IntelSlava · IranIntl · NavalNews
+        </div>
+      </div>
+
       <!-- ── HORMUZ / SHIPPING DASHBOARD ───────────────── -->
       <div class="rp-tab-body" id="rptab-hormuz" style="display:none;padding:0">
 
@@ -1171,6 +1208,9 @@
     // ── Right-panel tab switching ──────────────────────────
     document.querySelectorAll('.rptab').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (btn.dataset.rptab === 'defence') { window.location.href = '/defence.html'; return; }
+        if (btn.dataset.rptab === 'india')   { window.location.href = '/india.html';   return; }
+        if (btn.dataset.rptab === 'ai')      { window.location.href = '/ai.html';      return; }
         document.querySelectorAll('.rptab').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.rp-tab-body').forEach(b => b.style.display = 'none');
         btn.classList.add('active');
@@ -1185,6 +1225,7 @@
         if (tab === 'polymarket' && !btn._pmInited)      { btn._pmInited     = true; POLYMARKET.init(); }
         if (tab === 'defence'   && !btn._defInited)     { btn._defInited    = true; DEFENCE.init(); }
         if (tab === 'india'     && !btn._indiaInited)   { btn._indiaInited  = true; INDIA.init(); }
+        if (tab === 'telegram'  && !btn._tgInited)      { btn._tgInited     = true; loadTelegramPanel(); }
         if (tab === 'hormuz'    && !btn._hormuzInited)    { btn._hormuzInited   = true; HORMUZ.init(); }
         if (tab === 'education' && !btn._educationInited) { btn._educationInited = true; EDUCATION.init(); }
       });
@@ -1219,6 +1260,59 @@
         }).join('');
       } catch (_) { el.innerHTML = '<div class="news-loading">Unavailable</div>'; }
     }
+
+    // ── Telegram OSINT Panel ──────────────────────────────
+    let _tgMessages = [];
+    let _tgFilter = 'all';
+
+    function _tgTimeAgo(ts) {
+      if (!ts) return '';
+      try {
+        const diff = Date.now() - new Date(ts).getTime();
+        if (diff < 3600000)  return Math.round(diff/60000) + 'm ago';
+        if (diff < 86400000) return Math.round(diff/3600000) + 'h ago';
+        return Math.round(diff/86400000) + 'd ago';
+      } catch(_) { return ''; }
+    }
+
+    function renderTgPanel() {
+      const el = document.getElementById('tg-panel-feed');
+      if (!el) return;
+      const msgs = _tgFilter === 'all' ? _tgMessages
+        : _tgMessages.filter(m => (m.tags||[]).includes(_tgFilter));
+      if (!msgs.length) { el.innerHTML = '<div class="news-loading">No messages for this filter</div>'; return; }
+      el.innerHTML = msgs.slice(0, 40).map(m => {
+        const ts   = _tgTimeAgo(m.ts);
+        const safe = (m.text||'').replace(/</g,'&lt;').slice(0, 300);
+        return `<a href="${m.url||'#'}" target="_blank" rel="noopener"
+          style="display:block;padding:8px 10px;border-bottom:1px solid #0d1520;text-decoration:none;transition:background .1s"
+          onmouseover="this.style.background='rgba(41,182,246,.04)'" onmouseout="this.style.background=''">
+          <div style="font-size:7.5px;color:#29b6f6;margin-bottom:3px">📲 ${m.source||m.slug} ${ts ? '· '+ts : ''}</div>
+          <div style="font-size:9.5px;color:#c8dff0;line-height:1.4">${safe}</div>
+        </a>`;
+      }).join('');
+    }
+
+    async function loadTelegramPanel() {
+      const el = document.getElementById('tg-panel-feed');
+      if (el) el.innerHTML = '<div class="news-loading">⟳ Fetching OSINT channels…</div>';
+      try {
+        const r = await fetch('/api/telegram-feed');
+        const d = r.ok ? await r.json() : {};
+        _tgMessages = d.messages || [];
+        renderTgPanel();
+      } catch(_) {
+        if (el) el.innerHTML = '<div class="news-loading">Telegram feed unavailable</div>';
+      }
+    }
+
+    function filterTgPanel(f) {
+      _tgFilter = f;
+      document.querySelectorAll('[data-tgf]').forEach(b => b.classList.toggle('active', b.dataset.tgf === f));
+      renderTgPanel();
+    }
+    window.loadTelegramPanel = loadTelegramPanel;
+    window.filterTgPanel     = filterTgPanel;
 
     // ── Collapsible left panel cards ──────────────────────
     function toggleCard(id) {
@@ -1655,6 +1749,155 @@
         localStorage.removeItem('rp-pos');
       });
     })();
+  </script>
+
+  <!-- ── Country Instability Modal ─────────────────────────── -->
+  <div id="instability-modal" aria-hidden="true">
+    <div id="instab-header">
+      <div id="instab-flag">🌐</div>
+      <div id="instab-meta">
+        <div id="instab-country-name">Country Intelligence</div>
+        <div id="instab-sub">Loading…</div>
+      </div>
+      <button id="instab-close" onclick="closeInstabilityPanel()" title="Close">✕</button>
+    </div>
+    <div id="instab-body">
+      <div class="instab-loading">⟳ Fetching intelligence data…</div>
+    </div>
+  </div>
+
+  <script>
+  /* ── Layer Presets ──────────────────────────────────────── */
+  function applyLayerPreset(preset) {
+    const PRESETS = {
+      military: ['military','nuclear','aircraft','submarine','marine'],
+      finance:  ['datacenter','cables','outage'],
+      infra:    ['cables','datacenter','outage','internet'],
+      intel:    ['conflict','hapi','cyber','gpsjam'],
+      minimal:  ['conflict'],
+      clear:    [],
+    };
+    const wantOn = new Set(PRESETS[preset] || []);
+    // Turn off all first
+    document.querySelectorAll('.lbtn').forEach(btn => {
+      if (btn.classList.contains('active')) btn.click();
+    });
+    // Turn on desired layers after brief delay
+    setTimeout(() => {
+      document.querySelectorAll('.lbtn').forEach(btn => {
+        if (wantOn.has(btn.dataset.layer) && !btn.classList.contains('active')) btn.click();
+      });
+    }, 200);
+  }
+
+  /* ── Country Instability Panel ──────────────────────────── */
+  const _instabModal  = document.getElementById('instability-modal');
+  let   _instabActive = null;
+
+  window.showInstabilityPanel = async function(code, flag, name) {
+    if (_instabActive === code) { closeInstabilityPanel(); return; }
+    _instabActive = code;
+    document.getElementById('instab-flag').textContent = flag || '🌐';
+    document.getElementById('instab-country-name').textContent = name || code;
+    document.getElementById('instab-sub').textContent = code + ' · Country Intelligence';
+    document.getElementById('instab-body').innerHTML = '<div class="instab-loading">⟳ Fetching intelligence from GDELT…</div>';
+    _instabModal.classList.add('open');
+    _instabModal.setAttribute('aria-hidden','false');
+    try {
+      const r = await fetch(`/api/country-instability/${code}`);
+      const d = r.ok ? await r.json() : null;
+      if (d) renderInstabilityPanel(d, flag);
+    } catch(_) {
+      document.getElementById('instab-body').innerHTML = '<div class="instab-loading">⚠ Intelligence data unavailable</div>';
+    }
+  };
+
+  window.closeInstabilityPanel = function() {
+    _instabActive = null;
+    _instabModal.classList.remove('open');
+    _instabModal.setAttribute('aria-hidden','true');
+  };
+
+  function renderInstabilityPanel(d, flag) {
+    const stabColor = d.composite>=80?'#ff3344': d.composite>=60?'#ff8800': d.composite>=40?'#ffaa00': d.composite>=20?'#ffdd00':'#00ff88';
+    const scoreColor = s => s>=80?'#ff3344': s>=60?'#ff8800': s>=40?'#ffaa00':'#00ff88';
+
+    function scoreBar(label, icon, val) {
+      const col = scoreColor(val);
+      return `<div class="instab-sub-score">
+        <span class="instab-sub-icon">${icon}</span>
+        <span class="instab-sub-lbl">${label}</span>
+        <div class="instab-bar-wrap">
+          <div class="instab-bar-fill" style="width:${val}%;background:${col}"></div>
+        </div>
+        <span class="instab-sub-num" style="color:${col}">${val}</span>
+      </div>`;
+    }
+
+    const signalBadges = (d.activeSignals||[]).map(s =>
+      `<span class="instab-signal-badge" style="color:${s.color};border-color:${s.color}30">
+        ${s.icon} ${s.count} ${s.label}
+      </span>`
+    ).join('') || '<span style="color:#3d5a78;font-size:8.5px">No active signals detected</span>';
+
+    const events = (d.recentEvents||[]).map(e => {
+      const sevCol = e.severity==='critical'?'#ff3344': e.severity==='high'?'#ff8800': e.severity==='moderate'?'#ffaa00':'#888';
+      return `<div class="instab-event-item" onclick="window.open('${e.url||'#'}','_blank')">
+        <div class="instab-event-title">${(e.title||'').slice(0,120)}</div>
+        <div class="instab-event-meta">
+          <span style="color:${sevCol}">${(e.severity||'low').toUpperCase()}</span> ·
+          <span>${e.source||''}</span> ·
+          <span>${e.category||''}</span>
+        </div>
+      </div>`;
+    }).join('') || '<div style="color:#3d5a78;font-size:8.5px;padding:8px 0">No recent events</div>';
+
+    document.getElementById('instab-body').innerHTML = `
+      <div class="instab-section">
+        <div class="instab-section-lbl">Instability Index</div>
+        <div class="instab-index-row">
+          <span class="instab-index-val" style="color:${stabColor}">${d.composite}/100</span>
+          <span class="instab-index-label">→ ${d.stabilityLabel}</span>
+        </div>
+        ${scoreBar('Unrest',    '📢', d.scores?.unrest||0)}
+        ${scoreBar('Conflict',  '✕',  d.scores?.conflict||0)}
+        ${scoreBar('Security',  '🛡',  d.scores?.security||0)}
+        ${scoreBar('Information','📡', d.scores?.information||0)}
+      </div>
+      <div class="instab-section">
+        <div class="instab-section-lbl">Active Signals</div>
+        <div class="instab-signals">${signalBadges}</div>
+      </div>
+      <div class="instab-section">
+        <div class="instab-section-lbl">Severity Breakdown</div>
+        <div class="instab-severity-row">
+          <div class="instab-sev-box">
+            <div class="instab-sev-num" style="background:rgba(255,51,68,0.15);color:#ff3344">${d.critical}</div>
+            <div class="instab-sev-lbl">Critical</div>
+          </div>
+          <div class="instab-sev-box">
+            <div class="instab-sev-num" style="background:rgba(255,136,0,0.15);color:#ff8800">${d.high}</div>
+            <div class="instab-sev-lbl">High</div>
+          </div>
+          <div class="instab-sev-box">
+            <div class="instab-sev-num" style="background:rgba(255,221,0,0.12);color:#ffdd00">${d.moderate}</div>
+            <div class="instab-sev-lbl">Moderate</div>
+          </div>
+          <div class="instab-sev-box">
+            <div class="instab-sev-num" style="background:rgba(0,255,136,0.1);color:#00ff88">${d.low}</div>
+            <div class="instab-sev-lbl">Low</div>
+          </div>
+        </div>
+      </div>
+      <div class="instab-section">
+        <div class="instab-section-lbl">Recent Events</div>
+        ${events}
+      </div>
+      <div class="instab-updated">Updated ${d.updated||'—'} · GDELT OSINT</div>`;
+  }
+
+  /* Expose to MILITARY module for country click */
+  window.INSTABILITY = { show: showInstabilityPanel, close: closeInstabilityPanel };
   </script>
 
 </body>

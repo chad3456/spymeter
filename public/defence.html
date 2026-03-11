@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPYMETER — DEFENCE INTELLIGENCE</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" />
+  <style>
+    /* ── Reset & Variables ─────────────────────────────── */
+    :root {
+      --bg:        #040608;
+      --bg2:       #07090e;
+      --bg3:       #0c1118;
+      --border:    #182030;
+      --border-hi: #1e3a5f;
+      --accent:    #00d4ff;
+      --accent2:   #00ff88;
+      --warn:      #ffaa00;
+      --danger:    #ff3333;
+      --orange:    #ff9900;
+      --purple:    #9b59ff;
+      --text:      #8ba4c0;
+      --text-hi:   #c8dff0;
+      --text-dim:  #3d5a78;
+      --font-mono: 'Share Tech Mono', monospace;
+      --font-ui:   'Rajdhani', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Classification Banner ─────────────────────────── */
+    #cls-banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+      height: 18px;
+      background: #001800;
+      color: #00ff88;
+      font-size: 8.5px;
+      letter-spacing: 2.5px;
+      display: flex; align-items: center; justify-content: center;
+      border-bottom: 1px solid #003300;
+    }
+
+    /* ── Header ────────────────────────────────────────── */
+    #def-header {
+      position: sticky; top: 18px; z-index: 200;
+      background: rgba(4,6,8,0.97);
+      border-bottom: 1px solid var(--border-hi);
+      padding: 0 16px;
+      height: 46px;
+      display: flex; align-items: center; gap: 16px;
+      backdrop-filter: blur(8px);
+    }
+    #back-btn {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 9px; color: var(--text-dim);
+      letter-spacing: 1px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    #back-btn:hover { color: var(--accent); border-color: var(--accent); background: rgba(0,212,255,0.06); }
+    #def-title {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-ui);
+      font-size: 17px; font-weight: 700;
+      color: var(--text-hi);
+      letter-spacing: 2px;
+      flex: 1;
+    }
+    #def-title .title-icon { font-size: 20px; }
+    #def-title .title-sub  { font-size: 8px; color: var(--text-dim); letter-spacing: 2px; display: block; font-family: var(--font-mono); margin-top: 1px; }
+    .badge-live {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 7.5px; color: var(--accent2); letter-spacing: 1px;
+      padding: 2px 7px; border-radius: 2px;
+      background: rgba(0,255,136,0.08); border: 1px solid rgba(0,255,136,0.2);
+      animation: pulse-live 2s infinite;
+    }
+    @keyframes pulse-live { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
+    .badge-static {
+      display: inline-block; font-size: 7px; padding: 1px 6px;
+      background: rgba(61,90,120,0.3); color: var(--text-dim);
+      border: 1px solid var(--border); border-radius: 2px; letter-spacing: 1px;
+    }
+    #def-header-right {
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    #def-last-upd  { font-size: 8px; color: var(--text-dim); }
+    #def-utc-clock { font-size: 10px; color: var(--accent); letter-spacing: 1px; }
+    .hdr-btn {
+      background: rgba(0,212,255,0.07);
+      border: 1px solid var(--border-hi);
+      color: var(--accent); font-family: var(--font-mono); font-size: 9px;
+      padding: 4px 12px; border-radius: 2px; cursor: pointer;
+      letter-spacing: 1px; transition: all 0.15s;
+    }
+    .hdr-btn:hover { background: rgba(0,212,255,0.15); }
+
+    /* ── Stats Bar ─────────────────────────────────────── */
+    #def-stats-bar {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      border-bottom: 2px solid var(--border-hi);
+      margin-top: 18px; /* cls-banner height */
+    }
+    .def-stat-box {
+      padding: 12px 16px;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      text-align: center;
+      transition: background 0.15s;
+    }
+    .def-stat-box:last-child { border-right: none; }
+    .def-stat-box:hover { background: rgba(0,212,255,0.04); }
+    .def-stat-val {
+      font-size: 26px;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      line-height: 1;
+      transition: color 0.3s;
+    }
+    .def-stat-val.orange { color: var(--orange); }
+    .def-stat-val.green  { color: var(--accent2); }
+    .def-stat-val.purple { color: var(--purple); }
+    .def-stat-val.warn   { color: var(--warn); }
+    .def-stat-val.red    { color: var(--danger); }
+    .def-stat-lbl {
+      font-size: 7.5px; color: var(--text-dim);
+      letter-spacing: 1.5px; margin-top: 4px;
+      text-transform: uppercase;
+    }
+
+    /* ── Filter Bar ────────────────────────────────────── */
+    #def-filter-bar {
+      display: flex; align-items: center; gap: 5px;
+      padding: 8px 14px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .filter-label {
+      font-size: 8px; color: var(--text-dim);
+      letter-spacing: 1.5px; margin-right: 4px;
+    }
+    .def-pill {
+      background: rgba(0,0,0,0.35);
+      border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font-mono);
+      font-size: 9px; padding: 3px 12px;
+      border-radius: 2px; cursor: pointer;
+      transition: all 0.12s; letter-spacing: 0.5px;
+    }
+    .def-pill:hover         { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.06); }
+    .def-pill.active        { background: rgba(0,212,255,0.12); border-color: var(--accent); color: var(--accent); }
+    .def-pill[data-cat="drone"].active    { background: rgba(0,212,255,0.12); border-color: #00d4ff; color: #00d4ff; }
+    .def-pill[data-cat="missile"].active  { background: rgba(255,102,0,0.12);  border-color: #ff6600; color: #ff6600; }
+    .def-pill[data-cat="naval"].active    { background: rgba(68,136,255,0.12); border-color: #4488ff; color: #4488ff; }
+    .def-pill[data-cat="ai"].active       { background: rgba(155,89,255,0.12); border-color: #9b59ff; color: #9b59ff; }
+    .def-pill[data-cat="india"].active    { background: rgba(255,136,0,0.12);  border-color: #ff8800; color: #ff8800; }
+    .def-pill[data-cat="general"].active  { background: rgba(136,136,136,0.12); border-color: #888; color: #888; }
+    .pill-count {
+      display: inline-block;
+      background: rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 0 5px;
+      font-size: 8px;
+      margin-left: 4px;
+      min-width: 16px;
+      text-align: center;
+    }
+
+    /* ── Main Grid ─────────────────────────────────────── */
+    #def-grid {
+      display: grid;
+      grid-template-columns: 300px 1fr 280px;
+      min-height: calc(100vh - 175px);
+    }
+    #def-left, #def-right {
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      height: calc(100vh - 175px);
+      position: sticky;
+      top: 175px;
+    }
+    #def-right { border-right: none; border-left: 1px solid var(--border); }
+    #def-center {
+      background: var(--bg);
+      overflow-y: auto;
+      height: calc(100vh - 175px);
+      position: sticky;
+      top: 175px;
+    }
+
+    /* ── Panel Cards ───────────────────────────────────── */
+    .panel-card { border-bottom: 1px solid var(--border); }
+    .card-hdr {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 12px;
+      font-size: 8.5px; color: var(--accent);
+      letter-spacing: 1.5px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.2);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .card-hdr .mini-btn {
+      margin-left: auto;
+      background: none; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--font-mono);
+      font-size: 10px; padding: 1px 7px; border-radius: 2px;
+      cursor: pointer; transition: all 0.12s;
+    }
+    .card-hdr .mini-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .news-loading {
+      padding: 16px 12px; color: var(--text-dim);
+      font-size: 9px; letter-spacing: 1px;
+      animation: pulse-live 1.5s infinite;
+    }
+
+    /* ── Feed Items (centre column) ────────────────────── */
+    a.def-item {
+      display: block;
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    a.def-item:hover { background: rgba(0,212,255,0.03); }
+    .def-item-cat {
+      display: inline-block;
+      font-size: 7.5px; padding: 2px 8px;
+      border-radius: 2px; margin-bottom: 5px;
+      letter-spacing: 0.5px;
+    }
+    .def-item-title {
+      font-size: 11.5px; color: var(--text-hi);
+      line-height: 1.45; margin-bottom: 4px;
+      font-family: var(--font-ui); font-weight: 600;
+    }
+    .def-item-desc {
+      font-size: 9px; color: var(--text); line-height: 1.4;
+      margin-bottom: 5px;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .def-item-meta {
+      display: flex; gap: 10px; font-size: 8px; color: var(--text-dim);
+    }
+    .def-src  { color: var(--text-dim); }
+    .def-ts   { color: var(--text-dim); }
+    /* GDELT items (right col) — more compact */
+    a.def-item.compact { padding: 8px 12px; }
+    a.def-item.compact .def-item-title { font-size: 10px; }
+
+    /* ── Drones of India Cards ─────────────────────────── */
+    a.def-drone-card {
+      display: block;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    a.def-drone-card:hover { background: rgba(255,136,0,0.04); }
+    .def-drone-name {
+      font-size: 10.5px; color: #ff8800;
+      font-family: var(--font-ui); font-weight: 600;
+      margin-bottom: 3px;
+    }
+    .def-drone-badges { display: flex; flex-wrap: wrap; gap: 3px; }
+    .def-drone-type {
+      display: inline-block; font-size: 7.5px; padding: 1px 6px;
+      background: rgba(255,136,0,0.1); color: #ff8800;
+      border: 1px solid rgba(255,136,0,0.2); border-radius: 2px;
+    }
+    .def-drone-status {
+      display: inline-block; font-size: 7.5px; padding: 1px 6px;
+      background: rgba(0,255,136,0.08); color: var(--accent2);
+      border: 1px solid rgba(0,255,136,0.15); border-radius: 2px;
+    }
+    .def-drone-dev {
+      display: inline-block; font-size: 7.5px; padding: 1px 6px;
+      background: rgba(0,212,255,0.06); color: var(--text-dim);
+      border: 1px solid var(--border); border-radius: 2px;
+    }
+
+    /* ── Category Breakdown Bars ───────────────────────── */
+    #def-cat-breakdown { padding: 8px 0 4px; }
+    .cat-bar-row { padding: 4px 12px 5px; }
+    .cat-bar-top {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 8.5px; color: var(--text); margin-bottom: 3px;
+    }
+    .cat-bar-icon { margin-right: 4px; }
+    .cat-bar-count { color: var(--text-hi); font-size: 9px; }
+    .cat-bar-track {
+      height: 3px; background: var(--border);
+      border-radius: 2px; overflow: hidden;
+    }
+    .cat-bar-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+
+    /* ── Sources List ──────────────────────────────────── */
+    .src-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 8.5px; color: var(--text);
+    }
+    .src-row .badge-live  { font-size: 6.5px; }
+    .src-row .badge-static { font-size: 6.5px; }
+
+    /* ── Threat Level Banner ───────────────────────────── */
+    #def-threat-banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 14px;
+      background: rgba(255,102,0,0.06);
+      border-bottom: 1px solid rgba(255,102,0,0.2);
+      font-size: 8.5px; color: #ff6600;
+      letter-spacing: 1px;
+    }
+    #def-threat-banner .threat-icon { font-size: 14px; }
+    #def-threat-banner .threat-level {
+      font-family: var(--font-ui); font-weight: 700;
+      font-size: 13px; color: #ff6600;
+    }
+    #def-threat-banner .threat-sep { color: var(--border-hi); margin: 0 4px; }
+
+    /* ── Domain Cards (top grid inside center col) ─────── */
+    #def-domain-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border-bottom: 2px solid var(--border-hi);
+    }
+    .def-domain-card {
+      background: var(--bg2);
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: background 0.12s;
+      border: none; outline: none;
+      font-family: var(--font-mono);
+      text-align: left;
+    }
+    .def-domain-card:hover { background: rgba(0,212,255,0.04); }
+    .def-domain-card.active { background: rgba(0,212,255,0.07); border-bottom: 2px solid var(--accent); }
+    .def-domain-icon { font-size: 18px; display: block; margin-bottom: 4px; }
+    .def-domain-label {
+      font-size: 8px; color: var(--text-dim);
+      letter-spacing: 1.5px; display: block;
+    }
+    .def-domain-count {
+      font-size: 18px; color: var(--text-hi);
+      font-family: var(--font-mono);
+      display: block; line-height: 1;
+    }
+
+    /* ── Scrollbar ─────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg2); }
+    ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+    /* ── Footer ────────────────────────────────────────── */
+    #def-footer {
+      background: var(--bg2);
+      border-top: 1px solid var(--border-hi);
+      padding: 8px 16px;
+      display: flex; align-items: center; gap: 16px;
+      font-size: 7.5px; color: var(--text-dim);
+    }
+    #def-footer .footer-logo { color: var(--accent); letter-spacing: 2px; font-size: 9px; }
+
+    /* ── Section Header (divider) ──────────────────────── */
+    .def-section-hdr {
+      padding: 6px 12px;
+      font-size: 8px; color: var(--accent);
+      letter-spacing: 1.5px;
+      background: rgba(0,0,0,0.3);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    /* ── AI Tech News items (right col) ────────────────── */
+    .ai-item {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ai-item-title {
+      font-size: 10px; color: var(--text-hi);
+      font-family: var(--font-ui); font-weight: 600;
+      line-height: 1.4; margin-bottom: 3px;
+    }
+    .ai-item-meta { font-size: 7.5px; color: var(--text-dim); }
+
+    /* ── Responsive ────────────────────────────────────── */
+    @media (max-width: 900px) {
+      #def-stats-bar { grid-template-columns: repeat(3, 1fr); }
+      #def-grid      { grid-template-columns: 1fr; }
+      #def-left, #def-right, #def-center {
+        height: auto; position: static;
+      }
+      #def-right { border-left: none; border-top: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Classification Banner -->
+  <div id="cls-banner">SPYMETER // DEFENCE INTELLIGENCE // OSINT // OPEN SOURCE DATA ONLY // UNCLASSIFIED</div>
+
+  <!-- Stats Bar (below cls-banner, above header) -->
+  <div id="def-stats-bar" style="margin-top:18px">
+    <div class="def-stat-box">
+      <div class="def-stat-val" id="def-stat-total">—</div>
+      <div class="def-stat-lbl">INTEL ITEMS</div>
+    </div>
+    <div class="def-stat-box">
+      <div class="def-stat-val orange" id="def-stat-sources">—</div>
+      <div class="def-stat-lbl">LIVE SOURCES</div>
+    </div>
+    <div class="def-stat-box">
+      <div class="def-stat-val" id="def-stat-drone">—</div>
+      <div class="def-stat-lbl">DRONE / UAV</div>
+    </div>
+    <div class="def-stat-box">
+      <div class="def-stat-val orange" id="def-stat-missile">—</div>
+      <div class="def-stat-lbl">MISSILE / HYPERSONIC</div>
+    </div>
+    <div class="def-stat-box">
+      <div class="def-stat-val purple" id="def-stat-ai">—</div>
+      <div class="def-stat-lbl">AI / AUTONOMOUS</div>
+    </div>
+    <div class="def-stat-box">
+      <div class="def-stat-val warn" id="def-stat-india">—</div>
+      <div class="def-stat-lbl">INDIA DEFENCE</div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header id="def-header">
+    <a href="/" id="back-btn" title="Return to SPYMETER map">◈ ← SPYMETER</a>
+    <div id="def-title">
+      <span class="title-icon">🛡</span>
+      <div>
+        DEFENCE <span style="color:var(--accent)">INTELLIGENCE</span>
+        <span class="title-sub">TECHNOLOGY · WARFARE · WEAPONS SYSTEMS · OSINT</span>
+      </div>
+      <span class="badge-live">● LIVE</span>
+    </div>
+    <div id="def-header-right">
+      <span id="def-last-upd"></span>
+      <span id="def-utc-clock">--:--:-- UTC</span>
+      <button class="hdr-btn" onclick="DEFENCE.refresh()">↻ REFRESH</button>
+    </div>
+  </header>
+
+  <!-- Filter Bar -->
+  <div id="def-filter-bar">
+    <span class="filter-label">FILTER:</span>
+    <button class="def-pill active" data-cat="all"     onclick="DEFENCE.setFilter('all')">ALL <span class="pill-count" id="pc-all">—</span></button>
+    <button class="def-pill"        data-cat="drone"   onclick="DEFENCE.setFilter('drone')">🚁 DRONE/UAV <span class="pill-count" id="pc-drone">—</span></button>
+    <button class="def-pill"        data-cat="missile" onclick="DEFENCE.setFilter('missile')">🚀 MISSILE <span class="pill-count" id="pc-missile">—</span></button>
+    <button class="def-pill"        data-cat="naval"   onclick="DEFENCE.setFilter('naval')">⚓ NAVAL <span class="pill-count" id="pc-naval">—</span></button>
+    <button class="def-pill"        data-cat="ai"      onclick="DEFENCE.setFilter('ai')">🤖 AI/AUTO <span class="pill-count" id="pc-ai">—</span></button>
+    <button class="def-pill"        data-cat="india"   onclick="DEFENCE.setFilter('india')">🇮🇳 INDIA <span class="pill-count" id="pc-india">—</span></button>
+    <button class="def-pill"        data-cat="general" onclick="DEFENCE.setFilter('general')">🛡 GENERAL <span class="pill-count" id="pc-general">—</span></button>
+  </div>
+
+  <!-- Main Grid -->
+  <div id="def-grid">
+
+    <!-- LEFT COLUMN ─────────────────────────────────── -->
+    <aside id="def-left">
+
+      <!-- Global Drone Inventory -->
+      <div class="panel-card">
+        <div class="card-hdr">
+          🚁 DRONE INVENTORY
+          <span class="badge-static">OSINT</span>
+          <button class="mini-btn" id="drone-inv-refresh-btn">↻</button>
+        </div>
+        <!-- Country filter pills -->
+        <div style="display:flex;flex-wrap:wrap;gap:3px;padding:6px 8px;border-bottom:1px solid var(--border)">
+          <button class="def-pill active" data-dcat="all"     onclick="filterDroneInv('all',this)">ALL</button>
+          <button class="def-pill"        data-dcat="India"   onclick="filterDroneInv('India',this)">🇮🇳</button>
+          <button class="def-pill"        data-dcat="USA"     onclick="filterDroneInv('USA',this)">🇺🇸</button>
+          <button class="def-pill"        data-dcat="China"   onclick="filterDroneInv('China',this)">🇨🇳</button>
+          <button class="def-pill"        data-dcat="Russia"  onclick="filterDroneInv('Russia',this)">🇷🇺</button>
+          <button class="def-pill"        data-dcat="Israel"  onclick="filterDroneInv('Israel',this)">🇮🇱</button>
+          <button class="def-pill"        data-dcat="Turkey"  onclick="filterDroneInv('Turkey',this)">🇹🇷</button>
+          <button class="def-pill"        data-dcat="Iran"    onclick="filterDroneInv('Iran',this)">🇮🇷</button>
+          <button class="def-pill"        data-dcat="Ukraine" onclick="filterDroneInv('Ukraine',this)">🇺🇦</button>
+        </div>
+        <!-- Type filter -->
+        <div style="display:flex;flex-wrap:wrap;gap:3px;padding:4px 8px;border-bottom:1px solid var(--border)">
+          <span style="font-size:7px;color:#3d5a78;align-self:center">TYPE:</span>
+          <button class="def-pill active" data-dtype="all"       onclick="filterDroneType('all',this)">ALL</button>
+          <button class="def-pill"        data-dtype="MALE"      onclick="filterDroneType('MALE',this)">MALE</button>
+          <button class="def-pill"        data-dtype="HALE"      onclick="filterDroneType('HALE',this)">HALE</button>
+          <button class="def-pill"        data-dtype="Loitering" onclick="filterDroneType('Loitering',this)">LOITER</button>
+          <button class="def-pill"        data-dtype="FPV"       onclick="filterDroneType('FPV',this)">FPV</button>
+          <button class="def-pill"        data-dtype="Combat"    onclick="filterDroneType('Combat',this)">COMBAT</button>
+        </div>
+        <div id="drone-inv-list" style="overflow-y:auto;max-height:calc(100vh - 450px)">
+          <div class="news-loading">⟳ Loading drone inventory…</div>
+        </div>
+      </div>
+
+      <!-- Category Breakdown -->
+      <div class="panel-card">
+        <div class="card-hdr">📊 CATEGORY BREAKDOWN</div>
+        <div id="def-cat-breakdown">
+          <div class="news-loading">⟳ Loading…</div>
+        </div>
+      </div>
+
+      <!-- Data Sources -->
+      <div class="panel-card">
+        <div class="card-hdr">ℹ DATA SOURCES</div>
+        <div class="src-row"><span class="badge-live">LIVE</span><span>Breaking Defense</span></div>
+        <div class="src-row"><span class="badge-live">LIVE</span><span>The War Zone (thedrive.com)</span></div>
+        <div class="src-row"><span class="badge-live">LIVE</span><span>Defense World</span></div>
+        <div class="src-row"><span class="badge-live">LIVE</span><span>Indian Defence Review</span></div>
+        <div class="src-row"><span class="badge-live">LIVE</span><span>Naval News</span></div>
+        <div class="src-row"><span class="badge-live">LIVE</span><span>Air Force Technology</span></div>
+        <div class="src-row"><span class="badge-live">LIVE</span><span>Army Technology</span></div>
+        <div class="src-row"><span class="badge-live">LIVE</span><span>GDELT — Defence queries</span></div>
+        <div class="src-row"><span class="badge-static">OSINT</span><span>Drones of India (github.com/duorope)</span></div>
+        <div class="src-row" style="padding:8px 12px;color:var(--text-dim);font-size:7.5px;border-top:1px solid var(--border)">
+          All data is open-source. Refresh every 10 minutes.
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- CENTRE COLUMN ───────────────────────────────── -->
+    <main id="def-center">
+
+      <!-- Domain Quick-Select Grid -->
+      <div id="def-domain-grid">
+        <button class="def-domain-card active" data-cat="all" onclick="selectDomain(this,'all')">
+          <span class="def-domain-icon">🛡</span>
+          <span class="def-domain-count" id="dd-all">—</span>
+          <span class="def-domain-label">ALL DOMAINS</span>
+        </button>
+        <button class="def-domain-card" data-cat="drone" onclick="selectDomain(this,'drone')">
+          <span class="def-domain-icon">🚁</span>
+          <span class="def-domain-count" id="dd-drone">—</span>
+          <span class="def-domain-label">DRONE / UAV</span>
+        </button>
+        <button class="def-domain-card" data-cat="missile" onclick="selectDomain(this,'missile')">
+          <span class="def-domain-icon">🚀</span>
+          <span class="def-domain-count" id="dd-missile">—</span>
+          <span class="def-domain-label">MISSILE / HYPERSONIC</span>
+        </button>
+        <button class="def-domain-card" data-cat="naval" onclick="selectDomain(this,'naval')">
+          <span class="def-domain-icon">⚓</span>
+          <span class="def-domain-count" id="dd-naval">—</span>
+          <span class="def-domain-label">NAVAL / SUBMARINE</span>
+        </button>
+        <button class="def-domain-card" data-cat="ai" onclick="selectDomain(this,'ai')">
+          <span class="def-domain-icon">🤖</span>
+          <span class="def-domain-count" id="dd-ai">—</span>
+          <span class="def-domain-label">AI / AUTONOMOUS</span>
+        </button>
+        <button class="def-domain-card" data-cat="india" onclick="selectDomain(this,'india')">
+          <span class="def-domain-icon">🇮🇳</span>
+          <span class="def-domain-count" id="dd-india">—</span>
+          <span class="def-domain-label">INDIA DEFENCE</span>
+        </button>
+      </div>
+
+      <!-- Threat Activity Banner -->
+      <div id="def-threat-banner">
+        <span class="threat-icon">⚠</span>
+        <span class="threat-level" id="def-threat-level">ELEVATED</span>
+        <span class="threat-sep">|</span>
+        <span id="def-threat-text">Loading current global defence activity…</span>
+      </div>
+
+      <!-- Live Intel Feed -->
+      <div class="def-section-hdr">
+        📡 LIVE DEFENCE INTELLIGENCE
+        <span class="badge-live">● MULTI-SOURCE</span>
+        <span id="def-feed-count" style="margin-left:auto;font-size:8px;color:var(--text-dim)"></span>
+      </div>
+      <div id="def-feed">
+        <div class="news-loading">⟳ Fetching from 8 intelligence sources…</div>
+      </div>
+
+    </main>
+
+    <!-- RIGHT COLUMN ────────────────────────────────── -->
+    <aside id="def-right">
+
+      <!-- GDELT Defence -->
+      <div class="panel-card">
+        <div class="card-hdr">
+          🌐 GDELT DEFENCE NEWS
+          <span class="badge-live">● 24H</span>
+        </div>
+        <div id="def-gdelt">
+          <div class="news-loading">⟳ Loading GDELT…</div>
+        </div>
+      </div>
+
+      <!-- Key Technologies Watchlist -->
+      <div class="panel-card">
+        <div class="card-hdr">🔬 TECH WATCHLIST <span class="badge-static">OSINT</span></div>
+        <div id="def-tech-watchlist">
+          <!-- Populated by JS -->
+          <div class="news-loading">⟳ Analysing feeds…</div>
+        </div>
+      </div>
+
+    </aside>
+
+  </div><!-- /#def-grid -->
+
+  <!-- Footer -->
+  <footer id="def-footer">
+    <span class="footer-logo">◈ SPYMETER</span>
+    <span>DEFENCE INTELLIGENCE MODULE</span>
+    <span style="margin-left:auto">All data sourced from open public feeds · No classified information · OSINT only</span>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/defence.js"></script>
+  <script>
+    /* ── Domain card helper ──────────────────────────── */
+    function selectDomain(el, cat) {
+      document.querySelectorAll('.def-domain-card').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+      DEFENCE.setFilter(cat);
+      document.querySelectorAll('.def-pill').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+    }
+
+    /* ── UTC Clock ───────────────────────────────────── */
+    function tickClock() {
+      const n = new Date();
+      const pad = v => String(v).padStart(2, '0');
+      document.getElementById('def-utc-clock').textContent =
+        pad(n.getUTCHours()) + ':' + pad(n.getUTCMinutes()) + ':' + pad(n.getUTCSeconds()) + ' UTC';
+    }
+    setInterval(tickClock, 1000); tickClock();
+
+    /* ── onLoad stats update ─────────────────────────── */
+    const CAT_BAR_META = {
+      drone:   { label: '🚁 Drone / UAV',        color: '#00d4ff' },
+      missile: { label: '🚀 Missile / Hypersonic', color: '#ff6600' },
+      naval:   { label: '⚓ Naval / Submarine',    color: '#4488ff' },
+      ai:      { label: '🤖 AI / Autonomous',      color: '#9b59ff' },
+      india:   { label: '🇮🇳 India DRDO',           color: '#ff8800' },
+      general: { label: '🛡 General Defence',      color: '#888888' },
+    };
+
+    DEFENCE.onLoad(function(stats) {
+      /* ── Stat bar ── */
+      document.getElementById('def-stat-total').textContent   = stats.total   || 0;
+      document.getElementById('def-stat-sources').textContent = stats.sources || 8;
+      document.getElementById('def-stat-drone').textContent   = stats.cats?.drone   || 0;
+      document.getElementById('def-stat-missile').textContent = stats.cats?.missile || 0;
+      document.getElementById('def-stat-ai').textContent      = stats.cats?.ai      || 0;
+      document.getElementById('def-stat-india').textContent   = stats.cats?.india   || 0;
+
+      /* ── Domain grid counts ── */
+      document.getElementById('dd-all').textContent     = stats.total || 0;
+      document.getElementById('dd-drone').textContent   = stats.cats?.drone   || 0;
+      document.getElementById('dd-missile').textContent = stats.cats?.missile || 0;
+      document.getElementById('dd-naval').textContent   = stats.cats?.naval   || 0;
+      document.getElementById('dd-ai').textContent      = stats.cats?.ai      || 0;
+      document.getElementById('dd-india').textContent   = stats.cats?.india   || 0;
+
+      /* ── Filter pill counts ── */
+      document.getElementById('pc-all').textContent     = stats.total || 0;
+      document.getElementById('pc-drone').textContent   = stats.cats?.drone   || 0;
+      document.getElementById('pc-missile').textContent = stats.cats?.missile || 0;
+      document.getElementById('pc-naval').textContent   = stats.cats?.naval   || 0;
+      document.getElementById('pc-ai').textContent      = stats.cats?.ai      || 0;
+      document.getElementById('pc-india').textContent   = stats.cats?.india   || 0;
+      document.getElementById('pc-general').textContent = stats.cats?.general || 0;
+
+      /* ── Feed item count label ── */
+      const feedCount = document.getElementById('def-feed-count');
+      if (feedCount) feedCount.textContent = stats.total + ' items';
+
+      /* ── Threat banner ── */
+      const total = stats.total || 0;
+      const threatEl = document.getElementById('def-threat-level');
+      const threatTxt = document.getElementById('def-threat-text');
+      if (threatEl && threatTxt) {
+        if (total > 40) {
+          threatEl.textContent = 'HIGH'; threatEl.style.color = '#ff3333';
+          threatTxt.textContent = total + ' active defence items detected — elevated global activity';
+        } else if (total > 20) {
+          threatEl.textContent = 'ELEVATED'; threatEl.style.color = '#ff6600';
+          threatTxt.textContent = total + ' defence items tracked across ' + (stats.sources || 8) + ' sources';
+        } else {
+          threatEl.textContent = 'MODERATE'; threatEl.style.color = '#ffaa00';
+          threatTxt.textContent = (stats.sources || 8) + ' sources active — ' + total + ' items retrieved';
+        }
+      }
+
+      /* ── Category breakdown bars ── */
+      const breakdown = document.getElementById('def-cat-breakdown');
+      if (breakdown && stats.cats) {
+        const maxCount = Math.max(...Object.values(stats.cats), 1);
+        breakdown.innerHTML = Object.entries(CAT_BAR_META).map(([cat, meta]) => {
+          const count = stats.cats[cat] || 0;
+          const pct   = Math.round((count / maxCount) * 100);
+          return `<div class="cat-bar-row">
+            <div class="cat-bar-top">
+              <span>${meta.label}</span>
+              <span class="cat-bar-count">${count}</span>
+            </div>
+            <div class="cat-bar-track">
+              <div class="cat-bar-fill" style="width:${pct}%;background:${meta.color}"></div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+
+      /* ── Last updated ── */
+      const updEl = document.getElementById('def-last-upd');
+      if (updEl) updEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+      /* ── Tech watchlist ── */
+      buildTechWatchlist(stats);
+    });
+
+    /* ── Tech keyword watchlist ─────────────────────────── */
+    const TECH_KEYWORDS = [
+      { kw: /hypersonic/i,          label: 'Hypersonic Glide',      color: '#ff6600' },
+      { kw: /loitering.munition/i,  label: 'Loitering Munition',    color: '#ff4444' },
+      { kw: /swarm.drone/i,         label: 'Drone Swarm',           color: '#00d4ff' },
+      { kw: /Bayraktar/i,           label: 'Bayraktar TB2/TB3',     color: '#00d4ff' },
+      { kw: /HIMARS|MLRS/i,         label: 'HIMARS / MLRS',         color: '#ff9900' },
+      { kw: /Brahmos/i,             label: 'BrahMos Supersonic',    color: '#ff8800' },
+      { kw: /AUKUS/i,               label: 'AUKUS Submarine Deal',  color: '#4488ff' },
+      { kw: /electronic.warfare/i,  label: 'Electronic Warfare',    color: '#9b59ff' },
+      { kw: /directed.energy|laser/i,label:'Directed Energy (DEW)', color: '#ffdd00' },
+      { kw: /DARPA/i,               label: 'DARPA Programme',       color: '#888888' },
+      { kw: /stealth|fifth.gen/i,   label: '5th Gen / Stealth',     color: '#00ff88' },
+      { kw: /cyber.attack|cyberwar/i,label:'Cyberwarfare',          color: '#9b59ff' },
+    ];
+
+    function buildTechWatchlist(stats) {
+      // Fetch the feed data independently to scan for keywords
+      fetch('/api/defence-feed')
+        .then(r => r.json())
+        .then(d => {
+          const allText = [...(d.feed||[]), ...(d.gdelt||[])]
+            .map(i => (i.title||'') + ' ' + (i.desc||''))
+            .join(' ');
+
+          const hits = TECH_KEYWORDS.map(tk => ({
+            label: tk.label,
+            color: tk.color,
+            count: (allText.match(new RegExp(tk.kw.source, 'gi')) || []).length,
+          })).filter(h => h.count > 0).sort((a,b) => b.count - a.count);
+
+          const el = document.getElementById('def-tech-watchlist');
+          if (!el) return;
+          if (!hits.length) {
+            el.innerHTML = '<div class="news-loading">No trending tech keywords detected</div>';
+            return;
+          }
+          el.innerHTML = hits.map(h =>
+            `<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border)">
+              <div style="width:8px;height:8px;border-radius:50%;background:${h.color};flex-shrink:0"></div>
+              <div style="flex:1;font-size:9px;color:var(--text-hi)">${h.label}</div>
+              <div style="font-size:10px;color:${h.color};min-width:20px;text-align:right">${h.count}</div>
+            </div>`
+          ).join('');
+        })
+        .catch(() => {
+          const el = document.getElementById('def-tech-watchlist');
+          if (el) el.innerHTML = '<div class="news-loading">Tech watchlist unavailable</div>';
+        });
+    }
+
+    /* ── Boot ────────────────────────────────────────── */
+    DEFENCE.init();
+
+    /* ── Drone Inventory ──────────────────────────────── */
+    let _droneData = [];
+    let _droneCountry = 'all';
+    let _droneType    = 'all';
+
+    const STATUS_COL = {
+      'Inducted':'#00ff88','Active':'#00ff88','Ordering':'#ffaa00',
+      'On Order':'#ffaa00','Testing':'#00d4ff','Development':'#9b59ff',
+      'Limited':'#ff8800',
+    };
+    const TYPE_COL = {
+      'MALE':'#00d4ff','MALE/HALE':'#00d4ff','HALE':'#4488ff',
+      'MALE (Armed)':'#ff8800','Loitering Munition':'#ff3344',
+      'Tanker UAS':'#888','FPV':'#ff4444','Tactical':'#ffaa00',
+      'Mini ISR':'#888','Combat UAS':'#9b59ff',
+    };
+
+    function renderDroneInv() {
+      const el = document.getElementById('drone-inv-list');
+      if (!el) return;
+      let data = _droneData;
+      if (_droneCountry !== 'all') data = data.filter(d => d.country === _droneCountry);
+      if (_droneType    !== 'all') data = data.filter(d => (d.type||'').includes(_droneType));
+      if (!data.length) { el.innerHTML = '<div class="news-loading">No matching systems</div>'; return; }
+      let curCountry = '';
+      el.innerHTML = data.map(d => {
+        const hdr = d.country !== curCountry
+          ? `<div style="padding:4px 10px;background:rgba(0,0,0,0.3);font-size:8px;color:#3d5a78;letter-spacing:1.5px;border-bottom:1px solid var(--border)">${d.flag} ${d.country.toUpperCase()}</div>`
+          : '';
+        curCountry = d.country;
+        const sCol = STATUS_COL[d.status] || '#888';
+        const tCol = TYPE_COL[d.type]     || '#888';
+        return `${hdr}<div class="ai-item" style="padding:6px 10px">
+          <div class="ai-item-title">${d.system}</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin:3px 0">
+            <span style="font-size:7.5px;padding:1px 5px;border-radius:2px;border:1px solid ${tCol}20;color:${tCol}">${d.type}</span>
+            <span style="font-size:7.5px;padding:1px 5px;border-radius:2px;border:1px solid ${sCol}30;color:${sCol}">${d.status}</span>
+            <span style="font-size:7.5px;color:#ffaa00">${d.qty}</span>
+          </div>
+          <div style="font-size:7.5px;color:#3d5a78">${d.developer} · ${d.role}</div>
+          <div style="font-size:7px;color:#2a3d55;margin-top:2px">${d.specs}</div>
+        </div>`;
+      }).join('');
+    }
+
+    function filterDroneInv(country, btn) {
+      _droneCountry = country;
+      document.querySelectorAll('[data-dcat]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderDroneInv();
+    }
+
+    function filterDroneType(type, btn) {
+      _droneType = type;
+      document.querySelectorAll('[data-dtype]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderDroneInv();
+    }
+
+    async function loadDroneInv() {
+      const el = document.getElementById('drone-inv-list');
+      if (!el) return;
+      try {
+        const r = await fetch('/api/drone-inventory');
+        const d = r.ok ? await r.json() : { inventory: [] };
+        _droneData = d.inventory || [];
+        renderDroneInv();
+      } catch(_) {
+        if (el) el.innerHTML = '<div class="news-loading">Drone data unavailable</div>';
+      }
+    }
+
+    document.getElementById('drone-inv-refresh-btn')?.addEventListener('click', loadDroneInv);
+    loadDroneInv();
+  </script>
+
+</body>
+</html>

@@ -55,10 +55,14 @@ const MARKETS = (() => {
     if (!el) return;
 
     const groups = [
-      { id:'us',    label:'🇺🇸 US Markets' },
-      { id:'india', label:'🇮🇳 India Markets' },
-      { id:'china', label:'🇨🇳 China Markets' },
-      { id:'oil',   label:'🛢 Commodities / Energy' },
+      { id:'us',      label:'🇺🇸 US Markets' },
+      { id:'india',   label:'🇮🇳 India Markets' },
+      { id:'china',   label:'🇨🇳 China Markets' },
+      { id:'europe',  label:'🌍 Europe / Japan' },
+      { id:'oil',     label:'🛢 Commodities' },
+      { id:'sectors', label:'📊 Sector ETFs' },
+      { id:'defense', label:'🛡 Defense Stocks' },
+      { id:'crypto',  label:'₿ Crypto' },
     ];
 
     el.innerHTML = groups.map(g => {
