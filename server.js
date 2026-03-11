@@ -275,6 +275,183 @@ function triangulateEvents(articles, keywords) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 4B — CIRCUIT BREAKER (worldmonitor pattern)
+// Stops hammering failing endpoints; opens for 5 min after 3 consecutive fails
+// ═══════════════════════════════════════════════════════════════════════════════
+const _circuitBreakers = new Map();
+
+function getCircuit(key) {
+  if (!_circuitBreakers.has(key)) {
+    _circuitBreakers.set(key, { state: 'closed', failures: 0, openUntil: 0 });
+  }
+  return _circuitBreakers.get(key);
+}
+
+function circuitOk(key) {
+  const cb = getCircuit(key);
+  if (cb.state === 'open') {
+    if (Date.now() > cb.openUntil) { cb.state = 'half-open'; return true; }
+    return false;
+  }
+  return true;
+}
+
+function circuitSuccess(key) {
+  const cb = getCircuit(key);
+  cb.failures = 0;
+  cb.state = 'closed';
+}
+
+function circuitFail(key) {
+  const cb = getCircuit(key);
+  cb.failures++;
+  if (cb.failures >= 3) {
+    cb.state = 'open';
+    cb.openUntil = Date.now() + 5 * 60_000;
+    console.warn(`[Circuit] ${key} opened for 5min after ${cb.failures} failures`);
+  }
+}
+
+// Wrapped axios with circuit breaker
+async function fetchWithCircuit(key, url, opts = {}) {
+  if (!circuitOk(key)) throw new Error(`Circuit open: ${key}`);
+  try {
+    const r = await axios.get(url, opts);
+    circuitSuccess(key);
+    return r;
+  } catch (err) {
+    circuitFail(key);
+    throw err;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 4C — JACCARD NEWS DEDUPLICATION (worldmonitor pattern)
+// Groups near-duplicate headlines before serving; Jaccard threshold 0.50
+// ═══════════════════════════════════════════════════════════════════════════════
+function jaccardSim(a, b) {
+  const sA = new Set(significantWords(a));
+  const sB = new Set(significantWords(b));
+  if (!sA.size || !sB.size) return 0;
+  let inter = 0;
+  for (const w of sB) { if (sA.has(w)) inter++; }
+  return inter / (sA.size + sB.size - inter);
+}
+
+function deduplicateArticles(articles, threshold = 0.50) {
+  const kept = [];
+  for (const art of articles) {
+    const dup = kept.some(k => jaccardSim(k.title || '', art.title || '') >= threshold);
+    if (!dup) kept.push(art);
+  }
+  return kept;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 4D — KEYWORD SPIKE DETECTOR (worldmonitor pattern)
+// Tracks hourly keyword counts; fires alert if current hour > 3× 7-day average
+// ═══════════════════════════════════════════════════════════════════════════════
+const SPIKE_KEYWORDS = [
+  'explosion','airstrike','missile strike','nuclear','attack','killed','war',
+  'sanctions','ceasefire','troops','invasion','offensive','submarine','carrier',
+  'india china','pakistan india','taiwan','north korea','iran nuclear',
+  'stock crash','market crash','oil spike','rupee','yuan',
+];
+
+// Rolling hourly counters: Map<keyword, [{hour: ISO string, count: number}]>
+const _kwHistory = new Map();
+
+function recordKeywords(articles) {
+  const hour = new Date().toISOString().slice(0, 13); // "2025-03-11T14"
+  for (const kw of SPIKE_KEYWORDS) {
+    const kwL = kw.toLowerCase();
+    const count = articles.reduce((n, a) => {
+      const txt = ((a.title || '') + ' ' + (a.description || '')).toLowerCase();
+      return n + (txt.includes(kwL) ? 1 : 0);
+    }, 0);
+    if (!_kwHistory.has(kw)) _kwHistory.set(kw, []);
+    const hist = _kwHistory.get(kw);
+    const existing = hist.find(h => h.hour === hour);
+    if (existing) { existing.count = Math.max(existing.count, count); }
+    else { hist.push({ hour, count }); }
+    // Keep 7 days max
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60_000).toISOString().slice(0, 13);
+    _kwHistory.set(kw, hist.filter(h => h.hour >= cutoff));
+  }
+}
+
+function detectSpikes() {
+  const spikes = [];
+  const currentHour = new Date().toISOString().slice(0, 13);
+  for (const [kw, hist] of _kwHistory.entries()) {
+    const recent = hist.find(h => h.hour === currentHour);
+    if (!recent || recent.count === 0) continue;
+    const past = hist.filter(h => h.hour < currentHour);
+    if (past.length < 3) continue; // need baseline
+    const avg = past.reduce((s, h) => s + h.count, 0) / past.length;
+    if (avg === 0) continue;
+    const ratio = recent.count / avg;
+    if (ratio >= 3.0) {
+      spikes.push({ keyword: kw, count: recent.count, avgBaseline: parseFloat(avg.toFixed(2)), ratio: parseFloat(ratio.toFixed(1)), hour: currentHour });
+    }
+  }
+  return spikes.sort((a, b) => b.ratio - a.ratio);
+}
+
+app.get('/api/keyword-spikes', (req, res) => {
+  res.json({ spikes: detectSpikes(), tracked: SPIKE_KEYWORDS.length, ts: Date.now() });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 4E — GDELT TENSION PAIRS (worldmonitor pattern)
+// Tracks geopolitical tension between strategic country pairs via GDELT API
+// ═══════════════════════════════════════════════════════════════════════════════
+const TENSION_PAIRS = [
+  { a: 'India',  b: 'Pakistan', id: 'ind-pak', keywords: ['india pakistan','border clash','loc','line of control','kashmir attack','indian army pakistan'] },
+  { a: 'India',  b: 'China',    id: 'ind-chn', keywords: ['india china','lac','doklam','galwan','arunachal','sino-indian'] },
+  { a: 'USA',    b: 'China',    id: 'usa-chn', keywords: ['us china','trade war','taiwan strait','south china sea','chip ban','huawei'] },
+  { a: 'Russia', b: 'Ukraine',  id: 'rus-ukr', keywords: ['ukraine russia','kyiv','zelensky','putin','kharkiv','zaporizhzhia'] },
+  { a: 'Iran',   b: 'Israel',   id: 'irn-isr', keywords: ['iran israel','idf iran','irgc','tehran strike','nuclear iran'] },
+  { a: 'USA',    b: 'Iran',     id: 'usa-irn', keywords: ['us iran','sanctions iran','strait hormuz','nuclear deal','irgc'] },
+  { a: 'China',  b: 'Taiwan',   id: 'chn-twn', keywords: ['china taiwan','pla taiwan','taipei','taiwan strait','cross-strait'] },
+  { a: 'North Korea', b: 'USA', id: 'prk-usa', keywords: ['north korea','dprk','kim jong','icbm','nuclear test','pyongyang'] },
+];
+
+const _tensionCache = { data: null, ts: 0 };
+
+async function fetchTensionPairs() {
+  const now = Date.now();
+  const results = [];
+  for (const pair of TENSION_PAIRS) {
+    try {
+      const query = encodeURIComponent(pair.keywords[0]);
+      const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${query}&mode=artlist&maxrecords=5&format=json&timespan=24H&sort=DateDesc`;
+      const r = await fetchWithCircuit(`gdelt-${pair.id}`, url, { timeout: 8_000, headers: { 'User-Agent': 'SpymeterOSINT/1.0' } });
+      const arts = (r.data?.articles || []).slice(0, 5);
+      results.push({
+        ...pair,
+        articleCount: arts.length,
+        latestArticles: arts.map(a => ({ title: a.title, url: a.url, source: a.domain, date: a.seendate })),
+        trend: arts.length >= 4 ? 'escalating' : arts.length >= 2 ? 'active' : 'stable',
+        lastChecked: new Date(now).toISOString(),
+      });
+    } catch (_) {
+      results.push({ ...pair, articleCount: 0, latestArticles: [], trend: 'unknown', lastChecked: new Date(now).toISOString() });
+    }
+  }
+  _tensionCache.data = { pairs: results, ts: now };
+  _tensionCache.ts = now;
+}
+
+fetchTensionPairs();
+setInterval(fetchTensionPairs, 15 * 60_000);
+
+app.get('/api/tension-pairs', (req, res) => {
+  if (!_tensionCache.data) return res.json({ pairs: [], ts: Date.now(), status: 'loading' });
+  res.json(_tensionCache.data);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 5 — EXISTING ENDPOINTS (AIRCRAFT, SATELLITES, ETC.)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1475,11 +1652,13 @@ async function indiaOsintAgent() {
     }
 
     all.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+    const deduped = deduplicateArticles(all);
+    recordKeywords(deduped);
     cache.indiaNews = {
-      data: { articles: all.slice(0, 60), ts: now, total: all.length },
+      data: { articles: deduped.slice(0, 60), ts: now, total: deduped.length },
       ts: now,
     };
-    console.log(`[IndiaAgent] ${all.length} India OSINT articles scraped`);
+    console.log(`[IndiaAgent] ${all.length} raw → ${deduped.length} deduped India OSINT articles`);
   } catch (err) {
     console.error('[IndiaAgent]', err.message);
   }
@@ -1554,11 +1733,13 @@ async function chinaOsintAgent() {
     }
 
     all.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+    const deduped = deduplicateArticles(all);
+    recordKeywords(deduped);
     cache.chinaNews = {
-      data: { articles: all.slice(0, 60), ts: now, total: all.length },
+      data: { articles: deduped.slice(0, 60), ts: now, total: deduped.length },
       ts: now,
     };
-    console.log(`[ChinaAgent] ${all.length} China OSINT articles scraped`);
+    console.log(`[ChinaAgent] ${all.length} raw → ${deduped.length} deduped China OSINT articles`);
   } catch (err) {
     console.error('[ChinaAgent]', err.message);
   }

@@ -365,6 +365,17 @@
           </div>
           <div id="activity-feed" class="scroll-list" style="max-height:120px"></div>
         </div>
+
+        <!-- ── Tension Pairs widget (worldmonitor pattern) ── -->
+        <div class="panel-card">
+          <div class="card-hdr">
+            <span>⚔ TENSION PAIRS <span class="badge-static">GDELT 24H</span></span>
+            <button class="mini-btn" onclick="loadTensionPairs()">↻</button>
+          </div>
+          <div id="tension-pairs-widget" style="padding:4px 6px">
+            <div class="news-loading" style="font-size:8px">⟳ Loading tension index…</div>
+          </div>
+        </div>
       </div>
 
       <!-- TAB: Markets & War Economy -->
@@ -1248,6 +1259,69 @@
 
     // ── Markets refresh ────────────────────────────────────
     document.getElementById('refresh-market-btn')?.addEventListener('click', () => { MARKETS.fetchMarkets(); MARKETS.loadMarketNews(); });
+
+    // ══════════════════════════════════════════════════════
+    // WORLDMONITOR PATTERNS: Tab Visibility Throttle
+    // All intervals run 10× slower when the tab is hidden
+    // ══════════════════════════════════════════════════════
+    const _refreshIntervals = [];
+
+    function registerRefresh(fn, intervalMs) {
+      let id = setInterval(() => { if (!document.hidden) fn(); }, intervalMs);
+      // Switch to 10× slower interval when hidden
+      document.addEventListener('visibilitychange', () => {
+        clearInterval(id);
+        id = setInterval(() => { if (!document.hidden) fn(); }, document.hidden ? intervalMs * 10 : intervalMs);
+      });
+      _refreshIntervals.push(id);
+    }
+
+    // ── Keyword Spike Monitor ─────────────────────────────
+    const _breakingBanner = document.createElement('div');
+    _breakingBanner.id = 'breaking-banner';
+    _breakingBanner.style.cssText = 'display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#ff2200;color:#fff;font-size:9px;font-weight:700;letter-spacing:1.5px;padding:5px 12px;text-align:center;cursor:pointer';
+    _breakingBanner.onclick = () => { _breakingBanner.style.display = 'none'; };
+    document.body.prepend(_breakingBanner);
+
+    async function checkKeywordSpikes() {
+      try {
+        const r = await fetch('/api/keyword-spikes');
+        const d = r.ok ? await r.json() : { spikes: [] };
+        if (d.spikes && d.spikes.length) {
+          const top = d.spikes[0];
+          _breakingBanner.textContent = `⚡ SPIKE DETECTED — "${top.keyword}" ${top.ratio}× above baseline (${top.count} mentions this hour) — click to dismiss`;
+          _breakingBanner.style.display = 'block';
+          document.dispatchEvent(new CustomEvent('wm:keyword-spike', { detail: d.spikes }));
+          setTimeout(() => { _breakingBanner.style.display = 'none'; }, 30_000);
+        }
+      } catch (_) {}
+    }
+
+    // ── Tension Pairs Widget ──────────────────────────────
+    async function loadTensionPairs() {
+      const el = document.getElementById('tension-pairs-widget');
+      if (!el) return;
+      try {
+        const r = await fetch('/api/tension-pairs');
+        const d = r.ok ? await r.json() : { pairs: [] };
+        const pairs = d.pairs || [];
+        el.innerHTML = pairs.map(p => {
+          const col = p.trend === 'escalating' ? '#ff2200' : p.trend === 'active' ? '#ffaa00' : '#00ff88';
+          const dot = p.trend === 'escalating' ? '▲' : p.trend === 'active' ? '●' : '–';
+          return `<div class="tension-row" title="${p.a} ↔ ${p.b}: ${p.articleCount} articles/24h">
+            <span class="tension-flag">${p.a} ↔ ${p.b}</span>
+            <span class="tension-trend" style="color:${col}">${dot} ${p.trend.toUpperCase()}</span>
+            <span class="tension-count">${p.articleCount}</span>
+          </div>`;
+        }).join('');
+      } catch (_) { el.innerHTML = '<div class="news-loading" style="font-size:8px">Unavailable</div>'; }
+    }
+
+    // ── Start background tasks ────────────────────────────
+    registerRefresh(checkKeywordSpikes, 5 * 60_000);
+    registerRefresh(loadTensionPairs,   15 * 60_000);
+    checkKeywordSpikes();
+    loadTensionPairs();
 
     // ── Iran/Israel news (GDELT conflict endpoint) ─────────
     async function loadIranIsrNews() {

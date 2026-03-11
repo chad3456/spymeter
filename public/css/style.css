@@ -1274,6 +1274,17 @@ body.crt-active #ws-status.connected { color: #00ff41; }
 .mkt-chg   { font-size: 9px; font-weight: 700; }
 .mkt-abs   { font-size: 8px; color: var(--text-dim); font-weight: normal; }
 
+/* ── Tension Pairs (worldmonitor pattern) ─── */
+.tension-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 8px; border-bottom: 1px solid var(--border);
+  font-size: 8.5px; transition: background var(--transition);
+}
+.tension-row:hover { background: rgba(255,68,68,0.04); }
+.tension-flag  { color: var(--text-hi); font-weight: 600; flex: 1; }
+.tension-trend { font-size: 8px; font-weight: 700; letter-spacing: 0.5px; text-align: center; width: 90px; }
+.tension-count { color: var(--text-dim); font-size: 8px; width: 30px; text-align: right; }
+
 /* ── India Citizens Panel ────────────────────────────────── */
 .india-zone-row {
   display: flex; align-items: center; gap: 7px;
