@@ -6,6 +6,7 @@
   <title>SPYMETER — AI INTELLIGENCE DASHBOARD</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     /* ── Reset & Variables ─────────────────────────────── */
     :root {
@@ -252,7 +253,9 @@
     .badge-tier-hyperscale { background: rgba(255,153,0,0.12); color: var(--orange); border: 1px solid rgba(255,153,0,0.25); }
     .badge-tier-major      { background: rgba(0,212,255,0.08); color: var(--accent); border: 1px solid rgba(0,212,255,0.2); }
     .badge-tier-regional   { background: rgba(136,136,136,0.1); color: #888; border: 1px solid rgba(136,136,136,0.2); }
-    .badge-status-active   { background: rgba(0,255,136,0.08); color: var(--accent2); border: 1px solid rgba(0,255,136,0.2); }
+    .badge-status-active   { background: rgba(0,255,136,0.08);  color: var(--accent2); border: 1px solid rgba(0,255,136,0.2); }
+    .badge-status-planned  { background: rgba(0,212,255,0.08);  color: var(--accent);  border: 1px solid rgba(0,212,255,0.2); }
+    .badge-status-inactive { background: rgba(100,100,100,0.08);color: #666;           border: 1px solid rgba(100,100,100,0.2); }
     .facility-meta {
       display: flex; gap: 8px; font-size: 8px;
       color: var(--text-dim); flex-wrap: wrap;
@@ -467,6 +470,80 @@
     .compute-fill.eu    { background: var(--accent); }
     .compute-fill.other { background: var(--orange); }
     .compute-val { font-size: 8px; color: var(--purple); width: 45px; text-align: right; flex-shrink: 0; }
+
+    /* ── GPU Map ─────────────────────────────────────────── */
+    #gpu-map {
+      height: 260px;
+      width: 100%;
+      border-bottom: 1px solid var(--border);
+      background: #060c14;
+    }
+    #gpu-map .leaflet-tile-pane { filter: brightness(0.85) saturate(0.6); }
+    .gpu-map-wrap { position: relative; }
+    .gpu-map-legend {
+      display: flex; gap: 12px; padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 7.5px; color: var(--text-dim);
+    }
+    .gpu-map-legend span { display: flex; align-items: center; gap: 4px; }
+    .leg-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .leg-dot.existing    { background: #00ff88; }
+    .leg-dot.planned     { background: #00d4ff; }
+    .leg-dot.decommission{ background: #555; }
+    #map-cluster-count { margin-left: auto; color: var(--accent); }
+
+    /* ── News Panel (right column) ──────────────────────── */
+    #ai-right {
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    #news-panel-hdr {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border-hi);
+    }
+    .news-cats {
+      display: flex; gap: 0; overflow-x: auto;
+      border-bottom: 1px solid var(--border);
+      scrollbar-width: none;
+    }
+    .news-cats::-webkit-scrollbar { display: none; }
+    .news-cat-btn {
+      flex-shrink: 0;
+      padding: 5px 10px;
+      font-size: 7.5px; letter-spacing: 1px;
+      color: var(--text-dim);
+      background: none; border: none; border-right: 1px solid var(--border);
+      cursor: pointer; font-family: var(--font-mono);
+      transition: all 0.15s;
+    }
+    .news-cat-btn:hover  { color: var(--accent); background: rgba(0,212,255,0.05); }
+    .news-cat-btn.active { color: var(--accent); background: rgba(0,212,255,0.08); border-bottom: 2px solid var(--accent); }
+    #news-panel-body {
+      flex: 1; overflow-y: auto;
+    }
+    .np-item {
+      display: block;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      text-decoration: none;
+      transition: background 0.12s;
+    }
+    .np-item:hover { background: rgba(0,212,255,0.04); }
+    .np-title {
+      font-size: 10px; color: var(--text-hi);
+      line-height: 1.35; margin-bottom: 3px;
+    }
+    .np-desc {
+      font-size: 8px; color: var(--text-dim);
+      line-height: 1.3; margin-bottom: 3px;
+    }
+    .np-meta { display: flex; gap: 8px; align-items: center; }
+    .np-source { font-size: 7.5px; color: var(--accent); }
+    .np-time   { font-size: 7.5px; color: var(--text-dim); }
+    .np-cat    { font-size: 7px; color: var(--purple); letter-spacing: 0.5px; margin-left: auto; }
+    .np-loading { padding: 16px 12px; font-size: 8.5px; color: var(--text-dim); text-align: center; }
+    .np-empty   { padding: 20px 12px; font-size: 8.5px; color: var(--text-dim); text-align: center; }
   </style>
 </head>
 <body>
@@ -542,8 +619,19 @@
   <div id="ai-left">
     <div class="section-datacenters section-compute">
       <div class="card-hdr">
-        <span>🖥 AI DATACENTERS — EPOCH AI DATA</span>
+        <span>🖥 AI GPU CLUSTERS — EPOCH AI DATA</span>
         <span id="facility-count" style="margin-left:auto;font-size:7.5px;color:var(--text-dim)"></span>
+      </div>
+
+      <!-- World map of GPU clusters -->
+      <div class="gpu-map-wrap">
+        <div id="gpu-map"></div>
+        <div class="gpu-map-legend">
+          <span><i class="leg-dot existing"></i>EXISTING</span>
+          <span><i class="leg-dot planned"></i>PLANNED</span>
+          <span><i class="leg-dot decommission"></i>DECOMMISSIONED</span>
+          <span id="map-cluster-count"></span>
+        </div>
       </div>
 
       <!-- Epoch top-level summary bars -->
@@ -585,25 +673,31 @@
     </div>
   </div>
 
-  <!-- RIGHT: Cyber Threats + AI Risk -->
+  <!-- RIGHT: Live News Feed -->
   <div id="ai-right">
-    <!-- Cyber Threats -->
-    <div class="section-cyber">
-      <div class="card-hdr" style="color:var(--danger);">
-        <span>⚠ CYBER THREATS</span>
-        <button class="mini-btn" onclick="fetchCyberThreats()">↺</button>
+    <div id="news-panel-hdr">
+      <div class="card-hdr" style="color:var(--accent);">
+        <span>📡 LIVE NEWS FEED</span>
+        <button class="mini-btn" onclick="fetchRSSNews('all')" style="margin-left:auto;">↺</button>
       </div>
-      <div id="cyber-threats-content">
-        <div class="news-loading">◌ LOADING THREAT DATA...</div>
+      <div class="news-cats" id="news-cats">
+        <button class="news-cat-btn active" data-cat="all"       onclick="fetchRSSNews('all')">ALL</button>
+        <button class="news-cat-btn"         data-cat="ai"        onclick="fetchRSSNews('ai')">AI</button>
+        <button class="news-cat-btn"         data-cat="tech"      onclick="fetchRSSNews('tech')">TECH</button>
+        <button class="news-cat-btn"         data-cat="politics"  onclick="fetchRSSNews('politics')">POLITICS</button>
+        <button class="news-cat-btn"         data-cat="us"        onclick="fetchRSSNews('us')">US</button>
+        <button class="news-cat-btn"         data-cat="europe"    onclick="fetchRSSNews('europe')">EUROPE</button>
+        <button class="news-cat-btn"         data-cat="middleeast"onclick="fetchRSSNews('middleeast')">MIDEAST</button>
+        <button class="news-cat-btn"         data-cat="asia"      onclick="fetchRSSNews('asia')">ASIA</button>
+        <button class="news-cat-btn"         data-cat="finance"   onclick="fetchRSSNews('finance')">FINANCE</button>
+        <button class="news-cat-btn"         data-cat="gov"       onclick="fetchRSSNews('gov')">GOV</button>
+        <button class="news-cat-btn"         data-cat="energy"    onclick="fetchRSSNews('energy')">ENERGY</button>
+        <button class="news-cat-btn"         data-cat="africa"    onclick="fetchRSSNews('africa')">AFRICA</button>
+        <button class="news-cat-btn"         data-cat="latam"     onclick="fetchRSSNews('latam')">LATAM</button>
       </div>
     </div>
-
-    <!-- AI Risk Watchlist -->
-    <div class="section-cyber section-regulations">
-      <div class="card-hdr green">
-        <span>🔴 AI RISK WATCHLIST</span>
-      </div>
-      <div id="risk-watchlist"></div>
+    <div id="news-panel-body">
+      <div class="np-loading">◌ FETCHING NEWS FEEDS...</div>
     </div>
   </div>
 
@@ -613,28 +707,176 @@
 /* ═══════════════════════════════════════════════════════════
    DATA
 ═══════════════════════════════════════════════════════════ */
-const EPOCH_AI_FACILITIES = [
-  { name: 'Microsoft Azure OpenAI US East', country: 'USA', city: 'Ashburn, VA', lat: 39.0, lng: -77.5, gpus: 50000, model: 'GPT-4/o1', compute: 'H100/A100', status: 'active', tier: 'hyperscale', flag: '🇺🇸' },
-  { name: 'Google DeepMind / TPU Pods', country: 'USA', city: 'Council Bluffs, IA', lat: 41.3, lng: -95.9, gpus: 40000, model: 'Gemini Ultra', compute: 'TPUv5', status: 'active', tier: 'hyperscale', flag: '🇺🇸' },
-  { name: 'xAI Colossus Cluster', country: 'USA', city: 'Memphis, TN', lat: 35.1, lng: -90.0, gpus: 100000, model: 'Grok-3', compute: 'H100', status: 'active', tier: 'hyperscale', flag: '🇺🇸' },
-  { name: 'Meta AI Research (RCX1)', country: 'USA', city: 'Eagle Mountain, UT', lat: 40.3, lng: -112.0, gpus: 35000, model: 'Llama 4', compute: 'H100/GH200', status: 'active', tier: 'hyperscale', flag: '🇺🇸' },
-  { name: 'Amazon AWS Trainium Cluster', country: 'USA', city: 'Boardman, OR', lat: 45.8, lng: -119.7, gpus: 30000, model: 'Titan/Bedrock', compute: 'Trainium2', status: 'active', tier: 'hyperscale', flag: '🇺🇸' },
-  { name: 'Anthropic / AWS Claude Cluster', country: 'USA', city: 'N. Virginia', lat: 38.8, lng: -77.2, gpus: 25000, model: 'Claude 3.7', compute: 'H100', status: 'active', tier: 'major', flag: '🇺🇸' },
-  { name: 'Mistral AI Compute', country: 'France', city: 'Paris', lat: 48.9, lng: 2.3, gpus: 8000, model: 'Mistral Large', compute: 'H100', status: 'active', tier: 'major', flag: '🇫🇷' },
-  { name: 'Aleph Alpha', country: 'Germany', city: 'Heidelberg', lat: 49.4, lng: 8.7, gpus: 4000, model: 'Luminous', compute: 'A100', status: 'active', tier: 'regional', flag: '🇩🇪' },
-  { name: 'BAAI / Zhipu Beijing AI Cluster', country: 'China', city: 'Beijing', lat: 39.9, lng: 116.4, gpus: 20000, model: 'GLM-4/Ernie', compute: 'Huawei Ascend 910B', status: 'active', tier: 'hyperscale', flag: '🇨🇳' },
-  { name: 'Alibaba DAMO Academy', country: 'China', city: 'Hangzhou', lat: 30.3, lng: 120.2, gpus: 18000, model: 'Qwen 2.5', compute: 'Ascend/A100', status: 'active', tier: 'hyperscale', flag: '🇨🇳' },
-  { name: 'Tencent AI Lab', country: 'China', city: 'Shenzhen', lat: 22.5, lng: 114.1, gpus: 15000, model: 'Hunyuan', compute: 'Ascend 910', status: 'active', tier: 'major', flag: '🇨🇳' },
-  { name: 'RIKEN R-CCS Fugaku AI', country: 'Japan', city: 'Kobe', lat: 34.7, lng: 135.2, gpus: 6000, model: 'Research', compute: 'A64FX+GPU', status: 'active', tier: 'major', flag: '🇯🇵' },
-  { name: 'Samsung/Naver CLOVA', country: 'South Korea', city: 'Seoul', lat: 37.6, lng: 127.0, gpus: 5000, model: 'HyperCLOVA X', compute: 'H100', status: 'active', tier: 'major', flag: '🇰🇷' },
-  { name: 'AI21 Labs / Cohere', country: 'Israel', city: 'Tel Aviv', lat: 32.1, lng: 34.8, gpus: 3000, model: 'Jurassic/Command', compute: 'A100', status: 'active', tier: 'regional', flag: '🇮🇱' },
-  { name: 'Vector Institute', country: 'Canada', city: 'Toronto', lat: 43.7, lng: -79.4, gpus: 3500, model: 'Research', compute: 'A100', status: 'active', tier: 'regional', flag: '🇨🇦' },
-  { name: 'CDAC Param Ganga', country: 'India', city: 'Roorkee/Pune', lat: 18.5, lng: 73.9, gpus: 2000, model: 'Research/BharatGPT', compute: 'NVIDIA + domestic', status: 'active', tier: 'regional', flag: '🇮🇳' },
-  { name: 'Microsoft Azure EU West', country: 'Netherlands', city: 'Amsterdam', lat: 52.4, lng: 4.9, gpus: 12000, model: 'Azure OpenAI EU', compute: 'H100', status: 'active', tier: 'hyperscale', flag: '🇳🇱' },
-  { name: 'UAE TII Falcon Cluster', country: 'UAE', city: 'Abu Dhabi', lat: 24.5, lng: 54.4, gpus: 4500, model: 'Falcon 180B', compute: 'H100', status: 'active', tier: 'major', flag: '🇦🇪' },
-  { name: 'Yandex YaLM Cluster', country: 'Russia', city: 'Moscow', lat: 55.8, lng: 37.6, gpus: 6000, model: 'YaLM 2.0', compute: 'A100 (pre-sanction)', status: 'active', tier: 'major', flag: '🇷🇺' },
-  { name: 'Sber AI / GigaChat', country: 'Russia', city: 'Moscow', lat: 55.7, lng: 37.4, gpus: 4000, model: 'GigaChat', compute: 'Domestic+A100', status: 'active', tier: 'regional', flag: '🇷🇺' },
-];
+let EPOCH_AI_FACILITIES = []; // populated from gpu_clusters.csv
+
+/* ═══════════════════════════════════════════════════════════
+   GPU CLUSTERS CSV — COUNTRY COORDS + LOADER
+═══════════════════════════════════════════════════════════ */
+const COUNTRY_COORDS = {
+  'United States of America': [38.9, -95.7], 'United States': [38.9, -95.7],
+  'United Kingdom': [51.5, -0.12], 'France': [48.9, 2.3], 'Germany': [52.5, 13.4],
+  'China': [39.9, 116.4], 'Japan': [35.7, 139.7], 'South Korea': [37.6, 127.0],
+  'India': [20.6, 78.9], 'Canada': [45.4, -75.7], 'Australia': [-25.3, 133.8],
+  'Netherlands': [52.4, 4.9], 'Sweden': [59.3, 18.1], 'Finland': [60.2, 25.0],
+  'Denmark': [55.7, 12.6], 'Norway': [59.9, 10.7], 'Switzerland': [47.4, 8.5],
+  'Poland': [52.2, 21.0], 'Spain': [40.4, -3.7], 'Italy': [41.9, 12.5],
+  'Belgium': [50.8, 4.4], 'Singapore': [1.35, 103.8],
+  'United Arab Emirates': [24.5, 54.4], 'Saudi Arabia': [24.7, 46.7],
+  'Israel': [31.8, 35.2], 'Brazil': [-10.0, -55.0], 'Mexico': [23.6, -102.6],
+  'Argentina': [-34.6, -58.4], 'Chile': [-33.5, -70.6], 'Colombia': [4.6, -74.1],
+  'Peru': [-9.2, -75.0], 'Malaysia': [3.1, 101.7], 'Indonesia': [0.8, 113.9],
+  'Philippines (the)': [12.9, 121.8], 'Philippines': [12.9, 121.8],
+  'Thailand': [15.9, 100.9], 'Vietnam': [15.0, 108.3], 'Taiwan': [23.7, 120.9],
+  'Hong Kong': [22.3, 114.2], 'Russia': [55.8, 37.6], 'Luxembourg': [49.6, 6.1],
+  'Ireland': [53.3, -6.3], 'Portugal': [38.7, -9.1], 'Austria': [48.2, 16.4],
+  'Czech Republic': [50.1, 14.4], 'Hungary': [47.5, 19.1], 'Romania': [44.4, 26.1],
+  'Turkey': [39.9, 32.9], 'Egypt': [30.1, 31.2], 'South Africa': [-26.2, 28.0],
+  'Kenya': [1.3, 36.8], 'Nigeria': [9.1, 7.4], 'Ghana': [7.9, -1.0],
+  'Qatar': [25.3, 51.5], 'Bahrain': [26.0, 50.6], 'Kuwait': [29.4, 47.9],
+  'Jordan': [31.9, 35.9], 'New Zealand': [-41.3, 174.8], 'Pakistan': [33.7, 73.1],
+  'Bangladesh': [23.7, 90.4], 'Iceland': [64.9, -18.7], 'Estonia': [59.4, 24.7],
+  'Latvia': [56.9, 24.1], 'Lithuania': [54.7, 25.3], 'Ukraine': [50.5, 30.5],
+  'Greece': [37.9, 23.7], 'Bulgaria': [42.7, 23.3], 'Slovakia': [48.1, 17.1],
+  'Slovenia': [46.1, 14.5], 'Croatia': [45.8, 16.0], 'Serbia': [44.8, 20.5],
+  'Kazakhstan': [51.2, 71.4], 'Morocco': [31.8, -7.1], 'Tanzania': [-6.4, 34.9],
+  'Ethiopia': [9.0, 38.7], 'Malta': [35.9, 14.5], 'Cyprus': [35.1, 33.4],
+};
+const COUNTRY_FLAGS = {
+  'United States of America': '🇺🇸', 'United States': '🇺🇸',
+  'United Kingdom': '🇬🇧', 'France': '🇫🇷', 'Germany': '🇩🇪',
+  'China': '🇨🇳', 'Japan': '🇯🇵', 'South Korea': '🇰🇷',
+  'India': '🇮🇳', 'Canada': '🇨🇦', 'Australia': '🇦🇺',
+  'Netherlands': '🇳🇱', 'Sweden': '🇸🇪', 'Finland': '🇫🇮',
+  'Denmark': '🇩🇰', 'Norway': '🇳🇴', 'Switzerland': '🇨🇭',
+  'Poland': '🇵🇱', 'Spain': '🇪🇸', 'Italy': '🇮🇹',
+  'Belgium': '🇧🇪', 'Singapore': '🇸🇬', 'United Arab Emirates': '🇦🇪',
+  'Saudi Arabia': '🇸🇦', 'Israel': '🇮🇱', 'Brazil': '🇧🇷',
+  'Mexico': '🇲🇽', 'Argentina': '🇦🇷', 'Chile': '🇨🇱',
+  'Malaysia': '🇲🇾', 'Indonesia': '🇮🇩', 'Philippines (the)': '🇵🇭',
+  'Thailand': '🇹🇭', 'Vietnam': '🇻🇳', 'Taiwan': '🇹🇼',
+  'Hong Kong': '🇭🇰', 'Russia': '🇷🇺', 'Luxembourg': '🇱🇺',
+  'Ireland': '🇮🇪', 'Portugal': '🇵🇹', 'Austria': '🇦🇹',
+  'Czech Republic': '🇨🇿', 'Hungary': '🇭🇺', 'Romania': '🇷🇴',
+  'Turkey': '🇹🇷', 'Egypt': '🇪🇬', 'South Africa': '🇿🇦',
+  'Kenya': '🇰🇪', 'Nigeria': '🇳🇬', 'Qatar': '🇶🇦',
+  'Bahrain': '🇧🇭', 'Kuwait': '🇰🇼', 'Jordan': '🇯🇴',
+  'New Zealand': '🇳🇿', 'Pakistan': '🇵🇰', 'Bangladesh': '🇧🇩',
+  'Iceland': '🇮🇸', 'Ukraine': '🇺🇦', 'Greece': '🇬🇷',
+  'Kazakhstan': '🇰🇿', 'Morocco': '🇲🇦', 'Colombia': '🇨🇴',
+  'Peru': '🇵🇪', 'Ghana': '🇬🇭', 'Ethiopia': '🇪🇹',
+};
+
+function _parseCSVLine(line) {
+  const cols = []; let f = ''; let q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (q && line[i+1] === '"') { f += '"'; i++; } else q = !q; }
+    else if (c === ',' && !q) { cols.push(f); f = ''; }
+    else f += c;
+  }
+  cols.push(f); return cols;
+}
+
+function _csvToObjects(text) {
+  const lines = text.trim().split('\n');
+  const hdrs  = _parseCSVLine(lines[0]).map(h => h.trim());
+  return lines.slice(1).map(l => {
+    const cols = _parseCSVLine(l);
+    const obj  = {};
+    hdrs.forEach((h, i) => { obj[h] = (cols[i] || '').trim(); });
+    return obj;
+  }).filter(r => r[hdrs[0]]);
+}
+
+let _gpuMap = null;
+const _gpuMarkers = [];
+
+async function loadGPUClusters() {
+  try {
+    const res  = await fetch('/gpu_clusters.csv');
+    const text = await res.text();
+    const rows = _csvToObjects(text);
+
+    const jitter = () => (Math.random() - 0.5) * 1.4;
+    EPOCH_AI_FACILITIES = [];
+
+    for (const r of rows) {
+      const country = r['Country'];
+      const coords  = COUNTRY_COORDS[country];
+      if (!coords) continue;
+
+      const h100 = parseFloat(r['H100 equivalents']) || 0;
+      const tier = h100 > 5e6 ? 'hyperscale' : h100 > 5e5 ? 'major' : 'regional';
+      const rawStatus = (r['Status'] || 'Existing').toLowerCase();
+      const status = rawStatus === 'existing' ? 'active' : rawStatus === 'planned' ? 'planned' : 'inactive';
+
+      EPOCH_AI_FACILITIES.push({
+        name:    r['Name'],
+        country: country,
+        city:    r['Location'] || country,
+        lat:     coords[0] + jitter(),
+        lng:     coords[1] + jitter(),
+        gpus:    Math.round(h100),
+        model:   r['Owner'] || '—',
+        compute: [r['Chip type (primary)'], r['Chip quantity (primary)']].filter(Boolean).join(' × ') || '—',
+        status:  status,
+        rawStatus: r['Status'],
+        tier:    tier,
+        flag:    COUNTRY_FLAGS[country] || '🌐',
+        powerMW: parseFloat(r['Power Capacity (MW)']) || 0,
+        sector:  r['Sector'] || '',
+        opDate:  r['First Operational Date'] || '',
+      });
+    }
+
+    populateStats();
+    renderFacilities();
+    renderComputeBars();
+    renderMapMarkers();
+
+    const el = document.getElementById('map-cluster-count');
+    if (el) el.textContent = EPOCH_AI_FACILITIES.length + ' CLUSTERS';
+    document.getElementById('facility-count').textContent = EPOCH_AI_FACILITIES.length + ' facilities';
+  } catch (e) {
+    console.warn('[GPU-CSV]', e.message);
+  }
+}
+
+function initGPUMap() {
+  if (_gpuMap) return;
+  _gpuMap = L.map('gpu-map', {
+    center: [20, 15], zoom: 2,
+    zoomControl: true, attributionControl: false,
+    minZoom: 1, maxZoom: 8,
+  });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 8,
+  }).addTo(_gpuMap);
+}
+
+function renderMapMarkers() {
+  if (!_gpuMap) return;
+  _gpuMarkers.forEach(m => m.remove());
+  _gpuMarkers.length = 0;
+
+  for (const f of EPOCH_AI_FACILITIES) {
+    const color = f.rawStatus === 'Planned' ? '#00d4ff'
+                : f.rawStatus === 'Decommissioned' ? '#555'
+                : '#00ff88';
+    const r = f.tier === 'hyperscale' ? 9 : f.tier === 'major' ? 6 : 4;
+
+    const m = L.circleMarker([f.lat, f.lng], {
+      radius: r, color: color, fillColor: color,
+      fillOpacity: 0.7, weight: 1,
+    }).bindTooltip(
+      `<b>${escHtml(f.name)}</b><br>${escHtml(f.country)}<br>${f.flag} ${escHtml(f.rawStatus)}` +
+      (f.powerMW ? `<br>⚡ ${f.powerMW} MW` : '') +
+      (f.compute !== '—' ? `<br>◈ ${escHtml(f.compute)}` : ''),
+      { className: 'gpu-tooltip', sticky: false }
+    ).addTo(_gpuMap);
+    _gpuMarkers.push(m);
+  }
+}
 
 const AI_REGULATIONS = [
   { country: 'European Union', flag: '🇪🇺', law: 'EU AI Act', status: 'ENFORCED', date: '2024-03', risk_tiers: ['Prohibited AI', 'High-Risk', 'Limited Risk', 'Minimal Risk'], key_points: ['Biometric surveillance ban', 'GPAI model obligations >10^25 FLOPs', 'Fines up to €35M or 7% global turnover', 'AI Office established'], severity: 'high' },
@@ -671,6 +913,8 @@ const AI_RISK_WATCHLIST = [
    UTILITIES
 ═══════════════════════════════════════════════════════════ */
 function fmtGPU(n) {
+  if (n >= 1e9)  return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6)  return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1000) return (n / 1000).toFixed(0) + 'K';
   return n.toString();
 }
@@ -966,57 +1210,105 @@ async function fetchRegNews() {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   RSS NEWS PANEL
+═══════════════════════════════════════════════════════════ */
+let _currentNewsCat = 'all';
+
+async function fetchRSSNews(cat) {
+  _currentNewsCat = cat || 'all';
+  // Update active tab
+  document.querySelectorAll('.news-cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === _currentNewsCat);
+  });
+
+  const body = document.getElementById('news-panel-body');
+  body.innerHTML = '<div class="np-loading">◌ FETCHING NEWS FEEDS...</div>';
+  try {
+    const url = '/api/rss-news' + (_currentNewsCat !== 'all' ? '?category=' + _currentNewsCat : '');
+    const res  = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const articles = data.articles || [];
+    if (!articles.length) {
+      body.innerHTML = '<div class="np-empty">NO ARTICLES AVAILABLE</div>';
+      return;
+    }
+    let html = '';
+    for (const a of articles) {
+      const title = a.title || 'Untitled';
+      const src   = a.source || '';
+      const ts    = a.pubDate || '';
+      const url2  = a.url || a.link || '#';
+      const desc  = a.description || '';
+      const cat2  = a.category || '';
+      html += `<a class="np-item" href="${escHtml(url2)}" target="_blank" rel="noopener">
+        <div class="np-title">${escHtml(title)}</div>
+        ${desc ? `<div class="np-desc">${escHtml(desc)}</div>` : ''}
+        <div class="np-meta">
+          ${src  ? `<span class="np-source">${escHtml(src)}</span>` : ''}
+          ${ts   ? `<span class="np-time">${relTime(ts)}</span>` : ''}
+          ${cat2 ? `<span class="np-cat">${escHtml(cat2.toUpperCase())}</span>` : ''}
+        </div>
+      </a>`;
+    }
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = `<div class="np-empty">⚠ NEWS UNAVAILABLE<br><span style="font-size:8px;color:var(--text-dim)">${escHtml(e.message)}</span></div>`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
    FILTER PILLS
 ═══════════════════════════════════════════════════════════ */
 function setFilter(f) {
-  // Update active pill
   document.querySelectorAll('.ai-pill').forEach(p => {
     p.classList.toggle('active', p.dataset.filter === f);
   });
 
-  // Section visibility map
   const show = {
-    all:          ['section-datacenters', 'section-regulations', 'section-cyber', 'section-compute'],
-    datacenters:  ['section-datacenters'],
-    regulations:  ['section-regulations'],
-    cyber:        ['section-cyber'],
-    compute:      ['section-compute', 'section-datacenters'],
+    all:         ['section-datacenters', 'section-regulations', 'section-compute'],
+    datacenters: ['section-datacenters'],
+    regulations: ['section-regulations'],
+    cyber:       ['section-regulations'],
+    compute:     ['section-compute', 'section-datacenters'],
   };
 
-  const allSections = ['section-datacenters', 'section-regulations', 'section-cyber', 'section-compute'];
-  const toShow = show[f] || allSections;
-
-  document.querySelectorAll('.section-datacenters, .section-regulations, .section-cyber, .section-compute')
+  const toShow = show[f] || ['section-datacenters', 'section-regulations', 'section-compute'];
+  document.querySelectorAll('.section-datacenters, .section-regulations, .section-compute')
     .forEach(el => {
-      // Show element if it has ANY of the toShow classes
       const visible = toShow.some(cls => el.classList.contains(cls));
       el.style.display = visible ? '' : 'none';
     });
+
+  // News panel is always visible — right column stays
+  document.getElementById('ai-right').style.display = '';
 }
 
 /* ═══════════════════════════════════════════════════════════
    AUTO-REFRESH
 ═══════════════════════════════════════════════════════════ */
 function refreshAll() {
-  fetchCyberThreats();
   fetchRegNews();
+  fetchRSSNews(_currentNewsCat);
 }
 
-// Auto-refresh every 10 minutes
 setInterval(refreshAll, 10 * 60 * 1000);
 
 /* ═══════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', function () {
-  populateStats();
-  renderFacilities();
-  renderComputeBars();
   renderRegulations();
-  renderRiskWatchlist();
-  fetchCyberThreats();
+  initGPUMap();
+  loadGPUClusters();
   fetchRegNews();
+  fetchRSSNews('all');
 });
 </script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  .gpu-tooltip { background:#07090e; border:1px solid #1e3a5f; color:#c8dff0; font-family:'Share Tech Mono',monospace; font-size:10px; padding:6px 9px; border-radius:2px; }
+  .leaflet-tooltip-top:before,.leaflet-tooltip-bottom:before { display:none; }
+</style>
 </body>
 </html>

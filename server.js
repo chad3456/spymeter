@@ -1823,6 +1823,96 @@ app.get('/api/ai-news', (req, res) => {
   res.json(_aiNewsCache.data);
 });
 
+// ─── /api/rss-news — CSV-driven RSS news panel ────────────────────────────────
+const _rssNewsCache = { data: null, ts: 0 };
+const TTL_RSS_NEWS  = 15 * 60_000;
+
+function _parseCSVRow(line) {
+  const cols = []; let field = ''; let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { if (inQ && line[i + 1] === '"') { field += '"'; i++; } else { inQ = !inQ; } }
+    else if (c === ',' && !inQ) { cols.push(field); field = ''; }
+    else { field += c; }
+  }
+  cols.push(field);
+  return cols;
+}
+
+let _csvFeeds = null;
+function _loadFeedsCSV() {
+  if (_csvFeeds) return _csvFeeds;
+  try {
+    const raw = fs.readFileSync(path.join(__dirname, 'public', 'rss-feeds-report (1).csv'), 'utf8');
+    const lines = raw.trim().split('\n').slice(1);
+    const feeds = [];
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const cols = _parseCSVRow(line);
+      if (cols.length < 8) continue;
+      const [, , category, feedName, status, , , url] = cols;
+      if (status === 'OK' && url && url.startsWith('http'))
+        feeds.push({ name: feedName.trim(), category: category.trim(), url: url.trim() });
+    }
+    _csvFeeds = feeds;
+    console.log(`[RSS-CSV] Loaded ${feeds.length} OK feeds`);
+    return feeds;
+  } catch (e) { console.error('[RSS-CSV]', e.message); return []; }
+}
+
+async function _refreshRSSNews() {
+  const now = Date.now();
+  if (_rssNewsCache.data && (now - _rssNewsCache.ts) < TTL_RSS_NEWS) return;
+  const feeds = _loadFeedsCSV();
+  if (!feeds.length) return;
+  const sample = [...feeds].sort(() => Math.random() - 0.5).slice(0, 45);
+  const results = await Promise.allSettled(
+    sample.map(f =>
+      axios.get(f.url, {
+        timeout: 8_000,
+        headers: { 'User-Agent': 'SpymeterOSINT/1.0', Accept: 'application/rss+xml,text/xml,*/*' },
+        responseType: 'text',
+      }).then(r => ({ items: parseRSS(r.data, f.name), category: f.category }))
+    )
+  );
+  const cutoff = now - 48 * 60 * 60 * 1000;
+  const all = [];
+  for (const r of results) {
+    if (r.status !== 'fulfilled') continue;
+    for (const a of r.value.items) {
+      const t = a.pubDate ? new Date(a.pubDate).getTime() : 0;
+      if (t && t < cutoff) continue;
+      all.push({
+        title:       a.title,
+        url:         a.link,
+        source:      a.source,
+        description: (a.description || '').slice(0, 180),
+        pubDate:     a.pubDate ? a.pubDate.toISOString() : null,
+        category:    r.value.category,
+      });
+    }
+  }
+  all.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+  _rssNewsCache.data = { articles: all.slice(0, 150), ts: now };
+  _rssNewsCache.ts   = now;
+  console.log(`[RSS-News] ${all.length} articles from ${sample.length} feeds`);
+}
+
+_refreshRSSNews();
+setInterval(_refreshRSSNews, TTL_RSS_NEWS);
+
+app.get('/api/rss-news', async (req, res) => {
+  try {
+    await _refreshRSSNews();
+    const { articles = [], ts } = _rssNewsCache.data || {};
+    const cat = req.query.category;
+    const out  = (cat && cat !== 'all') ? articles.filter(a => a.category === cat) : articles;
+    res.json({ articles: out.slice(0, 100), ts });
+  } catch (e) {
+    res.status(500).json({ error: e.message, articles: [] });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 10 — WEBSOCKET
 // ═══════════════════════════════════════════════════════════════════════════════
