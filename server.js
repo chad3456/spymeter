@@ -1040,6 +1040,123 @@ app.get('/api/threat-levels', async (req, res) => {
   }
 });
 
+// ─── /api/datacenter-stats — country-level bubble data for DC map layer ──────
+// Called by DC_LAYER in public/js/app.js — needs {datacenters:[{lat,lng,count,country}]}
+const _dcStatsCache = { data: null, ts: 0 };
+const _DC_COUNTRY_COORDS = {
+  'United States of America':[38.9,-95.7],'United States':[38.9,-95.7],
+  'United Kingdom':[51.5,-0.12],'France':[48.9,2.3],'Germany':[52.5,13.4],
+  'China':[39.9,116.4],'Japan':[35.7,139.7],'South Korea':[37.6,127.0],
+  'India':[20.6,78.9],'Canada':[45.4,-75.7],'Australia':[-25.3,133.8],
+  'Netherlands':[52.4,4.9],'Sweden':[59.3,18.1],'Finland':[60.2,25.0],
+  'Denmark':[55.7,12.6],'Norway':[59.9,10.7],'Switzerland':[47.4,8.5],
+  'Poland':[52.2,21.0],'Spain':[40.4,-3.7],'Italy':[41.9,12.5],
+  'Belgium':[50.8,4.4],'Singapore':[1.35,103.8],
+  'United Arab Emirates':[24.5,54.4],'Saudi Arabia':[24.7,46.7],
+  'Israel':[31.8,35.2],'Brazil':[-10.0,-55.0],'Mexico':[23.6,-102.6],
+  'Argentina':[-34.6,-58.4],'Chile':[-33.5,-70.6],'Colombia':[4.6,-74.1],
+  'Malaysia':[3.1,101.7],'Indonesia':[0.8,113.9],'Philippines (the)':[12.9,121.8],
+  'Thailand':[15.9,100.9],'Vietnam':[15.0,108.3],'Taiwan':[23.7,120.9],
+  'Hong Kong':[22.3,114.2],'Russia':[55.8,37.6],'Luxembourg':[49.6,6.1],
+  'Ireland':[53.3,-6.3],'Portugal':[38.7,-9.1],'Austria':[48.2,16.4],
+  'Czech Republic':[50.1,14.4],'Hungary':[47.5,19.1],'Romania':[44.4,26.1],
+  'Turkey':[39.9,32.9],'Egypt':[30.1,31.2],'South Africa':[-26.2,28.0],
+  'Kenya':[1.3,36.8],'Nigeria':[9.1,7.4],'Ghana':[7.9,-1.0],
+  'Qatar':[25.3,51.5],'Bahrain':[26.0,50.6],'Kuwait':[29.4,47.9],
+  'Jordan':[31.9,35.9],'New Zealand':[-41.3,174.8],'Pakistan':[33.7,73.1],
+  'Bangladesh':[23.7,90.4],'Iceland':[64.9,-18.7],'Ukraine':[50.5,30.5],
+  'Greece':[37.9,23.7],'Kazakhstan':[51.2,71.4],'Morocco':[31.8,-7.1],
+  'Estonia':[59.4,24.7],'Latvia':[56.9,24.1],'Lithuania':[54.7,25.3],
+  // CSV alternate spellings
+  'Czechia':[50.1,14.4],
+  'Korea (Republic of)':[37.6,127.0],
+  'Slovenia':[46.1,14.5],
+  'United Kingdom of Great Britain and Northern Ireland':[51.5,-0.12],
+  'Viet Nam':[15.0,108.3],'Vietnam':[15.0,108.3],'Iran (Islamic Republic of)':[35.7,51.4],
+};
+const _DC_REGION_MAP = {
+  'United States of America':'North America','United States':'North America',
+  'Canada':'North America','Mexico':'North America','Brazil':'South America',
+  'Argentina':'South America','Colombia':'South America','Chile':'South America',
+  'United Kingdom':'Europe','France':'Europe','Germany':'Europe','Netherlands':'Europe',
+  'Sweden':'Europe','Finland':'Europe','Denmark':'Europe','Norway':'Europe',
+  'Switzerland':'Europe','Poland':'Europe','Spain':'Europe','Italy':'Europe',
+  'Belgium':'Europe','Luxembourg':'Europe','Ireland':'Europe','Portugal':'Europe',
+  'Austria':'Europe','Czech Republic':'Europe','Hungary':'Europe','Romania':'Europe',
+  'Greece':'Europe','Estonia':'Europe','Latvia':'Europe','Lithuania':'Europe',
+  'Ukraine':'Europe','Russia':'Europe/Asia',
+  'China':'Asia Pacific','Japan':'Asia Pacific','South Korea':'Asia Pacific',
+  'India':'Asia Pacific','Australia':'Asia Pacific','Singapore':'Asia Pacific',
+  'Malaysia':'Asia Pacific','Indonesia':'Asia Pacific','Thailand':'Asia Pacific',
+  'Vietnam':'Asia Pacific','Taiwan':'Asia Pacific','Hong Kong':'Asia Pacific',
+  'New Zealand':'Asia Pacific','Bangladesh':'Asia Pacific','Pakistan':'Asia Pacific',
+  'United Arab Emirates':'Middle East','Saudi Arabia':'Middle East',
+  'Israel':'Middle East','Qatar':'Middle East','Bahrain':'Middle East',
+  'Kuwait':'Middle East','Jordan':'Middle East','Turkey':'Middle East',
+  'Egypt':'Africa/ME','Kenya':'Africa','Nigeria':'Africa','Ghana':'Africa',
+  'South Africa':'Africa','Morocco':'Africa','Kazakhstan':'Central Asia',
+  'Iceland':'Europe',
+};
+
+app.get('/api/datacenter-stats', (req, res) => {
+  const now = Date.now();
+  if (_dcStatsCache.data && (now - _dcStatsCache.ts) < TTL.DATACENTERS)
+    return res.json(_dcStatsCache.data);
+
+  try {
+    const raw   = fs.readFileSync(path.join(__dirname, 'public', 'gpu_clusters.csv'), 'utf8');
+    const lines = raw.trim().split('\n');
+    const hdrs  = _parseCSVRow(lines[0]).map(h => h.trim());
+    const nameIdx    = hdrs.indexOf('Name');
+    const statusIdx  = hdrs.indexOf('Status');
+    const countryIdx = hdrs.indexOf('Country');
+    const h100Idx    = hdrs.indexOf('H100 equivalents');
+    const ownerIdx   = hdrs.indexOf('Owner');
+
+    const countryMap = {};
+    for (let i = 1; i < lines.length; i++) {
+      const cols    = _parseCSVRow(lines[i]);
+      const status  = (cols[statusIdx] || '').trim();
+      const country = (cols[countryIdx] || '').trim();
+      if (!country || status === 'Decommissioned') continue;
+      const coords  = _DC_COUNTRY_COORDS[country];
+      if (!coords) continue;
+      if (!countryMap[country]) {
+        countryMap[country] = {
+          country,
+          lat: coords[0], lng: coords[1],
+          count: 0, h100Total: 0,
+          region: _DC_REGION_MAP[country] || '',
+          planned: 0, existing: 0,
+        };
+      }
+      const h100 = parseFloat(cols[h100Idx]) || 0;
+      countryMap[country].count++;
+      countryMap[country].h100Total += h100;
+      if (status === 'Planned') countryMap[country].planned++;
+      else countryMap[country].existing++;
+    }
+
+    const datacenters = Object.values(countryMap).map(d => ({
+      country:  d.country,
+      lat:      d.lat,
+      lng:      d.lng,
+      count:    d.count,
+      region:   d.region,
+      note:     `${d.existing} existing · ${d.planned} planned`,
+      h100eq:   Math.round(d.h100Total),
+    })).sort((a, b) => b.count - a.count);
+
+    const result = { datacenters, source: 'Epoch AI GPU Clusters 2025', lastUpdate: new Date().toISOString() };
+    _dcStatsCache.data = result;
+    _dcStatsCache.ts   = now;
+    res.json(result);
+  } catch (e) {
+    console.error('[datacenter-stats]', e.message);
+    res.status(500).json({ datacenters: [], error: e.message });
+  }
+});
+
 // ─── /api/datacenters ─────────────────────────────────────────────────────────
 app.get('/api/datacenters', async (req, res) => {
   const now = Date.now();
