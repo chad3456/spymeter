@@ -1157,6 +1157,198 @@ app.get('/api/datacenter-stats', (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION — CYBER THREATS LAYER
+// Sources: FeodoTracker C2 blocklist · URLhaus malicious URLs · freeipapi.com
+// ═══════════════════════════════════════════════════════════════════════════════
+const _cyberCache = { data: null, ts: 0 };
+const TTL_CYBER   = 30 * 60_000; // 30 min
+
+// ISO-2 country code → [display name, lat, lng]
+const _ISO2_COUNTRY = {
+  'AF':['Afghanistan',33.9,67.7],'AL':['Albania',41.2,20.2],'DZ':['Algeria',28.0,1.7],
+  'AO':['Angola',-11.2,17.9],'AR':['Argentina',-38.4,-63.6],'AM':['Armenia',40.1,45.0],
+  'AU':['Australia',-25.3,133.8],'AT':['Austria',47.5,14.6],'AZ':['Azerbaijan',40.1,47.6],
+  'BH':['Bahrain',26.0,50.6],'BD':['Bangladesh',23.7,90.4],'BY':['Belarus',53.7,28.0],
+  'BE':['Belgium',50.5,4.5],'BZ':['Belize',17.2,-88.5],'BJ':['Benin',9.3,2.3],
+  'BO':['Bolivia',-16.3,-63.6],'BA':['Bosnia',43.9,17.7],'BR':['Brazil',-14.2,-51.9],
+  'BG':['Bulgaria',42.7,25.5],'BF':['Burkina Faso',12.4,-1.6],'KH':['Cambodia',12.6,104.9],
+  'CM':['Cameroon',3.8,11.5],'CA':['Canada',56.1,-106.3],'CF':['Central African Rep',6.6,20.9],
+  'TD':['Chad',15.5,18.7],'CL':['Chile',-35.7,-71.5],'CN':['China',35.9,104.2],
+  'CO':['Colombia',4.6,-74.1],'CG':['Congo',-0.2,15.8],'CD':['Congo DRC',-4.0,21.8],
+  'CR':['Costa Rica',9.7,-83.8],'HR':['Croatia',45.1,15.2],'CU':['Cuba',21.5,-77.8],
+  'CY':['Cyprus',35.1,33.4],'CZ':['Czech Republic',49.8,15.5],'DK':['Denmark',56.3,9.5],
+  'DO':['Dominican Rep',18.7,-70.2],'EC':['Ecuador',-1.8,-78.2],'EG':['Egypt',26.8,30.8],
+  'EE':['Estonia',58.6,25.0],'ET':['Ethiopia',9.1,40.5],'FI':['Finland',61.9,25.7],
+  'FR':['France',46.2,2.2],'GE':['Georgia',42.3,43.4],'DE':['Germany',51.2,10.5],
+  'GH':['Ghana',7.9,-1.0],'GR':['Greece',39.1,21.8],'GT':['Guatemala',15.8,-90.2],
+  'HT':['Haiti',18.9,-72.3],'HN':['Honduras',15.2,-86.2],'HK':['Hong Kong',22.3,114.2],
+  'HU':['Hungary',47.2,19.5],'IS':['Iceland',64.9,-18.7],'IN':['India',20.6,78.9],
+  'ID':['Indonesia',-0.8,113.9],'IR':['Iran',32.4,53.7],'IQ':['Iraq',33.2,43.7],
+  'IE':['Ireland',53.4,-8.2],'IL':['Israel',31.5,34.8],'IT':['Italy',41.9,12.6],
+  'JP':['Japan',36.2,138.3],'JO':['Jordan',30.6,36.2],'KZ':['Kazakhstan',48.0,66.9],
+  'KE':['Kenya',-0.0,37.9],'KW':['Kuwait',29.3,47.5],'KG':['Kyrgyzstan',41.2,74.8],
+  'LA':['Laos',19.9,102.5],'LV':['Latvia',56.9,24.6],'LB':['Lebanon',33.9,35.5],
+  'LY':['Libya',26.3,17.2],'LT':['Lithuania',55.2,23.9],'LU':['Luxembourg',49.8,6.1],
+  'MY':['Malaysia',4.2,108.0],'ML':['Mali',17.6,-4.0],'MT':['Malta',35.9,14.5],
+  'MX':['Mexico',23.6,-102.6],'MD':['Moldova',47.4,28.4],'MN':['Mongolia',46.9,103.8],
+  'MA':['Morocco',31.8,-7.1],'MZ':['Mozambique',-18.7,35.5],'MM':['Myanmar',19.2,96.7],
+  'NA':['Namibia',-22.0,17.1],'NP':['Nepal',28.4,84.1],'NL':['Netherlands',52.1,5.3],
+  'NZ':['New Zealand',-40.9,174.9],'NI':['Nicaragua',12.9,-85.2],'NG':['Nigeria',9.1,8.7],
+  'KP':['North Korea',40.3,127.5],'NO':['Norway',60.5,8.5],'OM':['Oman',21.5,55.9],
+  'PK':['Pakistan',30.4,69.3],'PA':['Panama',8.5,-80.8],'PY':['Paraguay',-23.4,-58.4],
+  'PE':['Peru',-9.2,-75.0],'PH':['Philippines',12.9,121.8],'PL':['Poland',51.9,19.1],
+  'PT':['Portugal',39.4,-8.2],'QA':['Qatar',25.4,51.2],'RO':['Romania',45.9,24.9],
+  'RU':['Russia',61.5,105.3],'RW':['Rwanda',-1.9,29.9],'SA':['Saudi Arabia',23.9,45.1],
+  'SN':['Senegal',14.5,-14.5],'RS':['Serbia',44.0,21.0],'SG':['Singapore',1.4,103.8],
+  'SK':['Slovakia',48.7,19.7],'SI':['Slovenia',46.1,14.6],'SO':['Somalia',6.9,47.5],
+  'ZA':['South Africa',-30.6,22.9],'KR':['South Korea',35.9,127.8],'SS':['South Sudan',7.9,29.9],
+  'ES':['Spain',40.5,-3.7],'LK':['Sri Lanka',7.9,80.8],'SD':['Sudan',12.9,30.2],
+  'SE':['Sweden',60.1,18.6],'CH':['Switzerland',46.8,8.2],'SY':['Syria',34.8,38.9],
+  'TW':['Taiwan',23.7,121.0],'TJ':['Tajikistan',38.9,71.3],'TZ':['Tanzania',-6.4,34.9],
+  'TH':['Thailand',15.9,100.9],'TN':['Tunisia',34.0,9.0],'TR':['Turkey',38.9,35.2],
+  'TM':['Turkmenistan',40.0,59.6],'UG':['Uganda',1.4,32.3],'UA':['Ukraine',48.4,31.2],
+  'AE':['UAE',23.4,53.8],'GB':['United Kingdom',55.4,-3.4],'US':['United States',37.1,-95.7],
+  'UY':['Uruguay',-32.5,-55.8],'UZ':['Uzbekistan',41.4,64.6],'VE':['Venezuela',6.4,-66.6],
+  'VN':['Vietnam',14.1,108.3],'YE':['Yemen',15.6,48.5],'ZM':['Zambia',-13.1,27.8],
+  'ZW':['Zimbabwe',-20.0,30.0],'MK':['North Macedonia',41.6,21.7],'ME':['Montenegro',42.7,19.4],
+};
+
+app.get('/api/cyber-threats', async (req, res) => {
+  const now = Date.now();
+  if (_cyberCache.data && (now - _cyberCache.ts) < TTL_CYBER)
+    return res.json(_cyberCache.data);
+
+  const countryMap = {}; // cc -> { name, lat, lng, count, types: Set }
+
+  const _bump = (cc, type) => {
+    if (!cc || cc === 'ZZ' || cc === '--') return;
+    const info = _ISO2_COUNTRY[cc];
+    if (!info) return;
+    if (!countryMap[cc]) countryMap[cc] = { name: info[0], lat: info[1], lng: info[2], count: 0, types: new Set() };
+    countryMap[cc].count++;
+    if (type) countryMap[cc].types.add(type);
+  };
+
+  // ── 1. FeodoTracker C2 blocklist (JSON with country codes) ─────────────────
+  try {
+    const r = await axios.get('https://feodotracker.abuse.ch/downloads/ipblocklist.json',
+      { timeout: 12_000, headers: { 'User-Agent': 'OSINT-Dashboard/1.0' } });
+    const entries = Array.isArray(r.data) ? r.data : [];
+    for (const e of entries) _bump(e.country, e.malware || 'C2 Botnet');
+    console.log(`[cyber-threats] FeodoTracker: ${entries.length} C2 IPs`);
+  } catch (e) { console.error('[cyber-threats] FeodoTracker:', e.message); }
+
+  // ── 2. URLhaus recent malicious URLs ──────────────────────────────────────
+  try {
+    const r = await axios.post('https://urlhaus-api.abuse.ch/v1/urls/recent/', {},
+      { timeout: 12_000, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+    const urls = (r.data && r.data.urls) ? r.data.urls : [];
+    // Extract raw IPs (domains would need DNS — skip for now)
+    const ips = [...new Set(
+      urls.slice(0, 300).map(u => u.host).filter(h => h && /^\d{1,3}(\.\d{1,3}){3}$/.test(h))
+    )].slice(0, 100);
+    console.log(`[cyber-threats] URLhaus: ${urls.length} URLs, ${ips.length} raw IPs to geolocate`);
+
+    if (ips.length > 0) {
+      try {
+        const gr = await axios.post('https://freeipapi.com/api/json', ips,
+          { timeout: 15_000, headers: { 'Content-Type': 'application/json' } });
+        const geos = Array.isArray(gr.data) ? gr.data : [];
+        for (const g of geos) _bump(g.countryCode, 'Malicious URL');
+        console.log(`[cyber-threats] freeipapi: ${geos.length} geolocated`);
+      } catch (e) { console.error('[cyber-threats] freeipapi:', e.message); }
+    }
+  } catch (e) { console.error('[cyber-threats] URLhaus:', e.message); }
+
+  const threats = Object.values(countryMap)
+    .filter(c => c.count > 0)
+    .map(c => ({
+      country: c.name,
+      lat:     c.lat,
+      lng:     c.lng,
+      count:   c.count,
+      types:   [...c.types].slice(0, 5).join(', ') || 'Unknown',
+      source:  'FeodoTracker · URLhaus',
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  const result = { threats, kev_count: 0, lastUpdate: new Date().toISOString() };
+  _cyberCache.data = result;
+  _cyberCache.ts   = now;
+  res.json(result);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION — SUBMARINE CABLE MAP
+// Source: TeleGeography SubmarineMap API v3
+// ═══════════════════════════════════════════════════════════════════════════════
+const _cablesCache = { data: null, ts: 0 };
+const TTL_CABLES   = 24 * 60 * 60_000; // 24 h — cable routes rarely change
+
+app.get('/api/cables', async (req, res) => {
+  const now = Date.now();
+  if (_cablesCache.data && (now - _cablesCache.ts) < TTL_CABLES)
+    return res.json(_cablesCache.data);
+
+  try {
+    const r = await axios.get('https://www.submarinecablemap.com/api/v3/cable/all.json',
+      { timeout: 20_000, headers: { 'User-Agent': 'OSINT-Dashboard/1.0', 'Accept': 'application/json' } });
+
+    const features = (r.data && Array.isArray(r.data.features)) ? r.data.features : [];
+
+    // SubCableMap returns GeoJSON FeatureCollection with MultiLineString geometries.
+    // cables.js expects: { cables: [{ cable_name, color, coordinates:[[lng,lat],...] }] }
+    const cables = [];
+    for (const feat of features) {
+      const props = feat.properties || {};
+      const geom  = feat.geometry  || {};
+      const name  = props.name || props.cable_name || 'Unknown';
+      const color = props.color || '#00aaff';
+
+      if (geom.type === 'MultiLineString' && Array.isArray(geom.coordinates)) {
+        // Flatten each segment into a separate cable entry so Leaflet renders correctly
+        for (const segment of geom.coordinates) {
+          if (Array.isArray(segment) && segment.length >= 2) {
+            cables.push({ cable_name: name, color, coordinates: segment });
+          }
+        }
+      } else if (geom.type === 'LineString' && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
+        cables.push({ cable_name: name, color, coordinates: geom.coordinates });
+      }
+    }
+
+    const result = { cables, count: cables.length, lastUpdate: new Date().toISOString() };
+    _cablesCache.data = result;
+    _cablesCache.ts   = now;
+    console.log(`[cables] Loaded ${cables.length} cable segments from SubmarineMap`);
+    res.json(result);
+  } catch (e) {
+    console.error('[cables]', e.message);
+    // Return cached stale data if available, else empty
+    if (_cablesCache.data) return res.json(_cablesCache.data);
+    res.status(500).json({ cables: [], error: e.message });
+  }
+});
+
+// ─── /api/submarine-enhanced ─────────────────────────────────────────────────
+// Used by submarine.js for patrol zone news
+app.get('/api/submarine-enhanced', async (req, res) => {
+  // Static OSINT-based submarine positions — real positions are classified
+  const submarines = [
+    { name:'USS Tennessee',   flag:'🇺🇸', country:'USA',  clazz:'Ohio SSBN',    lat:42.0,  lng:-65.0,  depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',   notes:'US Atlantic deterrent; exact position classified', source:'OSINT' },
+    { name:'USS Kentucky',    flag:'🇺🇸', country:'USA',  clazz:'Ohio SSBN',    lat:48.0,  lng:-148.0, depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',   notes:'US Pacific deterrent patrol', source:'OSINT' },
+    { name:'USS Connecticut', flag:'🇺🇸', country:'USA',  clazz:'Seawolf SSN',  lat:35.0,  lng:130.0,  depth:300, status:'intelligence patrol', warheads:'Mk 48 torpedoes',  notes:'Advanced SSN — Pacific ops', source:'OSINT' },
+    { name:'K-535 Yuri Dolgoruky', flag:'🇷🇺', country:'Russia', clazz:'Borei SSBN', lat:72.0, lng:35.0, depth:250, status:'deterrent patrol', warheads:'16× Bulava',  notes:'Northern Fleet SSBN bastion', source:'OSINT' },
+    { name:'K-329 Belgorod',  flag:'🇷🇺', country:'Russia', clazz:'Oscar II SSGN', lat:76.0, lng:40.0, depth:300, status:'special mission', warheads:'Poseidon UUV',     notes:'Special purpose submarine', source:'OSINT' },
+    { name:'Type 094 Jin',    flag:'🇨🇳', country:'China', clazz:'Type 094 SSBN', lat:20.0, lng:114.0, depth:200, status:'deterrent patrol', warheads:'12× JL-2 SLBM',   notes:'PLAN South China Sea patrol', source:'OSINT' },
+    { name:'HMS Vanguard',    flag:'🇬🇧', country:'UK',  clazz:'Vanguard SSBN',  lat:60.0, lng:-12.0, depth:200, status:'deterrent patrol', warheads:'16× Trident II D5', notes:'UK CASD patrol — always 1 at sea', source:'OSINT' },
+    { name:'Le Triomphant',   flag:'🇫🇷', country:'France', clazz:'Triomphant SSBN', lat:47.0, lng:-14.0, depth:200, status:'deterrent patrol', warheads:'16× M51 SLBM', notes:'French SNLE Atlantic zone', source:'OSINT' },
+    { name:'INS Arihant',     flag:'🇮🇳', country:'India', clazz:'Arihant SSBN', lat:14.0, lng:83.0, depth:150, status:'deterrent patrol', warheads:'4× K-15 SLBM', notes:'Bay of Bengal patrol', source:'OSINT' },
+  ];
+  res.json({ submarines, news: [], lastUpdate: new Date().toISOString() });
+});
+
 // ─── /api/datacenters ─────────────────────────────────────────────────────────
 app.get('/api/datacenters', async (req, res) => {
   const now = Date.now();
