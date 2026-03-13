@@ -319,6 +319,7 @@
         <button class="rptab" data-rptab="rss">⚡ LIVE</button>
         <button class="rptab" data-rptab="markets">📈 MKTS</button>
         <button class="rptab" data-rptab="iranisr">🔥 IRN/ISR</button>
+        <button class="rptab" id="rptab-country-btn" data-rptab="country" style="color:#00d4ff;border-bottom-color:#00d4ff">🌍 COUNTRY</button>
         <button class="rptab" data-rptab="reddit">🔴 REDDIT</button>
         <button class="rptab" data-rptab="sources">👤 SOURCES</button>
         <button class="rptab" data-rptab="intel" style="display:none">◈ INTEL</button>
@@ -393,19 +394,31 @@
         </div>
       </div>
 
-      <!-- TAB: Iran-Israel War 2026 -->
-      <div class="rp-tab-body" id="rptab-iranisr" style="display:none">
-        <div class="panel-card">
-          <div class="card-hdr">📰 IRN/ISR INTEL NEWS <span class="badge-live">● GDELT 1h</span></div>
-          <div id="iranisr-news-feed" class="scroll-list" style="max-height:calc(100vh - 320px)">
-            <div class="news-loading">⟳ Loading…</div>
-          </div>
+      <!-- TAB: Iran-Israel War 2026 — NewsAPI Enhanced -->
+      <div class="rp-tab-body" id="rptab-iranisr" style="display:none;padding:0">
+        <!-- Category filter pills -->
+        <div style="display:flex;gap:4px;padding:6px 8px;flex-wrap:wrap;background:rgba(255,68,0,.05);border-bottom:1px solid rgba(255,68,0,.15)">
+          <button class="def-pill active" data-irnf="all"         onclick="filterIranIsrNews('all',this)">ALL</button>
+          <button class="def-pill" data-irnf="iran-israel"        onclick="filterIranIsrNews('iran-israel',this)">🔥 IRN/ISR</button>
+          <button class="def-pill" data-irnf="lpg-energy"         onclick="filterIranIsrNews('lpg-energy',this)">⛽ LPG/ENERGY</button>
+          <button class="def-pill" data-irnf="war-insights"       onclick="filterIranIsrNews('war-insights',this)">📊 INSIGHTS</button>
+          <button class="mini-btn" onclick="loadIranIsrNews(true)" style="margin-left:auto">↻</button>
         </div>
-        <div class="panel-card">
+        <!-- Stats bar -->
+        <div id="irn-stats-bar" style="display:flex;gap:8px;padding:5px 10px;background:rgba(0,0,0,.2);border-bottom:1px solid #1a2840;font-size:8px;color:var(--text-dim);letter-spacing:1px">
+          <span>📰 <span id="irn-count">—</span> ARTICLES</span>
+          <span style="margin-left:auto" id="irn-source-lbl">NewsAPI + GDELT</span>
+        </div>
+        <!-- News feed -->
+        <div id="iranisr-news-feed" class="scroll-list" style="max-height:calc(100vh - 200px)">
+          <div class="news-loading">⟳ Loading…</div>
+        </div>
+        <!-- i24 live embed -->
+        <div class="panel-card" style="margin:4px">
           <div class="card-hdr">📡 i24 NEWS (ISRAEL) <span class="badge-live">● LIVE</span></div>
           <iframe src="https://www.youtube.com/embed/MLpupuAbWRc?autoplay=1&mute=1&controls=1"
             frameborder="0" allow="autoplay;encrypted-media" allowfullscreen
-            style="width:100%;height:180px;border-radius:3px"></iframe>
+            style="width:100%;height:160px;border-radius:3px"></iframe>
         </div>
       </div>
 
@@ -763,6 +776,92 @@
             <div id="csearch-news" class="scroll-list" style="max-height:280px">
               <div class="news-loading">⟳ Loading…</div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Country CII Panel -->
+      <div class="rp-tab-body" id="rptab-country" style="display:none;padding:0">
+        <div id="cii-loading" style="padding:20px;text-align:center;color:var(--text-dim);font-size:10px;letter-spacing:1px">
+          ◌ CLICK A COUNTRY ON THE MAP<br><span style="font-size:8px;opacity:0.6">or search below</span>
+        </div>
+        <div id="cii-search-bar" style="padding:6px 8px;background:rgba(0,0,0,.3);border-bottom:1px solid #1a2840;display:flex;gap:6px">
+          <input id="cii-search-input" type="text" placeholder="Search country…"
+            style="flex:1;background:#0a1520;border:1px solid #1e3a5f;color:#c8dff0;padding:4px 8px;font-family:monospace;font-size:10px;border-radius:2px;outline:none"/>
+          <button id="cii-search-btn" onclick="CII.search(document.getElementById('cii-search-input').value)"
+            style="background:#1e3a5f;color:#00d4ff;border:none;padding:4px 10px;font-family:monospace;font-size:10px;cursor:pointer;border-radius:2px">GO</button>
+        </div>
+        <div id="cii-panel" style="display:none;overflow-y:auto;max-height:calc(100vh - 100px)">
+          <!-- Header -->
+          <div class="panel-card" style="margin:4px;padding:8px 10px;background:rgba(0,180,255,.06);border:1px solid rgba(0,180,255,.15)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span id="cii-flag" style="font-size:24px">🌍</span>
+              <div style="flex:1">
+                <div id="cii-country-name" style="font-size:14px;font-weight:700;color:#c8dff0"></div>
+                <div id="cii-region" style="font-size:9px;color:var(--text-dim);letter-spacing:1px"></div>
+              </div>
+              <button id="cii-flyto-btn" class="im-btn" style="font-size:10px">📍</button>
+            </div>
+            <!-- CII Score Dial -->
+            <div style="text-align:center;margin:8px 0">
+              <div id="cii-score-display" style="font-size:36px;font-weight:700;font-family:monospace;letter-spacing:2px">—</div>
+              <div style="font-size:8px;color:var(--text-dim);letter-spacing:2px;margin-bottom:4px">COUNTRY INSTABILITY INDEX</div>
+              <div id="cii-stability-badge" style="display:inline-block;padding:3px 12px;border-radius:2px;font-size:10px;font-weight:700;letter-spacing:2px;border:1px solid #444">—</div>
+            </div>
+            <!-- Score breakdown bar -->
+            <div style="margin-top:8px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+                <span style="font-size:8px;color:var(--text-dim);letter-spacing:1px">UNREST ×0.4</span>
+                <span id="cii-unrest-val" style="font-size:8px;color:#ff6600">0</span>
+              </div>
+              <div style="background:#0a1520;border-radius:2px;height:4px;margin-bottom:4px"><div id="cii-unrest-bar" style="height:4px;background:#ff6600;border-radius:2px;width:0%;transition:width 0.6s"></div></div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+                <span style="font-size:8px;color:var(--text-dim);letter-spacing:1px">SECURITY ×0.3</span>
+                <span id="cii-security-val" style="font-size:8px;color:#ffaa00">0</span>
+              </div>
+              <div style="background:#0a1520;border-radius:2px;height:4px;margin-bottom:4px"><div id="cii-security-bar" style="height:4px;background:#ffaa00;border-radius:2px;width:0%;transition:width 0.6s"></div></div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+                <span style="font-size:8px;color:var(--text-dim);letter-spacing:1px">INFORMATION ×0.3</span>
+                <span id="cii-info-val" style="font-size:8px;color:#00d4ff">0</span>
+              </div>
+              <div style="background:#0a1520;border-radius:2px;height:4px"><div id="cii-info-bar" style="height:4px;background:#00d4ff;border-radius:2px;width:0%;transition:width 0.6s"></div></div>
+            </div>
+          </div>
+
+          <!-- Economic Parameters -->
+          <div class="panel-card" style="margin:4px;padding:8px 10px">
+            <div class="card-hdr" style="margin-bottom:6px">📊 ECONOMIC PARAMETERS</div>
+            <div id="cii-econ-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
+          </div>
+
+          <!-- Defence Strength -->
+          <div class="panel-card" style="margin:4px;padding:8px 10px">
+            <div class="card-hdr" style="margin-bottom:6px">⚔ MILITARY & DEFENCE STRENGTH</div>
+            <div id="cii-defence-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
+            <div id="cii-defence-news" class="scroll-list" style="max-height:160px;margin-top:6px"></div>
+          </div>
+
+          <!-- Tourism -->
+          <div class="panel-card" style="margin:4px;padding:8px 10px">
+            <div class="card-hdr" style="margin-bottom:6px">✈ TOURISM INDEX <span class="badge-static">UNWTO 2024</span></div>
+            <div id="cii-tourism"></div>
+          </div>
+
+          <!-- Raw signal inputs -->
+          <div class="panel-card" style="margin:4px;padding:8px 10px">
+            <div class="card-hdr" style="margin-bottom:6px">📡 RAW SIGNAL INPUTS</div>
+            <div id="cii-signals" style="font-size:9px;color:var(--text-dim);line-height:1.8"></div>
+          </div>
+
+          <!-- Live news -->
+          <div class="panel-card" style="margin:4px;padding:8px 10px">
+            <div class="card-hdr" style="margin-bottom:6px">📰 LIVE INTEL <span class="badge-live">● GDELT + NewsAPI</span></div>
+            <div id="cii-news" class="scroll-list" style="max-height:240px"></div>
+          </div>
+
+          <!-- Data sources -->
+          <div style="padding:6px 12px;font-size:8px;color:var(--text-dim);letter-spacing:1px;border-top:1px solid #1a2840">
+            SOURCES: <span id="cii-sources"></span>
           </div>
         </div>
       </div>
@@ -1246,7 +1345,8 @@
         // Lazy-init on first open
         if (tab === 'rss'        && !btn._rssInited)       { btn._rssInited       = true; if(window.POLLS) POLLS.loadRSSNews(); }
         if (tab === 'markets'    && !btn._mktInited)       { btn._mktInited       = true; MARKETS.init(); }
-        if (tab === 'iranisr'    && !btn._irnInited)       { btn._irnInited       = true; loadIranIsrNews(); if (window.twttr?.widgets) window.twttr.widgets.load(); }
+        if (tab === 'iranisr'    && !btn._irnInited)       { btn._irnInited       = true; loadIranIsrNews(false); if (window.twttr?.widgets) window.twttr.widgets.load(); }
+        if (tab === 'country'    && !btn._countryInited)   { btn._countryInited   = true; /* CII shows on demand */ }
         if (tab === 'defence'    && !btn._defInited)       { btn._defInited       = true; DEFENCE.init(); }
         if (tab === 'india'      && !btn._indiaInited)     { btn._indiaInited     = true; INDIA.init(); loadIndiaOsintFeed(); }
         if (tab === 'china'      && !btn._chinaInited)     { btn._chinaInited     = true; loadChinaFeed(); }
@@ -1324,30 +1424,75 @@
     loadTensionPairs();
 
     // ── Iran/Israel news (GDELT conflict endpoint) ─────────
-    async function loadIranIsrNews() {
+    // ── Iran-Israel NewsAPI enhanced feed ─────────────────
+    let _irnAllArticles = [];
+    let _irnFilter = 'all';
+
+    function filterIranIsrNews(f, btn) {
+      _irnFilter = f;
+      document.querySelectorAll('[data-irnf]').forEach(b => b.classList.toggle('active', b.dataset.irnf === f));
+      _renderIranIsrNews();
+    }
+    window.filterIranIsrNews = filterIranIsrNews;
+
+    function _renderIranIsrNews() {
       const el = document.getElementById('iranisr-news-feed');
       if (!el) return;
-      el.innerHTML = '<div class="news-loading">⟳ Fetching Iran-Israel intel…</div>';
+      const arts = _irnFilter === 'all' ? _irnAllArticles : _irnAllArticles.filter(a => a.category === _irnFilter);
+      if (!arts.length) { el.innerHTML = '<div class="news-loading">No articles in this category</div>'; return; }
+      el.innerHTML = arts.map(a => {
+        const col      = parseFloat(a.tone||0) < -3 ? '#ff4444' : parseFloat(a.tone||0) > 2 ? '#00ff88' : '#888';
+        const catColor = a.category === 'iran-israel' ? '#ff4400' : a.category === 'lpg-energy' ? '#ffaa00' : '#9b59ff';
+        const catLabel = a.category === 'iran-israel' ? '🔥 IRN/ISR' : a.category === 'lpg-energy' ? '⛽ LPG' : '📊 INSIGHT';
+        const rel      = UTILS.timeAgo(a.pubDate || a.date || '');
+        const safeTitle = (a.title||'').replace(/'/g,'&#39;');
+        const imgHtml  = a.image ? `<img src="${a.image}" style="width:100%;max-height:80px;object-fit:cover;border-radius:2px;margin-bottom:4px;opacity:0.85" loading="lazy" onerror="this.style.display='none'">` : '';
+        const descHtml = a.description ? `<div class="news-desc" style="font-size:8px;color:var(--text-dim);margin-top:2px;line-height:1.4">${a.description.slice(0,150)}…</div>` : '';
+        return `<a class="news-item" href="${a.url||'#'}" target="_blank" rel="noopener noreferrer">
+          ${imgHtml}
+          <div class="news-title">${a.title||''}</div>
+          ${descHtml}
+          <div class="news-meta">
+            <span class="news-src">${a.source||''}</span>
+            ${rel ? `<span class="news-ts">${rel}</span>` : ''}
+            <span style="font-size:7px;color:${catColor};border:1px solid ${catColor};padding:0 3px;border-radius:2px">${catLabel}</span>
+            ${a.tone ? `<span class="news-tone" style="color:${col}">${parseFloat(a.tone).toFixed(1)}</span>` : ''}
+            <button class="narrate-btn-sm" onclick="event.preventDefault();UTILS.narrate('${safeTitle}')">🔊</button>
+          </div>
+        </a>`;
+      }).join('');
+    }
+
+    async function loadIranIsrNews(force = false) {
+      const el = document.getElementById('iranisr-news-feed');
+      if (!el) return;
+      el.innerHTML = '<div class="news-loading">⟳ Fetching Iran-Israel intel via NewsAPI…</div>';
       try {
-        const r = await fetch('/api/conflict-news');
-        const d = r.ok ? await r.json() : { articles: [] };
-        const arts = d.articles || [];
-        if (!arts.length) { el.innerHTML = '<div class="news-loading">No recent articles</div>'; return; }
-        el.innerHTML = arts.map(a => {
-          const col = parseFloat(a.tone||0) < -3 ? '#ff4444' : parseFloat(a.tone||0) > 2 ? '#00ff88' : '#888';
-          const rel = UTILS.timeAgo(a.date);
-          const safeTitle = (a.title||'').replace(/'/g,'&#39;');
-          return `<a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
-            <div class="news-title">${a.title}</div>
-            <div class="news-meta">
-              <span class="news-src">${a.source}</span>
-              ${rel ? `<span class="news-ts">${rel}</span>` : ''}
-              <span class="news-tone" style="color:${col}">${parseFloat(a.tone||0).toFixed(1)}</span>
-              <button class="narrate-btn-sm" onclick="event.preventDefault();UTILS.narrate('${safeTitle}')">🔊</button>
-            </div>
-          </a>`;
-        }).join('');
-      } catch (_) { el.innerHTML = '<div class="news-loading">Unavailable</div>'; }
+        // Try NewsAPI first (50+ articles, 3 categories), fallback to GDELT conflict-news
+        const [newsapiR, gdeltR] = await Promise.allSettled([
+          fetch('/api/newsapi/conflict').then(r => r.ok ? r.json() : null),
+          fetch('/api/conflict-news').then(r => r.ok ? r.json() : null),
+        ]);
+        const newsapiArts = newsapiR.status === 'fulfilled' && newsapiR.value?.articles?.length
+          ? newsapiR.value.articles : [];
+        const gdeltArts = gdeltR.status === 'fulfilled' && gdeltR.value?.articles?.length
+          ? gdeltR.value.articles.map(a => ({ ...a, category: 'iran-israel' })) : [];
+
+        // Merge: NewsAPI first (higher quality), then GDELT for gaps
+        const newsapiUrls = new Set(newsapiArts.map(a => a.url));
+        const combined = [
+          ...newsapiArts,
+          ...gdeltArts.filter(a => !newsapiUrls.has(a.url)),
+        ];
+        _irnAllArticles = combined;
+
+        const countEl = document.getElementById('irn-count');
+        if (countEl) countEl.textContent = combined.length;
+        const srcEl = document.getElementById('irn-source-lbl');
+        if (srcEl) srcEl.textContent = newsapiArts.length ? `NewsAPI (${newsapiArts.length}) + GDELT (${gdeltArts.length})` : 'GDELT only';
+
+        _renderIranIsrNews();
+      } catch (_) { el.innerHTML = '<div class="news-loading">Feed unavailable</div>'; }
     }
 
     // ── India OSINT Feed ──────────────────────────────────
@@ -2108,6 +2253,282 @@
 
   /* Expose to MILITARY module for country click */
   window.INSTABILITY = { show: showInstabilityPanel, close: closeInstabilityPanel };
+
+  // ══════════════════════════════════════════════════════════════
+  // CII MODULE — Country Instability Index Panel
+  // Triggered by: map click on country, search bar, or MILITARY popup
+  // ══════════════════════════════════════════════════════════════
+  const CII = (() => {
+    let _lastCountry = null;
+    let _lastLat = 0, _lastLng = 0;
+
+    // Country name → lat/lng lookup for flyTo
+    const COUNTRY_LL = {
+      'India':[20.6,78.9],'China':[35.8,104.2],'Russia':[61.5,105.3],'USA':[39.5,-98.4],
+      'United States':[39.5,-98.4],'United Kingdom':[54.4,-2.1],'UK':[54.4,-2.1],
+      'France':[46.2,2.2],'Germany':[51.2,10.4],'Iran':[32.4,53.7],
+      'Israel':[31.5,34.8],'Pakistan':[30.4,69.3],'Ukraine':[49.0,31.0],
+      'Russia':[61.5,105.3],'Turkey':[39.9,32.9],'Saudi Arabia':[24.7,45.6],
+      'Iraq':[33.2,43.7],'Syria':[34.8,38.9],'Lebanon':[33.9,35.5],
+      'Yemen':[15.5,48.0],'Egypt':[26.8,30.8],'Jordan':[31.2,36.5],
+      'UAE':[23.4,53.8],'Japan':[36.2,138.2],'South Korea':[36.5,127.8],
+      'North Korea':[40.3,127.5],'Australia':[-25.3,133.8],'Brazil':[-10.0,-55.0],
+      'Afghanistan':[33.9,67.7],'Sudan':[15.5,32.5],'Libya':[26.3,17.2],
+      'Nigeria':[10.2,8.7],'Ethiopia':[8.6,39.6],'Somalia':[6.0,46.2],
+      'Myanmar':[16.8,96.2],'Taiwan':[23.7,120.9],'Qatar':[25.3,51.5],
+      'Kuwait':[29.4,47.9],'Bahrain':[26.0,50.5],'Oman':[21.0,57.0],
+      'Kazakhstan':[47.2,67.3],'Uzbekistan':[41.4,64.6],'Azerbaijan':[40.3,47.6],
+      'Armenia':[40.1,44.5],'Georgia':[42.3,43.4],'Venezuela':[8.0,-66.0],
+      'Colombia':[4.6,-74.1],'Mexico':[23.6,-102.6],'Argentina':[-34.6,-58.4],
+      'Bangladesh':[23.7,90.4],'Sri Lanka':[7.9,80.8],'Nepal':[28.4,84.1],
+      'Poland':[52.1,19.1],'Hungary':[47.2,19.5],'Romania':[44.4,26.1],
+      'Serbia':[44.0,21.0],'Bulgaria':[42.8,25.2],'Greece':[39.0,22.0],
+    };
+
+    // Country flag emoji lookup
+    const COUNTRY_FLAGS = {
+      'India':'🇮🇳','China':'🇨🇳','Russia':'🇷🇺','USA':'🇺🇸','United States':'🇺🇸',
+      'United Kingdom':'🇬🇧','UK':'🇬🇧','France':'🇫🇷','Germany':'🇩🇪',
+      'Iran':'🇮🇷','Israel':'🇮🇱','Pakistan':'🇵🇰','Ukraine':'🇺🇦','Turkey':'🇹🇷',
+      'Saudi Arabia':'🇸🇦','Iraq':'🇮🇶','Syria':'🇸🇾','Lebanon':'🇱🇧','Yemen':'🇾🇪',
+      'Egypt':'🇪🇬','Japan':'🇯🇵','South Korea':'🇰🇷','North Korea':'🇰🇵',
+      'Australia':'🇦🇺','Brazil':'🇧🇷','Afghanistan':'🇦🇫','Sudan':'🇸🇩',
+      'Myanmar':'🇲🇲','Taiwan':'🇹🇼','Qatar':'🇶🇦','UAE':'🇦🇪',
+      'Nigeria':'🇳🇬','Ethiopia':'🇪🇹','Somalia':'🇸🇴','Jordan':'🇯🇴',
+      'Libya':'🇱🇾','Venezuela':'🇻🇪','Poland':'🇵🇱',
+    };
+
+    function _cell(label, value, color = '') {
+      return `<div style="background:#0a1520;border:1px solid #1a2840;border-radius:2px;padding:5px 7px">
+        <div style="font-size:8px;color:var(--text-dim);letter-spacing:1px;margin-bottom:2px">${label}</div>
+        <div style="font-size:11px;font-weight:700;color:${color||'#c8dff0'};font-family:monospace">${value||'—'}</div>
+      </div>`;
+    }
+
+    async function show(countryName, lat, lng) {
+      _lastCountry = countryName;
+      _lastLat = lat || 0; _lastLng = lng || 0;
+
+      // Switch to country tab
+      document.querySelectorAll('.rptab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.rp-tab-body').forEach(b => b.style.display = 'none');
+      const tabBtn = document.querySelector('[data-rptab="country"]');
+      if (tabBtn) tabBtn.classList.add('active');
+      const tabBody = document.getElementById('rptab-country');
+      if (tabBody) tabBody.style.display = 'block';
+
+      // Open right panel on mobile
+      document.getElementById('right-panel')?.classList.add('mob-open');
+
+      // Show loading
+      document.getElementById('cii-loading').style.display = 'none';
+      const panel = document.getElementById('cii-panel');
+      panel.style.display = 'block';
+
+      // Set header
+      const ll   = COUNTRY_LL[countryName] || [lat||0, lng||0];
+      const flag = COUNTRY_FLAGS[countryName] || '🌍';
+      document.getElementById('cii-flag').textContent = flag;
+      document.getElementById('cii-country-name').textContent = countryName;
+      document.getElementById('cii-region').textContent = 'Loading…';
+      document.getElementById('cii-score-display').textContent = '…';
+      document.getElementById('cii-stability-badge').textContent = 'Computing CII…';
+      document.getElementById('cii-stability-badge').style.cssText = 'display:inline-block;padding:3px 12px;border-radius:2px;font-size:10px;font-weight:700;letter-spacing:2px;border:1px solid #444;color:#888';
+      ['cii-unrest-bar','cii-security-bar','cii-info-bar'].forEach(id => document.getElementById(id).style.width = '0%');
+      document.getElementById('cii-econ-grid').innerHTML  = '<div style="color:var(--text-dim);font-size:9px;grid-column:span 2">⟳ Loading…</div>';
+      document.getElementById('cii-defence-grid').innerHTML = '<div style="color:var(--text-dim);font-size:9px;grid-column:span 2">⟳ Loading…</div>';
+      document.getElementById('cii-defence-news').innerHTML = '<div class="news-loading">⟳ Fetching defence news…</div>';
+      document.getElementById('cii-tourism').innerHTML = '<div style="color:var(--text-dim);font-size:9px">⟳ Loading…</div>';
+      document.getElementById('cii-signals').innerHTML = '<div class="news-loading">⟳ Computing signals…</div>';
+      document.getElementById('cii-news').innerHTML = '<div class="news-loading">⟳ Fetching intel…</div>';
+      document.getElementById('cii-sources').textContent = '';
+
+      const flytoBtn = document.getElementById('cii-flyto-btn');
+      if (flytoBtn) flytoBtn.onclick = () => APP.flyTo(ll[0], ll[1], 5);
+
+      try {
+        const r = await fetch(`/api/cii/${encodeURIComponent(countryName)}`);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+
+        // Score display
+        const scoreEl = document.getElementById('cii-score-display');
+        scoreEl.textContent = d.cii;
+        scoreEl.style.color = d.stability_color;
+
+        const badgeEl = document.getElementById('cii-stability-badge');
+        badgeEl.textContent = d.stability;
+        badgeEl.style.cssText = `display:inline-block;padding:3px 12px;border-radius:2px;font-size:10px;font-weight:700;letter-spacing:2px;border:1px solid ${d.stability_color};color:${d.stability_color};background:${d.stability_color}18`;
+
+        // Score bars
+        const s = d.scores || {};
+        document.getElementById('cii-unrest-val').textContent  = s.unrest  || 0;
+        document.getElementById('cii-security-val').textContent= s.security|| 0;
+        document.getElementById('cii-info-val').textContent    = s.information || 0;
+        setTimeout(() => {
+          document.getElementById('cii-unrest-bar').style.width   = (s.unrest  || 0) + '%';
+          document.getElementById('cii-security-bar').style.width = (s.security|| 0) + '%';
+          document.getElementById('cii-info-bar').style.width     = (s.information || 0) + '%';
+        }, 50);
+
+        // Region
+        const e = d.econ || {};
+        document.getElementById('cii-region').textContent = [e.region, e.subregion].filter(Boolean).join(' · ');
+
+        // Economic grid
+        const pop = e.population ? (e.population / 1e6).toFixed(1) + 'M' : '—';
+        const area = e.area_km2 ? (e.area_km2 / 1e6).toFixed(2) + 'M km²' : '—';
+        const gdp = e.gdp_trillion ? '$' + e.gdp_trillion + 'T' : '—';
+        document.getElementById('cii-econ-grid').innerHTML = [
+          _cell('POPULATION', pop, '#00d4ff'),
+          _cell('AREA', area),
+          _cell('CAPITAL', e.capital, '#ffaa00'),
+          _cell('CURRENCY', e.currencies ? e.currencies.split(',')[0] : '—'),
+          _cell('GDP (APPROX)', gdp, '#00ff88'),
+          _cell('LANGUAGES', e.languages ? e.languages.split(',').slice(0,2).join(', ') : '—'),
+        ].join('');
+
+        // Defence grid
+        const def = d.defence || {};
+        const gfiBar = def.gfi_index ? Math.round((1 - def.gfi_index) * 100) : 0;
+        document.getElementById('cii-defence-grid').innerHTML = [
+          _cell('MIL. STRENGTH', def.military_strength_score ? def.military_strength_score + '/100' : '—', '#ff6600'),
+          _cell('GFP RANK', def.military_rank ? '#' + def.military_rank : '—', '#ffaa00'),
+          _cell('GFP INDEX', def.gfi_index ? def.gfi_index.toFixed(4) : '—'),
+          _cell('ECON STRENGTH', def.economic_strength ? def.economic_strength + '/100' : '—', '#00d4ff'),
+          _cell('SOCIAL SCORE', def.social_cohesion ? def.social_cohesion + '/100' : '—', '#00ff88'),
+          _cell('GFP POWER', gfiBar + '%', '#ff6600'),
+        ].join('');
+
+        // Defence news (fetch separately)
+        fetch(`/api/newsapi/search?q=${encodeURIComponent(countryName + ' military defence innovation 2026')}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(nd => {
+            const defArts = nd?.articles || [];
+            const defEl = document.getElementById('cii-defence-news');
+            if (!defArts.length) { defEl.innerHTML = '<div class="news-loading">No recent defence news</div>'; return; }
+            defEl.innerHTML = defArts.slice(0, 8).map(a => {
+              const rel = UTILS.timeAgo(a.pubDate || '');
+              const safe = (a.title||'').replace(/'/g,'&#39;');
+              return `<a class="news-item" href="${a.url||'#'}" target="_blank" rel="noopener">
+                <div class="news-title">${a.title||''}</div>
+                <div class="news-meta"><span class="news-src">${a.source||''}</span>${rel?`<span class="news-ts">${rel}</span>`:''}</div>
+              </a>`;
+            }).join('');
+          }).catch(() => { document.getElementById('cii-defence-news').innerHTML = '<div class="news-loading">Defence news unavailable</div>'; });
+
+        // Tourism
+        const t = d.tourism || {};
+        const tScore = t.score;
+        const tColor = tScore >= 70 ? '#00ff88' : tScore >= 40 ? '#ffaa00' : '#ff6600';
+        document.getElementById('cii-tourism').innerHTML = tScore != null
+          ? `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+               <div style="font-size:28px;font-weight:700;font-family:monospace;color:${tColor}">${tScore}</div>
+               <div>
+                 <div style="font-size:9px;color:var(--text-dim)">TOURISM SCORE /100</div>
+                 ${t.rank ? `<div style="font-size:9px;color:#888">World Rank #${t.rank}</div>` : ''}
+               </div>
+             </div>
+             <div style="background:#0a1520;border-radius:2px;height:6px;margin-bottom:4px">
+               <div style="height:6px;background:${tColor};border-radius:2px;width:${tScore}%;transition:width 0.6s"></div>
+             </div>
+             <div style="font-size:8px;color:var(--text-dim)">${t.note||''}</div>`
+          : `<div style="font-size:9px;color:var(--text-dim)">${t.note || 'Data not available'}</div>`;
+
+        // Raw signals
+        const ri = d.raw_inputs || {};
+        document.getElementById('cii-signals').innerHTML = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:9px">
+            <span style="color:var(--text-dim)">Protest events</span><span style="color:#ff9900">${ri.protest_count || 0}</span>
+            <span style="color:var(--text-dim)">Est. fatalities</span><span style="color:#ff4400">${ri.total_fatalities || 0}</span>
+            <span style="color:var(--text-dim)">High severity</span><span style="color:#ff6600">${ri.high_severity || 0}</span>
+            <span style="color:var(--text-dim)">News articles (48h)</span><span style="color:#00d4ff">${ri.news_count || 0}</span>
+            <span style="color:var(--text-dim)">Avg velocity</span><span style="color:#00d4ff">${ri.avg_velocity || 0}/hr</span>
+            <span style="color:var(--text-dim)">Avg tone</span><span style="color:${(ri.avg_tone||0) < 0 ? '#ff6600' : '#00ff88'}">${ri.avg_tone || 0}</span>
+            <span style="color:var(--text-dim)">Alert detected</span><span style="color:${ri.any_alert ? '#ff0000' : '#00ff88'}">${ri.any_alert ? '⚠ YES' : '✓ NO'}</span>
+            <span style="color:var(--text-dim)">Mil. flights</span><span style="color:#ffaa00">${ri.mil_flights || 0}</span>
+            <span style="color:var(--text-dim)">Naval vessels</span><span style="color:#ffaa00">${ri.naval_vessels || 0}</span>
+          </div>`;
+
+        // News
+        const news = d.recent_news || [];
+        const newsEl = document.getElementById('cii-news');
+        if (!news.length) { newsEl.innerHTML = '<div class="news-loading">No recent intel</div>'; }
+        else {
+          newsEl.innerHTML = news.map(a => {
+            const rel  = UTILS.timeAgo(a.date || '');
+            const safe = (a.title||'').replace(/'/g,'&#39;');
+            const col  = parseFloat(a.tone||0) < -3 ? '#ff4444' : '#888';
+            return `<a class="news-item" href="${a.url||'#'}" target="_blank" rel="noopener">
+              <div class="news-title">${a.title||''}</div>
+              <div class="news-meta">
+                <span class="news-src">${a.source||''}</span>
+                ${rel?`<span class="news-ts">${rel}</span>`:''}
+                <span style="font-size:7px;color:#555">${a.provider||''}</span>
+                ${a.tone?`<span class="news-tone" style="color:${col}">${parseFloat(a.tone).toFixed(1)}</span>`:''}
+                <button class="narrate-btn-sm" onclick="event.preventDefault();UTILS.narrate('${safe}')">🔊</button>
+              </div>
+            </a>`;
+          }).join('');
+        }
+
+        // Sources
+        document.getElementById('cii-sources').textContent = (d.sources || []).join(' · ');
+
+      } catch (err) {
+        document.getElementById('cii-stability-badge').textContent = 'Error: ' + err.message;
+        document.getElementById('cii-stability-badge').style.color = '#ff4444';
+        document.getElementById('cii-news').innerHTML = `<div class="news-loading">CII unavailable: ${err.message}</div>`;
+      }
+    }
+
+    function search(name) {
+      if (!name || name.length < 2) return;
+      const ll = COUNTRY_LL[name] || [0, 0];
+      show(name, ll[0], ll[1]);
+    }
+
+    // Enter key in search
+    document.getElementById('cii-search-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') search(e.target.value.trim());
+    });
+
+    // ── Map click → country CII ────────────────────────────
+    // We add a transparent GeoJSON world layer that intercepts clicks
+    // and resolves country name via reverse geocoding (Nominatim)
+    function initMapCountryClick() {
+      const m = window._leafletMap;
+      if (!m) { setTimeout(initMapCountryClick, 1000); return; }
+      m.on('click', async function(e) {
+        const lat = e.latlng.lat, lng = e.latlng.lng;
+        // Reverse geocode to get country
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=3`, {
+            headers: { 'User-Agent': 'SpymeterOSINT/1.0' }
+          });
+          const d = r.ok ? await r.json() : null;
+          const country = d?.address?.country;
+          if (country) {
+            CII.show(country, lat, lng);
+          }
+        } catch (_) {}
+      });
+    }
+    // Delay to ensure map is ready
+    setTimeout(initMapCountryClick, 2000);
+
+    return { show, search };
+  })();
+  window.CII = CII;
+
+  // Also hook into INSTABILITY.show to also trigger CII panel
+  const _origInstabShow = window.INSTABILITY?.show;
+  if (_origInstabShow) {
+    window.INSTABILITY.show = function(code, flag, name) {
+      _origInstabShow(code, flag, name);
+      CII.show(name || code, 0, 0);
+    };
+  }
   </script>
 
 </body>

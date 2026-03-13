@@ -571,6 +571,337 @@ app.get('/api/country-intel/:code', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 5B — NEWSAPI ENDPOINTS
+// Uses NEWSAPI_KEY env var (newsapi.org — free tier: 100 req/day)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const NEWSAPI_KEY = process.env.NEWSAPI_KEY || '';
+const _newsapiCache = {};
+
+async function fetchNewsAPI(query, pageSize = 50, cacheKey = null) {
+  const key = cacheKey || query;
+  const now  = Date.now();
+  const TTL  = 15 * 60_000; // 15 min
+  if (_newsapiCache[key] && now - _newsapiCache[key].ts < TTL) return _newsapiCache[key].data;
+  if (!NEWSAPI_KEY) throw new Error('NEWSAPI_KEY not configured');
+  const r = await axios.get('https://newsapi.org/v2/everything', {
+    params: {
+      q: query, language: 'en', sortBy: 'publishedAt',
+      pageSize: Math.min(pageSize, 100), page: 1,
+      apiKey: NEWSAPI_KEY,
+    },
+    timeout: 12_000,
+  });
+  const articles = (r.data?.articles || []).map(a => ({
+    title:       a.title || '',
+    url:         a.url   || '',
+    source:      a.source?.name || a.source?.id || '',
+    description: (a.description || '').slice(0, 200),
+    image:       a.urlToImage || null,
+    pubDate:     a.publishedAt || null,
+    author:      a.author || '',
+  })).filter(a => a.title && a.title !== '[Removed]');
+  _newsapiCache[key] = { data: articles, ts: now };
+  return articles;
+}
+
+// ─── /api/newsapi/conflict — Iran-Israel + regional war news (50+) ─────────────
+app.get('/api/newsapi/conflict', async (req, res) => {
+  try {
+    const [iranIsrael, lpg, war] = await Promise.allSettled([
+      fetchNewsAPI('Iran Israel war strike missile 2026', 50, 'iran-israel'),
+      fetchNewsAPI('LPG gas shortage India war Middle East energy crisis', 30, 'lpg-shortage'),
+      fetchNewsAPI('war geopolitics military conflict 2026 analysis', 30, 'war-insights'),
+    ]);
+    const articles = [
+      ...(iranIsrael.status === 'fulfilled' ? iranIsrael.value.map(a => ({ ...a, category: 'iran-israel' })) : []),
+      ...(lpg.status        === 'fulfilled' ? lpg.value.map(a => ({ ...a, category: 'lpg-energy' }))        : []),
+      ...(war.status        === 'fulfilled' ? war.value.map(a => ({ ...a, category: 'war-insights' }))      : []),
+    ];
+    // Deduplicate by URL
+    const seen = new Set();
+    const unique = articles.filter(a => { if (seen.has(a.url)) return false; seen.add(a.url); return true; });
+    unique.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+    res.json({ articles: unique, count: unique.length, ts: Date.now(), source: 'NewsAPI.org' });
+  } catch (e) {
+    res.status(503).json({ error: e.message, articles: [], count: 0 });
+  }
+});
+
+// ─── /api/newsapi/search — generic NewsAPI search ─────────────────────────────
+app.get('/api/newsapi/search', async (req, res) => {
+  const q = (req.query.q || '').trim().slice(0, 200);
+  if (!q) return res.status(400).json({ error: 'q param required' });
+  try {
+    const articles = await fetchNewsAPI(q, 30, null);
+    res.json({ articles, count: articles.length, ts: Date.now(), source: 'NewsAPI.org' });
+  } catch (e) {
+    res.status(503).json({ error: e.message, articles: [], count: 0 });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 5C — COUNTRY INSTABILITY INDEX (CII)
+// Algorithm: CII = unrest×0.4 + security×0.3 + information×0.3
+// Data sources: GDELT (news/velocity), HAPI (conflicts/fatalities),
+//               aircraft cache (military flights), marine cache (naval vessels),
+//               REST Countries (economic), NewsAPI (alerts)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const _ciiCache = {};
+const TTL_CII   = 10 * 60_000; // 10 min
+
+// Country name → ISO2 code lookup for REST Countries, GDELT queries, etc.
+const COUNTRY_ISO2 = {
+  'Afghanistan':'AF','Albania':'AL','Algeria':'DZ','Angola':'AO','Argentina':'AR',
+  'Armenia':'AM','Australia':'AU','Austria':'AT','Azerbaijan':'AZ','Bahrain':'BH',
+  'Bangladesh':'BD','Belarus':'BY','Belgium':'BE','Bhutan':'BT','Bolivia':'BO',
+  'Brazil':'BR','Bulgaria':'BG','Cambodia':'KH','Canada':'CA','Chile':'CL',
+  'China':'CN','Colombia':'CO','Congo':'CG','Croatia':'HR','Cuba':'CU',
+  'Czech Republic':'CZ','Denmark':'DK','Egypt':'EG','Estonia':'EE','Ethiopia':'ET',
+  'Finland':'FI','France':'FR','Georgia':'GE','Germany':'DE','Ghana':'GH',
+  'Greece':'GR','Guatemala':'GT','Haiti':'HT','Honduras':'HN','Hungary':'HU',
+  'India':'IN','Indonesia':'ID','Iran':'IR','Iraq':'IQ','Ireland':'IE',
+  'Israel':'IL','Italy':'IT','Jamaica':'JM','Japan':'JP','Jordan':'JO',
+  'Kazakhstan':'KZ','Kenya':'KE','South Korea':'KR','North Korea':'KP',
+  'Kuwait':'KW','Kyrgyzstan':'KG','Latvia':'LV','Lebanon':'LB','Libya':'LY',
+  'Lithuania':'LT','Luxembourg':'LU','Malaysia':'MY','Mexico':'MX','Moldova':'MD',
+  'Mongolia':'MN','Morocco':'MA','Mozambique':'MZ','Myanmar':'MM','Nepal':'NP',
+  'Netherlands':'NL','New Zealand':'NZ','Nicaragua':'NI','Nigeria':'NG','Norway':'NO',
+  'Oman':'OM','Pakistan':'PK','Palestine':'PS','Panama':'PA','Paraguay':'PY',
+  'Peru':'PE','Philippines':'PH','Poland':'PL','Portugal':'PT','Qatar':'QA',
+  'Romania':'RO','Russia':'RU','Saudi Arabia':'SA','Senegal':'SN','Serbia':'RS',
+  'Singapore':'SG','Slovakia':'SK','Somalia':'SO','South Africa':'ZA','Spain':'ES',
+  'Sri Lanka':'LK','Sudan':'SD','Sweden':'SE','Switzerland':'CH','Syria':'SY',
+  'Taiwan':'TW','Tajikistan':'TJ','Tanzania':'TZ','Thailand':'TH','Turkey':'TR',
+  'Turkmenistan':'TM','Uganda':'UG','Ukraine':'UA','UAE':'AE',
+  'United Arab Emirates':'AE','United Kingdom':'GB','UK':'GB',
+  'United States':'US','USA':'US','Uruguay':'UY','Uzbekistan':'UZ',
+  'Venezuela':'VE','Vietnam':'VN','Yemen':'YE','Zimbabwe':'ZW',
+  'Gaza':'PS','Palestine':'PS','Kosovo':'XK','Taiwan':'TW',
+};
+
+// IISS/GlobalFirepower/GFI data for military/economic strength (static 2024 baseline)
+const COUNTRY_BASELINE = {
+  US:  { mil:100, econ:100, social:78, mil_rank:1,  gdp_t:27.4,  gfi:0.0699 },
+  CN:  { mil:87,  econ:88,  social:62, mil_rank:3,  gdp_t:18.6,  gfi:0.0706 },
+  RU:  { mil:82,  econ:42,  social:55, mil_rank:2,  gdp_t:2.2,   gfi:0.0706 },
+  IN:  { mil:71,  econ:65,  social:58, mil_rank:4,  gdp_t:3.9,   gfi:0.1023 },
+  UK:  { mil:72,  econ:70,  social:80, mil_rank:5,  gdp_t:3.1,   gfi:0.1435 },
+  FR:  { mil:70,  econ:68,  social:79, mil_rank:7,  gdp_t:2.9,   gfi:0.1848 },
+  DE:  { mil:65,  econ:72,  social:82, mil_rank:8,  gdp_t:4.4,   gfi:0.1708 },
+  JP:  { mil:63,  econ:75,  social:84, mil_rank:8,  gdp_t:4.2,   gfi:0.1832 },
+  IL:  { mil:68,  econ:58,  social:60, mil_rank:17, gdp_t:0.52,  gfi:0.2596 },
+  IR:  { mil:55,  econ:25,  social:40, mil_rank:14, gdp_t:0.37,  gfi:0.2966 },
+  SA:  { mil:52,  econ:55,  social:45, mil_rank:22, gdp_t:1.1,   gfi:0.3128 },
+  PK:  { mil:58,  econ:28,  social:42, mil_rank:9,  gdp_t:0.34,  gfi:0.2053 },
+  KP:  { mil:48,  econ:8,   social:18, mil_rank:30, gdp_t:0.018, gfi:0.5118 },
+  UA:  { mil:60,  econ:22,  social:50, mil_rank:15, gdp_t:0.18,  gfi:0.2516 },
+  TR:  { mil:62,  econ:48,  social:57, mil_rank:11, gdp_t:1.1,   gfi:0.2296 },
+  BR:  { mil:56,  econ:58,  social:52, mil_rank:13, gdp_t:2.1,   gfi:0.2171 },
+  AU:  { mil:60,  econ:68,  social:82, mil_rank:16, gdp_t:1.7,   gfi:0.2896 },
+  KR:  { mil:64,  econ:62,  social:80, mil_rank:6,  gdp_t:1.7,   gfi:0.1509 },
+  EG:  { mil:54,  econ:38,  social:48, mil_rank:12, gdp_t:0.40,  gfi:0.2283 },
+  NG:  { mil:40,  econ:32,  social:38, mil_rank:35, gdp_t:0.49,  gfi:0.4285 },
+  IQ:  { mil:38,  econ:28,  social:38, mil_rank:40, gdp_t:0.27,  gfi:0.5283 },
+  SY:  { mil:28,  econ:10,  social:22, mil_rank:55, gdp_t:0.06,  gfi:0.5966 },
+  YE:  { mil:22,  econ:8,   social:18, mil_rank:60, gdp_t:0.05,  gfi:0.7083 },
+  AF:  { mil:18,  econ:7,   social:15, mil_rank:70, gdp_t:0.014, gfi:0.7218 },
+  LB:  { mil:25,  econ:12,  social:30, mil_rank:65, gdp_t:0.02,  gfi:0.8318 },
+  SD:  { mil:25,  econ:10,  social:20, mil_rank:68, gdp_t:0.28,  gfi:0.7385 },
+  MM:  { mil:32,  econ:20,  social:25, mil_rank:42, gdp_t:0.07,  gfi:0.5918 },
+};
+
+// World Tourism Organization rank/score (UNWTO 2024 estimates)
+const TOURISM_DATA = {
+  FR:{ rank:1,  arrivals_m:100,score:98 }, ES:{ rank:2,  arrivals_m:85, score:95 },
+  US:{ rank:3,  arrivals_m:79, score:92 }, TR:{ rank:4,  arrivals_m:56, score:85 },
+  IT:{ rank:5,  arrivals_m:57, score:87 }, CN:{ rank:6,  arrivals_m:53, score:82 },
+  MX:{ rank:7,  arrivals_m:42, score:80 }, DE:{ rank:8,  arrivals_m:35, score:78 },
+  UK:{ rank:9,  arrivals_m:38, score:79 }, JP:{ rank:10, arrivals_m:31, score:82 },
+  AU:{ rank:14, arrivals_m:10, score:70 }, IN:{ rank:22, arrivals_m:8,  score:62 },
+  TH:{ rank:8,  arrivals_m:28, score:80 }, SG:{ rank:11, arrivals_m:19, score:84 },
+  AE:{ rank:12, arrivals_m:17, score:86 }, GR:{ rank:15, arrivals_m:33, score:82 },
+  SA:{ rank:25, arrivals_m:7,  score:55 }, EG:{ rank:23, arrivals_m:15, score:58 },
+  BR:{ rank:18, arrivals_m:11, score:65 }, ZA:{ rank:28, arrivals_m:8,  score:60 },
+  RU:{ rank:16, arrivals_m:10, score:40 }, IR:{ rank:50, arrivals_m:4,  score:28 },
+  KR:{ rank:20, arrivals_m:11, score:73 }, IL:{ rank:35, arrivals_m:3,  score:30 },
+  UA:{ rank:45, arrivals_m:1,  score:15 }, PK:{ rank:80, arrivals_m:1,  score:22 },
+};
+
+app.get('/api/cii/:country', async (req, res) => {
+  const countryInput = req.params.country.trim();
+  const now = Date.now();
+  const cacheKey = countryInput.toLowerCase();
+  if (_ciiCache[cacheKey] && now - _ciiCache[cacheKey].ts < TTL_CII)
+    return res.json(_ciiCache[cacheKey].data);
+
+  // Resolve ISO2 code
+  const iso2 = COUNTRY_ISO2[countryInput] || countryInput.toUpperCase().slice(0, 2);
+  const baseline = COUNTRY_BASELINE[iso2] || { mil: 40, econ: 40, social: 50, gdp_t: 0.1, gfi: 0.5 };
+
+  try {
+    // ── Parallel data fetch ───────────────────────────────────────────────────
+    const [gdeltR, hapiR, countryR, newsapiR] = await Promise.allSettled([
+      // GDELT: news articles for country (last 48h)
+      axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+        params: { query: `${countryInput} conflict protest unrest military`, mode: 'artlist', maxrecords: 50, format: 'json', sort: 'datedesc', timespan: '48h' },
+        timeout: 8_000,
+      }),
+      // HAPI/ACLED events (already cached from hapiCache or direct)
+      axios.get('https://hapi.humdata.org/api/v1/conflict-event/', {
+        params: { limit: 100, output_format: 'json', app_identifier: 'spymeter-cii', location_name: countryInput },
+        timeout: 8_000,
+      }),
+      // REST Countries for economic data
+      axios.get(`https://restcountries.com/v3.1/name/${encodeURIComponent(countryInput)}`, { timeout: 6_000 }),
+      // NewsAPI alerts (if key available)
+      NEWSAPI_KEY ? axios.get('https://newsapi.org/v2/everything', {
+        params: { q: `${countryInput} alert crisis emergency military`, language: 'en', sortBy: 'publishedAt', pageSize: 20, apiKey: NEWSAPI_KEY },
+        timeout: 8_000,
+      }) : Promise.resolve({ data: { articles: [] } }),
+    ]);
+
+    // ── GDELT news analysis ───────────────────────────────────────────────────
+    const gdeltArticles = gdeltR.status === 'fulfilled' ? (gdeltR.value.data?.articles || []) : [];
+    const news_count    = gdeltArticles.length;
+    // Velocity: articles per hour (within 48h window → 48 hours)
+    const avg_velocity  = news_count / 48;
+    // Tone: negative = more alarming
+    const tones         = gdeltArticles.map(a => parseFloat(a.tone || 0)).filter(t => !isNaN(t));
+    const avg_tone      = tones.length ? tones.reduce((s, t) => s + t, 0) / tones.length : 0;
+
+    // ── HAPI conflict events ──────────────────────────────────────────────────
+    const hapiEvents = hapiR.status === 'fulfilled' ? (hapiR.value.data?.data || []) : [];
+    const protest_count     = hapiEvents.filter(e => /protest|demonstration|riot|unrest/i.test(e.event_type || '')).length;
+    const total_fatalities  = hapiEvents.reduce((s, e) => s + (e.fatalities || 0), 0);
+    const high_severity     = hapiEvents.filter(e => (e.fatalities || 0) > 10).length;
+
+    // ── NewsAPI alert detection ───────────────────────────────────────────────
+    const newsapiArticles = newsapiR.status === 'fulfilled' ? (newsapiR.value.data?.articles || []) : [];
+    const any_alert = newsapiArticles.some(a =>
+      /alert|emergency|crisis|attack|strike|bomb|missile|explosion|invasion/i.test(a.title || '')
+    );
+
+    // ── CII ALGORITHM ─────────────────────────────────────────────────────────
+    // Unrest Score
+    const u_base          = Math.min(50, protest_count * 8);
+    const u_fatality      = Math.min(30, total_fatalities > 0 ? Math.min(30, (total_fatalities / 1000) * 5) : 0);
+    const u_severity      = Math.min(20, high_severity * 10);
+    const unrest_score    = Math.min(100, u_base + u_fatality + u_severity);
+
+    // Augment unrest with GDELT tone (very negative news adds up to 20 pts)
+    const tone_boost = avg_tone < -5 ? Math.min(20, Math.abs(avg_tone) * 1.5) : 0;
+    const unrest_final = Math.min(100, unrest_score + tone_boost);
+
+    // Security Score (use cached aircraft/marine data as proxy)
+    const acData      = cache.aircraft.data?.aircraft || [];
+    const marData     = marineCache.data?.vessels || [];
+    // Military aircraft near country (rough: filter by country field)
+    const mil_flights = acData.filter(ac => {
+      const country = (ac[2] || '').toLowerCase();
+      return country === (iso2 === 'IN' ? 'india' : iso2 === 'US' ? 'usa' : countryInput.toLowerCase());
+    }).length;
+    const naval_vessels = marData.length; // All strategic-route vessels as proxy
+    const flight_score  = Math.min(50, mil_flights * 3);
+    const vessel_score  = Math.min(30, naval_vessels * 0.5); // scaled
+    const security_score = Math.min(100, flight_score + vessel_score);
+
+    // Information Score
+    const info_base     = Math.min(40, news_count * 5);
+    const info_velocity = Math.min(40, avg_velocity * 10);
+    const info_alert    = any_alert ? 20 : 0;
+    const info_score    = Math.min(100, info_base + info_velocity + info_alert);
+
+    // Final CII
+    const cii_raw  = Math.round(unrest_final * 0.4 + security_score * 0.3 + info_score * 0.3);
+    const cii      = Math.min(100, cii_raw);
+
+    // Stability label
+    let stability, stability_color;
+    if      (cii >= 80) { stability = 'VERY UNSTABLE';      stability_color = '#ff0000'; }
+    else if (cii >= 60) { stability = 'MODERATELY UNSTABLE'; stability_color = '#ff6600'; }
+    else if (cii >= 40) { stability = 'SLIGHTLY STABLE';    stability_color = '#ffaa00'; }
+    else if (cii >= 20) { stability = 'MODERATELY STABLE';  stability_color = '#88cc44'; }
+    else                { stability = 'HIGHLY STABLE';      stability_color = '#00ff88'; }
+
+    // ── Economic parameters from REST Countries ───────────────────────────────
+    const cData   = countryR.status === 'fulfilled' ? (countryR.value.data?.[0] || {}) : {};
+    const econ = {
+      population:   cData.population || null,
+      area_km2:     cData.area || null,
+      capital:      cData.capital?.[0] || null,
+      currencies:   cData.currencies ? Object.entries(cData.currencies).map(([k, v]) => `${v.name} (${k})`).join(', ') : null,
+      region:       cData.region || null,
+      subregion:    cData.subregion || null,
+      languages:    cData.languages ? Object.values(cData.languages).join(', ') : null,
+      gdp_trillion: baseline.gdp_t,
+      gdp_rank:     Object.keys(COUNTRY_BASELINE).indexOf(iso2) + 1 || null,
+    };
+
+    // ── Defence strength from baseline ───────────────────────────────────────
+    const defence = {
+      military_strength_score: baseline.mil,
+      military_rank:           baseline.mil_rank || null,
+      gfi_index:               baseline.gfi,   // GlobalFirepower Index (lower = stronger)
+      gfi_note:                `GFP Index ${baseline.gfi} (0=perfect, lower=stronger)`,
+      economic_strength:       baseline.econ,
+      social_cohesion:         baseline.social,
+    };
+
+    // ── Tourism ───────────────────────────────────────────────────────────────
+    const tData   = TOURISM_DATA[iso2] || null;
+    const tourism = tData ? {
+      score:           tData.score,
+      rank:            tData.rank,
+      arrivals_m:      tData.arrivals_m,
+      note:            `${tData.arrivals_m}M international arrivals/year (UNWTO 2024)`,
+    } : { score: null, rank: null, note: 'Data not available' };
+
+    // ── Recent news ──────────────────────────────────────────────────────────
+    const recent_news = [
+      ...gdeltArticles.slice(0, 12).map(a => ({
+        title: a.title || '', url: a.url || '', source: a.domain || '',
+        date: a.seendate || '', tone: parseFloat(a.tone || 0).toFixed(1), provider: 'GDELT',
+      })),
+      ...newsapiArticles.slice(0, 8).map(a => ({
+        title: a.title || '', url: a.url || '', source: a.source?.name || '',
+        date: a.publishedAt || '', tone: '0', provider: 'NewsAPI',
+      })),
+    ].filter((a, i, arr) => a.title && arr.findIndex(x => x.url === a.url) === i).slice(0, 15);
+
+    const result = {
+      country:    countryInput,
+      iso2,
+      ts:         now,
+      cii,
+      stability,
+      stability_color,
+      scores: {
+        unrest:      Math.round(unrest_final),
+        security:    Math.round(security_score),
+        information: Math.round(info_score),
+      },
+      raw_inputs: {
+        protest_count, total_fatalities, high_severity,
+        news_count, avg_velocity: parseFloat(avg_velocity.toFixed(2)), avg_tone: parseFloat(avg_tone.toFixed(2)),
+        any_alert, mil_flights, naval_vessels: Math.round(naval_vessels),
+      },
+      econ,
+      defence,
+      tourism,
+      recent_news,
+      sources: ['GDELT v2', 'HAPI HumanData', 'REST Countries', 'GlobalFirepower 2024', 'UNWTO 2024', NEWSAPI_KEY ? 'NewsAPI.org' : null].filter(Boolean),
+    };
+    _ciiCache[cacheKey] = { data: result, ts: now };
+    res.json(result);
+  } catch (err) {
+    console.error('[CII]', countryInput, err.message);
+    res.status(503).json({ error: 'CII computation failed', detail: err.message, country: countryInput });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 6 — AGENT 1: IRAN-ISRAEL MONITOR (every 5 minutes)
 // ═══════════════════════════════════════════════════════════════════════════════
 const IRAN_ISRAEL_FEEDS = [
