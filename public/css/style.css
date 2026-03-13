@@ -3529,3 +3529,32 @@ body.lego-mode #overlay-panel { border-color:#ffcc00; }
   #nmo-api-url-wrap { display: none !important; }
   #nmo-title    { font-size: 9px; letter-spacing: 1px; }
 }
+
+/* ══════════════════════════════════════════════════════════
+   CII — 7-dimension score bar tweaks + signal group headers
+   ══════════════════════════════════════════════════════════ */
+
+/* Make bars more compact now that there are 7 of them */
+#cd-score-right .cd-bar-row { gap: 4px; margin-bottom: 1px; }
+#cd-score-right .cd-bar-lbl { font-size: 7px; min-width: 46px; }
+#cd-score-right .cd-bar-track { height: 4px; }
+#cd-score-right .cd-bar-num { font-size: 8px; min-width: 18px; }
+
+/* Signal group separators */
+.cd-sig-grp {
+  grid-column: 1;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: #3a5a78;
+  padding: 5px 0 1px;
+  text-transform: uppercase;
+}
+.cd-sig-grp-wt {
+  grid-column: 2;
+  font-size: 7.5px;
+  color: #2a4060;
+  padding: 5px 0 1px;
+  text-align: right;
+  letter-spacing: .5px;
+}

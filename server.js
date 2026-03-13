@@ -733,10 +733,13 @@ app.get('/api/newsapi/search', async (req, res) => {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 5C — COUNTRY INSTABILITY INDEX (CII)
-// Algorithm: CII = unrest×0.4 + security×0.3 + information×0.3
-// Data sources: GDELT (news/velocity), HAPI (conflicts/fatalities),
-//               aircraft cache (military flights), marine cache (naval vessels),
-//               REST Countries (economic), NewsAPI (alerts)
+// Algorithm: CII = Σ(dimension × weight) across 7 live-data dimensions:
+//   Conflict & Unrest (25%)   · Military Activity (20%)  · News Distress (15%)
+//   Economic Stress   (15%)   · Internet Disruption (10%)· Financial Stress (10%)
+//   Geopolitical Tension (5%)
+//
+// Data sources: GDELT v2, HAPI/HumanData, IODA/CAIDA (internet), Cloudflare Radar,
+//               NewsAPI (3 query categories), REST Countries, aircraft/marine cache
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const _ciiCache = {};
@@ -827,99 +830,243 @@ app.get('/api/cii/:country', async (req, res) => {
   if (_ciiCache[cacheKey] && now - _ciiCache[cacheKey].ts < TTL_CII)
     return res.json(_ciiCache[cacheKey].data);
 
-  // Resolve ISO2 code
-  const iso2 = COUNTRY_ISO2[countryInput] || countryInput.toUpperCase().slice(0, 2);
-  const baseline = COUNTRY_BASELINE[iso2] || { mil: 40, econ: 40, social: 50, gdp_t: 0.1, gfi: 0.5 };
+  const iso2     = COUNTRY_ISO2[countryInput] || countryInput.toUpperCase().slice(0, 2);
+  const baseline = COUNTRY_BASELINE[iso2] || { mil: 40, econ: 40, social: 50, gdp_t: 0.1, gfi: 0.5, mil_rank: 50 };
+  const CF_TOKEN = process.env.CF_API_TOKEN || '';
 
   try {
-    // ── Parallel data fetch ───────────────────────────────────────────────────
-    const [gdeltR, hapiR, countryR, newsapiR] = await Promise.allSettled([
-      // GDELT: news articles for country (last 48h)
+    // ── Parallel data fetch — 9 sources ──────────────────────────────────────
+    const [
+      gdeltConflictR, gdeltMilR, hapiR, countryR,
+      newsConflictR, newsEconR, newsFinR, iodaR, cfRadarR,
+    ] = await Promise.allSettled([
+
+      // 1. GDELT: civil unrest / protest / explosion (48h)
+      // URL: https://api.gdeltproject.org/api/v2/doc/doc?query=...&timespan=48h
       axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
-        params: { query: `${countryInput} conflict protest unrest military`, mode: 'artlist', maxrecords: 50, format: 'json', sort: 'datedesc', timespan: '48h' },
+        params: { query: `${countryInput} protest riot unrest demonstration explosion attack bomb shooting`, mode: 'artlist', maxrecords: 50, format: 'json', sort: 'datedesc', timespan: '48h' },
         timeout: 8_000,
       }),
-      // HAPI/ACLED events (already cached from hapiCache or direct)
+
+      // 2. GDELT: military actions / strike / drone (48h)
+      axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+        params: { query: `${countryInput} military strike airstrike missile troops mobilization navy drone nuclear`, mode: 'artlist', maxrecords: 30, format: 'json', sort: 'datedesc', timespan: '48h' },
+        timeout: 8_000,
+      }),
+
+      // 3. HAPI/HumanData: conflict event database
+      // URL: https://hapi.humdata.org/api/v1/conflict-event/?location_name=...
       axios.get('https://hapi.humdata.org/api/v1/conflict-event/', {
         params: { limit: 100, output_format: 'json', app_identifier: 'spymeter-cii', location_name: countryInput },
         timeout: 8_000,
       }),
-      // REST Countries for economic data
+
+      // 4. REST Countries: economic metadata
       axios.get(`https://restcountries.com/v3.1/name/${encodeURIComponent(countryInput)}`, { timeout: 6_000 }),
-      // NewsAPI alerts (if key available)
+
+      // 5. NewsAPI — conflict/crisis/war news
+      // URL: https://newsapi.org/v2/everything?q="<country>" war attack missile...
       NEWSAPI_KEY ? axios.get('https://newsapi.org/v2/everything', {
-        params: { q: `${countryInput} alert crisis emergency military`, language: 'en', sortBy: 'publishedAt', pageSize: 20, apiKey: NEWSAPI_KEY },
+        params: { q: `"${countryInput}" war attack missile strike explosion bomb crisis emergency invasion killed`, language: 'en', sortBy: 'publishedAt', pageSize: 20, apiKey: NEWSAPI_KEY },
         timeout: 8_000,
       }) : Promise.resolve({ data: { articles: [] } }),
+
+      // 6. NewsAPI — economic stress / sanctions
+      // URL: https://newsapi.org/v2/everything?q="<country>" sanctions economy inflation...
+      NEWSAPI_KEY ? axios.get('https://newsapi.org/v2/everything', {
+        params: { q: `"${countryInput}" sanctions economy inflation recession GDP debt bankruptcy shortage`, language: 'en', sortBy: 'publishedAt', pageSize: 10, apiKey: NEWSAPI_KEY },
+        timeout: 8_000,
+      }) : Promise.resolve({ data: { articles: [] } }),
+
+      // 7. NewsAPI — financial stress / market
+      // URL: https://newsapi.org/v2/everything?q="<country>" stock market currency crash...
+      NEWSAPI_KEY ? axios.get('https://newsapi.org/v2/everything', {
+        params: { q: `"${countryInput}" stock market currency crash collapse devaluation financial crisis panic`, language: 'en', sortBy: 'publishedAt', pageSize: 10, apiKey: NEWSAPI_KEY },
+        timeout: 8_000,
+      }) : Promise.resolve({ data: { articles: [] } }),
+
+      // 8. IODA/CAIDA — internet outage alerts (FREE, no auth required)
+      // URL: https://api.ioda.caida.org/v2/alerts?entityType=country&entityCode=<ISO2>
+      // Detects BGP disruptions, darknet anomalies → internet shutdowns
+      axios.get('https://api.ioda.caida.org/v2/alerts', {
+        params: {
+          entityType: 'country',
+          entityCode:  iso2,
+          from:  Math.floor((now - 24 * 3600_000) / 1000),
+          until: Math.floor(now / 1000),
+        },
+        timeout: 7_000,
+      }),
+
+      // 9. Cloudflare Radar — traffic anomalies (optional, needs CF_API_TOKEN env var)
+      // URL: https://api.cloudflare.com/client/v4/radar/traffic/anomalies/top?location=<ISO2>
+      CF_TOKEN ? axios.get('https://api.cloudflare.com/client/v4/radar/traffic/anomalies/top', {
+        params: { location: iso2, date_range: '1d', limit: 5, format: 'json' },
+        headers: { Authorization: `Bearer ${CF_TOKEN}`, 'Content-Type': 'application/json' },
+        timeout: 6_000,
+      }) : Promise.resolve({ data: { result: { top0: [] } } }),
     ]);
 
-    // ── GDELT news analysis ───────────────────────────────────────────────────
-    const gdeltArticles = gdeltR.status === 'fulfilled' ? (gdeltR.value.data?.articles || []) : [];
-    const news_count    = gdeltArticles.length;
-    // Velocity: articles per hour (within 48h window → 48 hours)
-    const avg_velocity  = news_count / 48;
-    // Tone: negative = more alarming
-    const tones         = gdeltArticles.map(a => parseFloat(a.tone || 0)).filter(t => !isNaN(t));
-    const avg_tone      = tones.length ? tones.reduce((s, t) => s + t, 0) / tones.length : 0;
+    // ── Parse GDELT ───────────────────────────────────────────────────────────
+    const gdeltConflict       = gdeltConflictR.status === 'fulfilled' ? (gdeltConflictR.value.data?.articles || []) : [];
+    const gdeltMil            = gdeltMilR.status      === 'fulfilled' ? (gdeltMilR.value.data?.articles      || []) : [];
+    const gdeltAll            = [...gdeltConflict, ...gdeltMil];
+    const news_count_conflict = gdeltConflict.length;
+    const news_count_mil      = gdeltMil.length;
+    const avg_velocity        = gdeltAll.length / 48;   // articles/hour over 48h
+    const tones               = gdeltAll.map(a => parseFloat(a.tone || 0)).filter(t => !isNaN(t));
+    const avg_tone            = tones.length ? tones.reduce((s, t) => s + t, 0) / tones.length : 0;
 
-    // ── HAPI conflict events ──────────────────────────────────────────────────
-    const hapiEvents = hapiR.status === 'fulfilled' ? (hapiR.value.data?.data || []) : [];
-    const protest_count     = hapiEvents.filter(e => /protest|demonstration|riot|unrest/i.test(e.event_type || '')).length;
-    const total_fatalities  = hapiEvents.reduce((s, e) => s + (e.fatalities || 0), 0);
-    const high_severity     = hapiEvents.filter(e => (e.fatalities || 0) > 10).length;
+    // ── Parse HAPI ────────────────────────────────────────────────────────────
+    const hapiEvents       = hapiR.status === 'fulfilled' ? (hapiR.value.data?.data || []) : [];
+    const protest_count    = hapiEvents.filter(e => /protest|demonstration|riot|unrest/i.test(e.event_type || '')).length;
+    const battle_count     = hapiEvents.filter(e => /battle|fight|clash|attack|explosion/i.test(e.event_type || '')).length;
+    const total_fatalities = hapiEvents.reduce((s, e) => s + (e.fatalities || 0), 0);
+    const high_severity    = hapiEvents.filter(e => (e.fatalities || 0) > 10).length;
 
-    // ── NewsAPI alert detection ───────────────────────────────────────────────
-    const newsapiArticles = newsapiR.status === 'fulfilled' ? (newsapiR.value.data?.articles || []) : [];
-    const any_alert = newsapiArticles.some(a =>
-      /alert|emergency|crisis|attack|strike|bomb|missile|explosion|invasion/i.test(a.title || '')
-    );
+    // ── Parse REST Countries (needed for scoring) ─────────────────────────────
+    const cData  = countryR.status === 'fulfilled' ? (countryR.value.data?.[0] || {}) : {};
+    const population = cData.population || null;
 
-    // ── CII ALGORITHM ─────────────────────────────────────────────────────────
-    // Unrest Score
-    const u_base          = Math.min(50, protest_count * 8);
-    const u_fatality      = Math.min(30, total_fatalities > 0 ? Math.min(30, (total_fatalities / 1000) * 5) : 0);
-    const u_severity      = Math.min(20, high_severity * 10);
-    const unrest_score    = Math.min(100, u_base + u_fatality + u_severity);
+    // ── Parse NewsAPI ─────────────────────────────────────────────────────────
+    const newsConflict = newsConflictR.status === 'fulfilled' ? (newsConflictR.value.data?.articles || []) : [];
+    const newsEcon     = newsEconR.status     === 'fulfilled' ? (newsEconR.value.data?.articles     || []) : [];
+    const newsFin      = newsFinR.status      === 'fulfilled' ? (newsFinR.value.data?.articles      || []) : [];
 
-    // Augment unrest with GDELT tone (very negative news adds up to 20 pts)
-    const tone_boost = avg_tone < -5 ? Math.min(20, Math.abs(avg_tone) * 1.5) : 0;
-    const unrest_final = Math.min(100, unrest_score + tone_boost);
+    const CRISIS_KW = /attack|strike|bomb|missile|explosion|invasion|war|battle|killed|dead|airstrike|hostage|massacre/i;
+    const ECON_KW   = /sanctions|embargo|inflation|recession|shortage|debt|default|bankrupt|crisis|currency collapse/i;
+    const FIN_KW    = /crash|collapse|devaluation|currency|stock market|plunge|panic|sell-off|bank run|liquidity/i;
+    const MIL_KW    = /military|troops|army|navy|airstrike|drone|mobiliz|deploy|nuclear|missile|warship|fighter jet/i;
 
-    // Security Score (use cached aircraft/marine data as proxy)
-    const acData      = cache.aircraft.data?.aircraft || [];
-    const marData     = marineCache.data?.vessels || [];
-    // Military aircraft near country (rough: filter by country field)
-    const mil_flights = acData.filter(ac => {
-      const country = (ac[2] || '').toLowerCase();
-      return country === (iso2 === 'IN' ? 'india' : iso2 === 'US' ? 'usa' : countryInput.toLowerCase());
+    const crisis_hits   = newsConflict.filter(a => CRISIS_KW.test(a.title || '')).length;
+    const econ_hits     = newsEcon.filter(a => ECON_KW.test(a.title || '')).length;
+    const fin_hits      = newsFin.filter(a => FIN_KW.test(a.title || '')).length;
+    const mil_news_hits = [...newsConflict, ...gdeltMil].filter(a => MIL_KW.test((a.title || '') + (a.description || ''))).length;
+    const any_alert     = crisis_hits > 0 || newsConflict.some(a => /emergency|crisis/i.test(a.title || ''));
+
+    // ── Parse IODA internet disruption ────────────────────────────────────────
+    // IODA/CAIDA detects BGP routing anomalies → internet shutdowns/outages
+    const iodaRaw       = iodaR.status === 'fulfilled' ? iodaR.value.data : null;
+    const iodaAlerts    = iodaRaw?.data || iodaRaw?.alerts || iodaRaw?.result || [];
+    const ioda_alerts   = Array.isArray(iodaAlerts) ? iodaAlerts : [];
+    const ioda_alert_count = ioda_alerts.length;
+    const ioda_critical    = ioda_alerts.filter(a => /critical/i.test(String(a.level || a.status || ''))).length;
+    const ioda_source      = iodaR.status === 'fulfilled' ? 'IODA/CAIDA' : null;
+
+    // ── Parse Cloudflare Radar ────────────────────────────────────────────────
+    const cfAnomalies    = cfRadarR.status === 'fulfilled'
+      ? (cfRadarR.value.data?.result?.top0 || cfRadarR.value.data?.result?.anomalies || [])
+      : [];
+    const cf_anomaly_count = cfAnomalies.length;
+    const cf_source        = CF_TOKEN && cfRadarR.status === 'fulfilled' ? 'Cloudflare Radar' : null;
+
+    // ── Aircraft / Marine cache ───────────────────────────────────────────────
+    const acData        = cache.aircraft.data?.aircraft || [];
+    const marData       = marineCache.data?.vessels || [];
+    const mil_flights   = acData.filter(ac => {
+      const c = (ac[2] || '').toLowerCase();
+      return c === (iso2 === 'IN' ? 'india' : iso2 === 'US' ? 'usa' : countryInput.toLowerCase());
     }).length;
-    const naval_vessels = marData.length; // All strategic-route vessels as proxy
-    const flight_score  = Math.min(50, mil_flights * 3);
-    const vessel_score  = Math.min(30, naval_vessels * 0.5); // scaled
-    const security_score = Math.min(100, flight_score + vessel_score);
+    const naval_vessels = Math.min(60, marData.length);
 
-    // Information Score
-    const info_base     = Math.min(40, news_count * 5);
-    const info_velocity = Math.min(40, avg_velocity * 10);
-    const info_alert    = any_alert ? 20 : 0;
-    const info_score    = Math.min(100, info_base + info_velocity + info_alert);
+    // ════════════════════════════════════════════════════════════════════════
+    // 7-DIMENSION CII ALGORITHM
+    //
+    //  Dim                    Weight   Sources
+    //  ─────────────────────  ──────   ─────────────────────────────────────
+    //  1. Conflict & Unrest    25%     HAPI events + GDELT tone
+    //  2. Military Activity    20%     GDELT military + NewsAPI + cache
+    //  3. News Distress        15%     NewsAPI crisis keywords + velocity
+    //  4. Economic Stress      15%     NewsAPI econ + GDP/capita fragility
+    //  5. Internet Disruption  10%     IODA/CAIDA + Cloudflare Radar
+    //  6. Financial Stress     10%     NewsAPI financial keywords
+    //  7. Geopolitical          5%     Static known-conflict-zone baseline
+    // ════════════════════════════════════════════════════════════════════════
 
-    // Final CII
-    const cii_raw  = Math.round(unrest_final * 0.4 + security_score * 0.3 + info_score * 0.3);
-    const cii      = Math.min(100, cii_raw);
+    // ── 1. Conflict & Unrest (0-100) ─────────────────────────────────────────
+    const cu_protest  = Math.min(28, protest_count * 8);
+    const cu_battle   = Math.min(28, battle_count * 10);
+    const cu_fatal    = Math.min(24, total_fatalities > 0 ? Math.min(24, (total_fatalities / 200) * 5) : 0);
+    const cu_severe   = Math.min(14, high_severity * 8);
+    const cu_tone     = avg_tone < -5 ? Math.min(14, Math.abs(avg_tone) * 1.4) : 0;
+    const score_conflict_unrest = Math.min(100, cu_protest + cu_battle + cu_fatal + cu_severe + cu_tone);
 
-    // Stability label
+    // ── 2. Military Activity (0-100) ─────────────────────────────────────────
+    const ma_gdelt    = Math.min(35, news_count_mil * 4);      // GDELT military articles
+    const ma_newsapi  = Math.min(25, mil_news_hits * 4);       // NewsAPI military keyword hits
+    const ma_flights  = Math.min(22, mil_flights * 4);         // aircraft cache
+    const ma_vessels  = Math.min(15, naval_vessels * 0.35);    // naval cache
+    const ma_baseline = baseline.mil_rank ? Math.min(6, Math.max(0, 6 - baseline.mil_rank * 0.1)) : 0;
+    const score_military_activity = Math.min(100, ma_gdelt + ma_newsapi + ma_flights + ma_vessels + ma_baseline);
+
+    // ── 3. News Distress Signal (0-100) ──────────────────────────────────────
+    const nd_articles = Math.min(28, newsConflict.length * 3); // raw article count
+    const nd_crisis   = Math.min(38, crisis_hits * 7);         // crisis keyword density
+    const nd_velocity = Math.min(22, avg_velocity * 12);       // articles/hour
+    const nd_alert    = any_alert ? 12 : 0;
+    const score_news_distress = Math.min(100, nd_articles + nd_crisis + nd_velocity + nd_alert);
+
+    // ── 4. Economic Stress (0-100) ────────────────────────────────────────────
+    // GDP per capita as fragility proxy (lower = more stressed)
+    const gdpPerCap   = baseline.gdp_t && population
+      ? (baseline.gdp_t * 1e12) / population : 10_000;
+    const econ_fragility = gdpPerCap < 800   ? 55
+                         : gdpPerCap < 3000  ? 38
+                         : gdpPerCap < 8000  ? 22
+                         : gdpPerCap < 20000 ? 12 : 5;
+    const es_news     = Math.min(28, newsEcon.length * 5);
+    const es_keywords = Math.min(28, econ_hits * 8);
+    const es_fragile  = Math.min(28, econ_fragility);
+    const es_baseline = Math.min(16, Math.max(0, (100 - baseline.econ) * 0.14));
+    const score_economic_stress = Math.min(100, es_news + es_keywords + es_fragile + es_baseline);
+
+    // ── 5. Internet Disruption (0-100) ────────────────────────────────────────
+    // IODA: BGP routing alerts + darknet anomalies = government shutdown signal
+    const id_ioda_base = Math.min(50, ioda_alert_count * 16);
+    const id_ioda_crit = Math.min(35, ioda_critical * 28);
+    const id_cf        = Math.min(22, cf_anomaly_count * 12);
+    const score_internet_disruption = Math.min(100, id_ioda_base + id_ioda_crit + id_cf);
+
+    // ── 6. Financial Stress (0-100) ───────────────────────────────────────────
+    const fs_news     = Math.min(38, newsFin.length * 6);
+    const fs_keywords = Math.min(42, fin_hits * 10);
+    const fs_baseline = Math.min(20, Math.max(0, (100 - baseline.econ) * 0.18));
+    const score_financial_stress = Math.min(100, fs_news + fs_keywords + fs_baseline);
+
+    // ── 7. Geopolitical Tension (0-100) — static baseline ────────────────────
+    // Active warzones and high-tension states get a non-zero floor score
+    const GEO_SCORE = {
+      SY:92, YE:90, AF:88, SD:85, SO:78, MM:76, UA:80, LY:68, ML:62, CF:65,
+      PS:88, IQ:62, LB:72, ET:58, NI:55,   // active/recent conflicts
+      IR:58, KP:68, IL:48, RU:42, BY:38, PK:40, VE:45, CU:32, NG:40,  // high tension
+    };
+    const score_geopolitical = GEO_SCORE[iso2] || 0;
+
+    // ── Weighted CII ──────────────────────────────────────────────────────────
+    const cii_raw = Math.round(
+      score_conflict_unrest     * 0.25 +
+      score_military_activity   * 0.20 +
+      score_news_distress       * 0.15 +
+      score_economic_stress     * 0.15 +
+      score_internet_disruption * 0.10 +
+      score_financial_stress    * 0.10 +
+      score_geopolitical        * 0.05
+    );
+    const cii = Math.min(100, Math.max(0, cii_raw));
+
+    // ── Stability labels (7 tiers) ────────────────────────────────────────────
     let stability, stability_color;
-    if      (cii >= 80) { stability = 'VERY UNSTABLE';      stability_color = '#ff0000'; }
-    else if (cii >= 60) { stability = 'MODERATELY UNSTABLE'; stability_color = '#ff6600'; }
-    else if (cii >= 40) { stability = 'SLIGHTLY STABLE';    stability_color = '#ffaa00'; }
-    else if (cii >= 20) { stability = 'MODERATELY STABLE';  stability_color = '#88cc44'; }
-    else                { stability = 'HIGHLY STABLE';      stability_color = '#00ff88'; }
+    if      (cii >= 85) { stability = 'ACTIVE CONFLICT';  stability_color = '#cc0000'; }
+    else if (cii >= 70) { stability = 'HIGH ALERT';       stability_color = '#ff2200'; }
+    else if (cii >= 55) { stability = 'ELEVATED RISK';    stability_color = '#ff6600'; }
+    else if (cii >= 40) { stability = 'MODERATE TENSION'; stability_color = '#ffaa00'; }
+    else if (cii >= 25) { stability = 'GUARDED';          stability_color = '#ddcc00'; }
+    else if (cii >= 10) { stability = 'LOW RISK';         stability_color = '#88cc44'; }
+    else                { stability = 'STABLE';           stability_color = '#00ff88'; }
 
-    // ── Economic parameters from REST Countries ───────────────────────────────
-    const cData   = countryR.status === 'fulfilled' ? (countryR.value.data?.[0] || {}) : {};
+    // ── Economic metadata ─────────────────────────────────────────────────────
     const econ = {
-      population:   cData.population || null,
+      population:   population,
       area_km2:     cData.area || null,
       capital:      cData.capital?.[0] || null,
       currencies:   cData.currencies ? Object.entries(cData.currencies).map(([k, v]) => `${v.name} (${k})`).join(', ') : null,
@@ -927,63 +1074,89 @@ app.get('/api/cii/:country', async (req, res) => {
       subregion:    cData.subregion || null,
       languages:    cData.languages ? Object.values(cData.languages).join(', ') : null,
       gdp_trillion: baseline.gdp_t,
-      gdp_rank:     Object.keys(COUNTRY_BASELINE).indexOf(iso2) + 1 || null,
+      gdp_per_capita_usd: Math.round(gdpPerCap),
     };
 
-    // ── Defence strength from baseline ───────────────────────────────────────
     const defence = {
       military_strength_score: baseline.mil,
       military_rank:           baseline.mil_rank || null,
-      gfi_index:               baseline.gfi,   // GlobalFirepower Index (lower = stronger)
-      gfi_note:                `GFP Index ${baseline.gfi} (0=perfect, lower=stronger)`,
+      gfi_index:               baseline.gfi,
       economic_strength:       baseline.econ,
       social_cohesion:         baseline.social,
     };
 
-    // ── Tourism ───────────────────────────────────────────────────────────────
     const tData   = TOURISM_DATA[iso2] || null;
-    const tourism = tData ? {
-      score:           tData.score,
-      rank:            tData.rank,
-      arrivals_m:      tData.arrivals_m,
-      note:            `${tData.arrivals_m}M international arrivals/year (UNWTO 2024)`,
-    } : { score: null, rank: null, note: 'Data not available' };
+    const tourism = tData
+      ? { score: tData.score, rank: tData.rank, arrivals_m: tData.arrivals_m, note: `${tData.arrivals_m}M international arrivals/year (UNWTO 2024)` }
+      : { score: null, rank: null, note: 'Data not available' };
 
-    // ── Recent news ──────────────────────────────────────────────────────────
+    // ── Combined news for display ─────────────────────────────────────────────
     const recent_news = [
-      ...gdeltArticles.slice(0, 12).map(a => ({
+      ...gdeltConflict.slice(0, 8).map(a => ({
         title: a.title || '', url: a.url || '', source: a.domain || '',
         date: a.seendate || '', tone: parseFloat(a.tone || 0).toFixed(1), provider: 'GDELT',
       })),
-      ...newsapiArticles.slice(0, 8).map(a => ({
+      ...gdeltMil.slice(0, 4).map(a => ({
+        title: a.title || '', url: a.url || '', source: a.domain || '',
+        date: a.seendate || '', tone: parseFloat(a.tone || 0).toFixed(1), provider: 'GDELT',
+      })),
+      ...newsConflict.slice(0, 8).map(a => ({
         title: a.title || '', url: a.url || '', source: a.source?.name || '',
         date: a.publishedAt || '', tone: '0', provider: 'NewsAPI',
       })),
-    ].filter((a, i, arr) => a.title && arr.findIndex(x => x.url === a.url) === i).slice(0, 15);
+    ]
+    .filter((a, i, arr) => a.title && a.title !== '[Removed]' && arr.findIndex(x => x.url === a.url) === i)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 20);
 
     const result = {
-      country:    countryInput,
+      country: countryInput,
       iso2,
-      ts:         now,
+      ts:    now,
       cii,
       stability,
       stability_color,
       scores: {
-        unrest:      Math.round(unrest_final),
-        security:    Math.round(security_score),
-        information: Math.round(info_score),
+        conflict_unrest:     Math.round(score_conflict_unrest),
+        military_activity:   Math.round(score_military_activity),
+        news_distress:       Math.round(score_news_distress),
+        economic_stress:     Math.round(score_economic_stress),
+        internet_disruption: Math.round(score_internet_disruption),
+        financial_stress:    Math.round(score_financial_stress),
+        geopolitical:        Math.round(score_geopolitical),
+        // legacy aliases (backwards compat)
+        unrest:      Math.round(score_conflict_unrest),
+        security:    Math.round(score_military_activity),
+        information: Math.round(score_news_distress),
       },
       raw_inputs: {
-        protest_count, total_fatalities, high_severity,
-        news_count, avg_velocity: parseFloat(avg_velocity.toFixed(2)), avg_tone: parseFloat(avg_tone.toFixed(2)),
-        any_alert, mil_flights, naval_vessels: Math.round(naval_vessels),
+        // Conflict & Unrest
+        protest_count, battle_count, total_fatalities, high_severity,
+        // Military
+        mil_flights, naval_vessels: Math.round(naval_vessels), mil_news_hits,
+        news_count_mil,
+        // News distress
+        news_count_conflict, crisis_hits, avg_velocity: parseFloat(avg_velocity.toFixed(2)),
+        avg_tone: parseFloat(avg_tone.toFixed(2)), any_alert,
+        // Economic
+        econ_hits, gdp_per_cap_usd: Math.round(gdpPerCap), econ_fragility,
+        // Internet
+        ioda_alert_count, ioda_critical, cf_anomaly_count,
+        ioda_available: iodaR.status === 'fulfilled',
+        // Financial
+        fin_hits,
       },
       econ,
       defence,
       tourism,
       recent_news,
-      sources: ['GDELT v2', 'HAPI HumanData', 'REST Countries', 'GlobalFirepower 2024', 'UNWTO 2024', NEWSAPI_KEY ? 'NewsAPI.org' : null].filter(Boolean),
+      sources: [
+        'GDELT v2', 'HAPI HumanData', 'REST Countries', 'GlobalFirepower 2024', 'UNWTO 2024',
+        ioda_source, cf_source,
+        NEWSAPI_KEY ? 'NewsAPI.org (×3 queries)' : null,
+      ].filter(Boolean),
     };
+
     _ciiCache[cacheKey] = { data: result, ts: now };
     res.json(result);
   } catch (err) {

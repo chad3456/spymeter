@@ -2294,9 +2294,11 @@
       $id('cd-stability-pill').textContent = 'Computing…';
       $id('cd-stability-pill').style.cssText = '';
 
-      // Reset bars
-      ['cd-bar-unrest','cd-bar-security','cd-bar-info'].forEach(id => $id(id).style.width = '0%');
-      $id('cd-val-unrest').textContent = $id('cd-val-security').textContent = $id('cd-val-info').textContent = '…';
+      // Reset 7 dimension bars
+      ['conflict','military','news','econ','internet','finance','geo'].forEach(d => {
+        $id('cd-bar-' + d).style.width = '0%';
+        $id('cd-val-' + d).textContent = '…';
+      });
 
       // Reset body sections
       $id('cd-econ-grid').innerHTML   = '<div class="cd-loading">⟳ Loading…</div>';
@@ -2323,15 +2325,26 @@
         pill.textContent = d.stability;
         pill.style.cssText = `color:${d.stability_color};border-color:${d.stability_color};background:${d.stability_color}1a`;
 
-        // ── Score bars ──
+        // ── 7 CII dimension bars ──
         const s = d.scores || {};
-        $id('cd-val-unrest').textContent   = s.unrest   || 0;
-        $id('cd-val-security').textContent = s.security || 0;
-        $id('cd-val-info').textContent     = s.information || 0;
+        const DIMS = [
+          { key: 'conflict_unrest',    id: 'conflict',  weight: '25%' },
+          { key: 'military_activity',  id: 'military',  weight: '20%' },
+          { key: 'news_distress',      id: 'news',      weight: '15%' },
+          { key: 'economic_stress',    id: 'econ',      weight: '15%' },
+          { key: 'internet_disruption',id: 'internet',  weight: '10%' },
+          { key: 'financial_stress',   id: 'finance',   weight: '10%' },
+          { key: 'geopolitical',       id: 'geo',       weight: '5%' },
+        ];
+        DIMS.forEach(dim => {
+          const v = s[dim.key] || 0;
+          $id('cd-val-' + dim.id).textContent = v;
+          $id('cd-val-' + dim.id).title = dim.key.replace(/_/g,' ').toUpperCase() + ' — weight ' + dim.weight;
+        });
         setTimeout(() => {
-          $id('cd-bar-unrest').style.width   = (s.unrest   || 0) + '%';
-          $id('cd-bar-security').style.width = (s.security || 0) + '%';
-          $id('cd-bar-info').style.width     = (s.information || 0) + '%';
+          DIMS.forEach(dim => {
+            $id('cd-bar-' + dim.id).style.width = (s[dim.key] || 0) + '%';
+          });
         }, 60);
 
         // ── Region ──
@@ -2395,19 +2408,46 @@
           $id('cd-tourism').innerHTML = `<div class="cd-loading">${t.note || 'Data not available'}</div>`;
         }
 
-        // ── Signal inputs ──
+        // ── Signal inputs (7 dimension breakdown) ──
         const ri = d.raw_inputs || {};
-        const alertColor = ri.any_alert ? '#ff2200' : '#00ff88';
+        const aColor = ri.any_alert ? '#ff2200' : '#00ff88';
+        const tColor = (ri.avg_tone || 0) < -3 ? '#ff6600' : '#00ff88';
+        const iColor = (ri.ioda_alert_count || 0) > 0 ? '#cc44ff' : '#00ff88';
         $id('cd-signals').innerHTML = `
-          <span class="cd-sig-lbl">Protest events</span><span class="cd-sig-val" style="color:#ff9900">${ri.protest_count || 0}</span>
+          <span class="cd-sig-grp">⚔ CONFLICT &amp; UNREST</span><span class="cd-sig-grp-wt">×0.25</span>
+          <span class="cd-sig-lbl">Protest events (HAPI)</span><span class="cd-sig-val" style="color:#ff9900">${ri.protest_count || 0}</span>
+          <span class="cd-sig-lbl">Battle/clashes (HAPI)</span><span class="cd-sig-val" style="color:#ff6600">${ri.battle_count || 0}</span>
           <span class="cd-sig-lbl">Est. fatalities</span><span class="cd-sig-val" style="color:#ff4400">${ri.total_fatalities || 0}</span>
-          <span class="cd-sig-lbl">High severity</span><span class="cd-sig-val" style="color:#ff6600">${ri.high_severity || 0}</span>
-          <span class="cd-sig-lbl">News (48h)</span><span class="cd-sig-val" style="color:#00d4ff">${ri.news_count || 0}</span>
-          <span class="cd-sig-lbl">Velocity</span><span class="cd-sig-val" style="color:#00d4ff">${ri.avg_velocity || 0}/hr</span>
-          <span class="cd-sig-lbl">Avg sentiment</span><span class="cd-sig-val" style="color:${(ri.avg_tone||0)<0?'#ff6600':'#00ff88'}">${ri.avg_tone || 0}</span>
-          <span class="cd-sig-lbl">Alert detected</span><span class="cd-sig-val" style="color:${alertColor}">${ri.any_alert ? '⚠ YES' : '✓ NO'}</span>
-          <span class="cd-sig-lbl">Mil. flights</span><span class="cd-sig-val" style="color:#ffaa00">${ri.mil_flights || 0}</span>
-          <span class="cd-sig-lbl">Naval vessels</span><span class="cd-sig-val" style="color:#ffaa00">${ri.naval_vessels || 0}</span>`;
+          <span class="cd-sig-lbl">High severity events</span><span class="cd-sig-val" style="color:#ff5500">${ri.high_severity || 0}</span>
+          <span class="cd-sig-lbl">GDELT tone (negative=bad)</span><span class="cd-sig-val" style="color:${tColor}">${ri.avg_tone || 0}</span>
+
+          <span class="cd-sig-grp">🛡 MILITARY ACTIVITY</span><span class="cd-sig-grp-wt">×0.20</span>
+          <span class="cd-sig-lbl">GDELT mil. articles (48h)</span><span class="cd-sig-val" style="color:#ff8800">${ri.news_count_mil || 0}</span>
+          <span class="cd-sig-lbl">NewsAPI mil. hits</span><span class="cd-sig-val" style="color:#ffaa00">${ri.mil_news_hits || 0}</span>
+          <span class="cd-sig-lbl">Aircraft (cache)</span><span class="cd-sig-val" style="color:#ffcc00">${ri.mil_flights || 0}</span>
+          <span class="cd-sig-lbl">Naval vessels (cache)</span><span class="cd-sig-val" style="color:#ffcc00">${ri.naval_vessels || 0}</span>
+
+          <span class="cd-sig-grp">📡 NEWS DISTRESS</span><span class="cd-sig-grp-wt">×0.15</span>
+          <span class="cd-sig-lbl">NewsAPI crisis articles</span><span class="cd-sig-val" style="color:#ff6600">${ri.news_count_conflict || 0}</span>
+          <span class="cd-sig-lbl">Crisis keyword hits</span><span class="cd-sig-val" style="color:#ff8844">${ri.crisis_hits || 0}</span>
+          <span class="cd-sig-lbl">GDELT velocity (art/hr)</span><span class="cd-sig-val" style="color:#00d4ff">${ri.avg_velocity || 0}</span>
+          <span class="cd-sig-lbl">Alert detected</span><span class="cd-sig-val" style="color:${aColor}">${ri.any_alert ? '⚠ YES' : '✓ NO'}</span>
+
+          <span class="cd-sig-grp">📊 ECONOMIC STRESS</span><span class="cd-sig-grp-wt">×0.15</span>
+          <span class="cd-sig-lbl">NewsAPI econ articles</span><span class="cd-sig-val" style="color:#ffcc44">${ri.econ_hits || 0}</span>
+          <span class="cd-sig-lbl">GDP/capita (USD)</span><span class="cd-sig-val" style="color:${(ri.gdp_per_cap_usd||0)<3000?'#ff6600':'#00ff88'}">$${(ri.gdp_per_cap_usd||0).toLocaleString()}</span>
+          <span class="cd-sig-lbl">Fragility score</span><span class="cd-sig-val" style="color:#ffaa44">${ri.econ_fragility || 0}/55</span>
+
+          <span class="cd-sig-grp">🌐 INTERNET DISRUPTION</span><span class="cd-sig-grp-wt">×0.10</span>
+          <span class="cd-sig-lbl">IODA alerts (24h)</span><span class="cd-sig-val" style="color:${iColor}">${ri.ioda_alert_count || 0}</span>
+          <span class="cd-sig-lbl">IODA critical</span><span class="cd-sig-val" style="color:${ri.ioda_critical>0?'#cc44ff':'#00ff88'}">${ri.ioda_critical || 0}</span>
+          <span class="cd-sig-lbl">Cloudflare anomalies</span><span class="cd-sig-val" style="color:${ri.cf_anomaly_count>0?'#cc44ff':'#00ff88'}">${ri.cf_anomaly_count || 0}</span>
+
+          <span class="cd-sig-grp">💸 FINANCIAL STRESS</span><span class="cd-sig-grp-wt">×0.10</span>
+          <span class="cd-sig-lbl">NewsAPI financial hits</span><span class="cd-sig-val" style="color:#ff44aa">${ri.fin_hits || 0}</span>
+
+          <span class="cd-sig-grp">🗺 GEOPOLITICAL</span><span class="cd-sig-grp-wt">×0.05</span>
+          <span class="cd-sig-lbl">Conflict-zone baseline</span><span class="cd-sig-val" style="color:#00aaff">${d.scores?.geopolitical || 0}/100</span>`;
 
         // ── Live news ──
         const news = d.recent_news || [];
@@ -2510,20 +2550,41 @@
         </div>
         <div id="cd-score-right">
           <div id="cd-stability-pill">COMPUTING…</div>
+          <!-- ── 7 CII Dimension bars ──────────────────────────── -->
           <div class="cd-bar-row">
-            <span class="cd-bar-lbl">UNREST</span>
-            <div class="cd-bar-track"><div class="cd-bar-fill" id="cd-bar-unrest" style="background:#ff5533"></div></div>
-            <span class="cd-bar-num" id="cd-val-unrest">0</span>
+            <span class="cd-bar-lbl" title="HAPI conflict events + GDELT tone">CONFLICT</span>
+            <div class="cd-bar-track"><div class="cd-bar-fill" id="cd-bar-conflict" style="background:#cc2200"></div></div>
+            <span class="cd-bar-num" id="cd-val-conflict">0</span>
           </div>
           <div class="cd-bar-row">
-            <span class="cd-bar-lbl">SECURITY</span>
-            <div class="cd-bar-track"><div class="cd-bar-fill" id="cd-bar-security" style="background:#ffaa00"></div></div>
-            <span class="cd-bar-num" id="cd-val-security">0</span>
+            <span class="cd-bar-lbl" title="GDELT military articles + NewsAPI + aircraft/naval cache">MILITARY</span>
+            <div class="cd-bar-track"><div class="cd-bar-fill" id="cd-bar-military" style="background:#ff5500"></div></div>
+            <span class="cd-bar-num" id="cd-val-military">0</span>
           </div>
           <div class="cd-bar-row">
-            <span class="cd-bar-lbl">INTEL</span>
-            <div class="cd-bar-track"><div class="cd-bar-fill" id="cd-bar-info" style="background:#00d4ff"></div></div>
-            <span class="cd-bar-num" id="cd-val-info">0</span>
+            <span class="cd-bar-lbl" title="NewsAPI crisis keywords + GDELT velocity">NEWS</span>
+            <div class="cd-bar-track"><div class="cd-bar-fill" id="cd-bar-news" style="background:#ff8800"></div></div>
+            <span class="cd-bar-num" id="cd-val-news">0</span>
+          </div>
+          <div class="cd-bar-row">
+            <span class="cd-bar-lbl" title="NewsAPI sanctions/recession + GDP/capita fragility">ECONOMY</span>
+            <div class="cd-bar-track"><div class="cd-bar-fill" id="cd-bar-econ" style="background:#ffcc00"></div></div>
+            <span class="cd-bar-num" id="cd-val-econ">0</span>
+          </div>
+          <div class="cd-bar-row">
+            <span class="cd-bar-lbl" title="IODA/CAIDA BGP alerts + Cloudflare Radar anomalies">INTERNET</span>
+            <div class="cd-bar-track"><div class="cd-bar-fill" id="cd-bar-internet" style="background:#cc44ff"></div></div>
+            <span class="cd-bar-num" id="cd-val-internet">0</span>
+          </div>
+          <div class="cd-bar-row">
+            <span class="cd-bar-lbl" title="NewsAPI financial/market crisis keywords">FINANCE</span>
+            <div class="cd-bar-track"><div class="cd-bar-fill" id="cd-bar-finance" style="background:#ff44aa"></div></div>
+            <span class="cd-bar-num" id="cd-val-finance">0</span>
+          </div>
+          <div class="cd-bar-row">
+            <span class="cd-bar-lbl" title="Known active conflict / high-tension baseline">GEO</span>
+            <div class="cd-bar-track"><div class="cd-bar-fill" id="cd-bar-geo" style="background:#00aaff"></div></div>
+            <span class="cd-bar-num" id="cd-val-geo">0</span>
           </div>
         </div>
       </div>
@@ -2554,7 +2615,7 @@
 
       <!-- Signals -->
       <div class="cd-section">
-        <div class="cd-section-hdr">📡 OSINT SIGNAL INPUTS</div>
+        <div class="cd-section-hdr">📡 CII SIGNAL BREAKDOWN <span class="cd-badge">7 dimensions</span></div>
         <div class="cd-signals-grid" id="cd-signals"></div>
       </div>
 
