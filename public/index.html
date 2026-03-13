@@ -97,6 +97,7 @@
         <div id="usearch-results" class="usearch-results" style="display:none"></div>
       </div>
       <div id="utc-clock">--:--:-- UTC</div>
+      <button id="news-overlay-btn" class="ctrl-btn" onclick="NEWS_OVERLAY.open()" title="Live War News Monitor — NewsAPI real-time feeds" style="color:#ff5533;border-color:rgba(255,85,51,.35);background:rgba(255,85,51,.07)">📡 LIVE NEWS</button>
       <button id="api-status-btn" class="ctrl-btn" title="API Status — show all data sources">⬡ API</button>
       <button id="crt-btn"   class="ctrl-btn" title="CRT Scanline Effect">CRT</button>
       <button id="nv-btn"    class="ctrl-btn" title="Night Vision">👁 NV</button>
@@ -2567,5 +2568,303 @@
       <div id="cd-sources-row">SOURCES: <span id="cd-sources"></span></div>
     </div>
   </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       LIVE NEWS MONITOR OVERLAY
+       Full-screen overlay with multi-category NewsAPI feeds.
+       Triggered by 📡 LIVE NEWS button in topbar.
+       ══════════════════════════════════════════════════════════ -->
+  <div id="nmo-overlay">
+
+    <!-- Header bar -->
+    <div id="nmo-header">
+      <div id="nmo-header-left">
+        <span id="nmo-pulse"></span>
+        <span id="nmo-title">LIVE WAR &amp; TECH NEWS MONITOR</span>
+        <span id="nmo-powered">NewsAPI.org</span>
+      </div>
+      <div id="nmo-header-right">
+        <span id="nmo-last-updated"></span>
+        <button id="nmo-refresh-btn" title="Refresh all feeds">↻ REFRESH</button>
+        <button id="nmo-close-btn" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+
+    <!-- Category tab bar -->
+    <div id="nmo-tabs">
+      <!-- populated by JS -->
+    </div>
+
+    <!-- Search + meta bar -->
+    <div id="nmo-meta-bar">
+      <div id="nmo-search-wrap">
+        <input id="nmo-search" type="text" placeholder="🔍 Filter articles…" autocomplete="off"/>
+      </div>
+      <div id="nmo-view-toggle">
+        <button class="nmo-view-btn active" data-view="grid" title="Grid view">⊞ GRID</button>
+        <button class="nmo-view-btn" data-view="list" title="List view">≡ LIST</button>
+      </div>
+      <div id="nmo-count-lbl"></div>
+      <div id="nmo-api-url-wrap">
+        <span id="nmo-api-label">NEWSAPI URL:</span>
+        <code id="nmo-api-url"></code>
+      </div>
+    </div>
+
+    <!-- Feed body -->
+    <div id="nmo-body">
+      <div id="nmo-articles"></div>
+    </div>
+
+    <!-- API reference footer -->
+    <div id="nmo-footer">
+      <div id="nmo-footer-feeds"></div>
+    </div>
+
+  </div>
+
+  <script>
+  // ══════════════════════════════════════════════════════════════
+  // NEWS MONITOR OVERLAY (NEWS_OVERLAY)
+  // ══════════════════════════════════════════════════════════════
+  const NEWS_OVERLAY = (() => {
+    const overlay    = document.getElementById('nmo-overlay');
+    const tabBar     = document.getElementById('nmo-tabs');
+    const articlesEl = document.getElementById('nmo-articles');
+    const countLbl   = document.getElementById('nmo-count-lbl');
+    const lastUpd    = document.getElementById('nmo-last-updated');
+    const apiUrlEl   = document.getElementById('nmo-api-url');
+    const footerEl   = document.getElementById('nmo-footer-feeds');
+
+    let _allFeeds  = {};        // id → { label, emoji, articles, newsapi_url, query }
+    let _activeCat = 'all';     // currently selected tab
+    let _view      = 'grid';    // 'grid' | 'list'
+    let _filter    = '';        // text filter
+    let _refreshTimer = null;
+    let _loading   = false;
+
+    // ── Open / close ─────────────────────────────────────────
+    function open() {
+      overlay.classList.add('nmo-open');
+      document.body.style.overflow = 'hidden';
+      if (!Object.keys(_allFeeds).length) loadAll();
+    }
+    function close() {
+      overlay.classList.remove('nmo-open');
+      document.body.style.overflow = '';
+    }
+
+    document.getElementById('nmo-close-btn').addEventListener('click', close);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.classList.contains('nmo-open')) close(); });
+    document.getElementById('nmo-refresh-btn').addEventListener('click', () => loadAll(true));
+
+    // ── View toggle ──────────────────────────────────────────
+    document.querySelectorAll('.nmo-view-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.nmo-view-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _view = btn.dataset.view;
+        articlesEl.className = _view === 'list' ? 'nmo-list-view' : '';
+        render();
+      });
+    });
+
+    // ── Search filter ────────────────────────────────────────
+    document.getElementById('nmo-search').addEventListener('input', function() {
+      _filter = this.value.toLowerCase();
+      render();
+    });
+
+    // ── Fetch all feeds ──────────────────────────────────────
+    async function loadAll(force = false) {
+      if (_loading) return;
+      _loading = true;
+      setLoading(true);
+      try {
+        const r = await fetch('/api/newsapi/feeds');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        _allFeeds = d.feeds || {};
+        buildTabs(d.categories || []);
+        buildFooter(d.categories || []);
+        render();
+        lastUpd.textContent = '↻ ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' UTC';
+      } catch (err) {
+        articlesEl.innerHTML = `<div class="nmo-empty">⚠ Feed unavailable — ${err.message}</div>`;
+      } finally {
+        _loading = false;
+        setLoading(false);
+      }
+      // Auto-refresh every 10 minutes
+      clearTimeout(_refreshTimer);
+      _refreshTimer = setTimeout(() => loadAll(), 10 * 60_000);
+    }
+
+    function setLoading(on) {
+      document.getElementById('nmo-refresh-btn').textContent = on ? '⟳ Loading…' : '↻ REFRESH';
+      if (on) articlesEl.innerHTML = '<div class="nmo-loading-grid">' +
+        Array(8).fill('<div class="nmo-skeleton"></div>').join('') + '</div>';
+    }
+
+    // ── Build category tabs ──────────────────────────────────
+    function buildTabs(cats) {
+      const all = [{ id: 'all', label: 'ALL FEEDS', emoji: '📡' }, ...cats];
+      tabBar.innerHTML = all.map(c =>
+        `<button class="nmo-tab ${c.id === _activeCat ? 'active' : ''}" data-cat="${c.id}">
+          ${c.emoji} ${c.label}
+          ${c.id !== 'all' && _allFeeds[c.id] ? `<span class="nmo-tab-count">${_allFeeds[c.id].articles.length}</span>` : ''}
+        </button>`
+      ).join('');
+      tabBar.querySelectorAll('.nmo-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          _activeCat = btn.dataset.cat;
+          tabBar.querySelectorAll('.nmo-tab').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          // Show NewsAPI URL for this category
+          const feed = _allFeeds[_activeCat];
+          if (feed) {
+            apiUrlEl.textContent = feed.newsapi_url || '';
+            apiUrlEl.parentElement.style.display = 'flex';
+          } else {
+            apiUrlEl.parentElement.style.display = 'none';
+          }
+          render();
+        });
+      });
+    }
+
+    // ── Build footer API reference table ─────────────────────
+    function buildFooter(cats) {
+      footerEl.innerHTML = `
+        <div class="nmo-footer-title">📋 NEWSAPI QUERY REFERENCE</div>
+        <div class="nmo-footer-grid">
+          ${cats.map(c => {
+            const f = _allFeeds[c.id];
+            const url = f?.newsapi_url || '';
+            return `<div class="nmo-footer-row">
+              <span class="nmo-footer-cat">${c.emoji} ${c.label}</span>
+              <code class="nmo-footer-url" title="${url}">${url.replace('&apiKey=YOUR_KEY','')}</code>
+              <span class="nmo-footer-n">${f?.articles?.length || 0} articles</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
+    // ── Render articles ──────────────────────────────────────
+    function render() {
+      // Collect articles for active tab
+      let articles = [];
+      if (_activeCat === 'all') {
+        // Interleave from all feeds (round-robin so every category shows)
+        const feedArrays = Object.values(_allFeeds).map(f => f.articles || []);
+        const maxLen = Math.max(...feedArrays.map(a => a.length), 0);
+        for (let i = 0; i < maxLen; i++) {
+          feedArrays.forEach((arr, fi) => {
+            if (arr[i]) articles.push({ ...arr[i], _feedId: Object.keys(_allFeeds)[fi] });
+          });
+        }
+      } else {
+        articles = (_allFeeds[_activeCat]?.articles || []).map(a => ({ ...a, _feedId: _activeCat }));
+      }
+
+      // Text filter
+      if (_filter) {
+        articles = articles.filter(a =>
+          (a.title || '').toLowerCase().includes(_filter) ||
+          (a.description || '').toLowerCase().includes(_filter) ||
+          (a.source || '').toLowerCase().includes(_filter)
+        );
+      }
+
+      // Deduplicate by url
+      const seen = new Set();
+      articles = articles.filter(a => { if (seen.has(a.url)) return false; seen.add(a.url); return true; });
+
+      countLbl.textContent = articles.length + ' articles';
+
+      if (!articles.length) {
+        articlesEl.innerHTML = '<div class="nmo-empty">No articles found</div>';
+        return;
+      }
+
+      articlesEl.className = _view === 'list' ? 'nmo-list-view' : '';
+      articlesEl.innerHTML = articles.map(a => _view === 'list' ? _listCard(a) : _gridCard(a)).join('');
+    }
+
+    const FEED_COLORS = {
+      'iran-israel':    '#ff3300',
+      'us-updates':     '#3388ff',
+      'israel-updates': '#2244cc',
+      'india-updates':  '#ff9933',
+      'iran-updates':   '#cc3300',
+      'ai-tech':        '#9b59ff',
+      'military-drones':'#00d4ff',
+      'energy-crisis':  '#ffcc00',
+    };
+    const FEED_LABELS = {
+      'iran-israel':    '🔥 IRN/ISR',
+      'us-updates':     '🇺🇸 USA',
+      'israel-updates': '🇮🇱 ISRAEL',
+      'india-updates':  '🇮🇳 INDIA',
+      'iran-updates':   '🇮🇷 IRAN',
+      'ai-tech':        '🤖 AI/TECH',
+      'military-drones':'🚁 DRONES',
+      'energy-crisis':  '⛽ ENERGY',
+    };
+
+    function _timeAgo(ts) {
+      if (!ts) return '';
+      try { return UTILS.timeAgo(ts); } catch { return ''; }
+    }
+
+    function _gridCard(a) {
+      const col   = FEED_COLORS[a._feedId] || '#888';
+      const label = FEED_LABELS[a._feedId] || '';
+      const rel   = _timeAgo(a.pubDate || '');
+      const safe  = (a.title || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+      const img   = a.image
+        ? `<div class="nmo-card-img" style="background-image:url('${a.image}')"></div>`
+        : `<div class="nmo-card-img nmo-card-img-placeholder"><span>${label}</span></div>`;
+      return `<a class="nmo-card" href="${a.url || '#'}" target="_blank" rel="noopener noreferrer" style="--feed-color:${col}">
+        ${img}
+        <div class="nmo-card-body">
+          <div class="nmo-card-tag" style="color:${col};border-color:${col}40">${label}</div>
+          <div class="nmo-card-title">${a.title || ''}</div>
+          ${a.description ? `<div class="nmo-card-desc">${a.description}</div>` : ''}
+          <div class="nmo-card-meta">
+            <span class="nmo-card-source">${a.source || ''}</span>
+            ${rel ? `<span class="nmo-card-time">${rel}</span>` : ''}
+            <button class="nmo-narrate" onclick="event.preventDefault();UTILS.narrate('${safe}')" title="Listen">🔊</button>
+          </div>
+        </div>
+      </a>`;
+    }
+
+    function _listCard(a) {
+      const col   = FEED_COLORS[a._feedId] || '#888';
+      const label = FEED_LABELS[a._feedId] || '';
+      const rel   = _timeAgo(a.pubDate || '');
+      const safe  = (a.title || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+      return `<a class="nmo-list-item" href="${a.url || '#'}" target="_blank" rel="noopener noreferrer" style="--feed-color:${col}">
+        <div class="nmo-list-bar" style="background:${col}"></div>
+        ${a.image ? `<img class="nmo-list-thumb" src="${a.image}" loading="lazy" onerror="this.style.display='none'">` : ''}
+        <div class="nmo-list-body">
+          <div class="nmo-list-tag" style="color:${col}">${label}</div>
+          <div class="nmo-list-title">${a.title || ''}</div>
+          ${a.description ? `<div class="nmo-list-desc">${a.description}</div>` : ''}
+          <div class="nmo-list-meta">
+            <span>${a.source || ''}</span>
+            ${rel ? `<span>${rel}</span>` : ''}
+            <button class="nmo-narrate" onclick="event.preventDefault();UTILS.narrate('${safe}')" title="Listen">🔊</button>
+          </div>
+        </div>
+      </a>`;
+    }
+
+    return { open, close, refresh: () => loadAll(true) };
+  })();
+  window.NEWS_OVERLAY = NEWS_OVERLAY;
+  </script>
+
 </body>
 </html>

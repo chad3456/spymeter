@@ -605,20 +605,111 @@ async function fetchNewsAPI(query, pageSize = 50, cacheKey = null) {
   return articles;
 }
 
-// ─── /api/newsapi/conflict — Iran-Israel + regional war news (50+) ─────────────
+// ─── News feed category definitions ───────────────────────────────────────────
+// Each entry: { id, label, emoji, query, pageSize }
+// Exact NewsAPI URL used: https://newsapi.org/v2/everything?q=<query>&language=en&sortBy=publishedAt&pageSize=<n>&apiKey=KEY
+const NEWS_FEEDS = [
+  {
+    id: 'iran-israel',
+    label: 'Iran–Israel War',
+    emoji: '🔥',
+    query: 'Iran Israel war strike missile airstrike IRGC IDF 2026',
+    pageSize: 30,
+  },
+  {
+    id: 'us-updates',
+    label: 'United States',
+    emoji: '🇺🇸',
+    query: 'United States military foreign policy Pentagon White House defense 2026',
+    pageSize: 20,
+  },
+  {
+    id: 'israel-updates',
+    label: 'Israel',
+    emoji: '🇮🇱',
+    query: 'Israel IDF Gaza Hamas Hezbollah Netanyahu Iron Dome 2026',
+    pageSize: 20,
+  },
+  {
+    id: 'india-updates',
+    label: 'India',
+    emoji: '🇮🇳',
+    query: 'India military border security defence Rafale Modi 2026',
+    pageSize: 20,
+  },
+  {
+    id: 'iran-updates',
+    label: 'Iran',
+    emoji: '🇮🇷',
+    query: 'Iran IRGC nuclear sanctions Khamenei Hormuz 2026',
+    pageSize: 20,
+  },
+  {
+    id: 'ai-tech',
+    label: 'AI & Tech',
+    emoji: '🤖',
+    query: 'artificial intelligence AI defense military technology OpenAI LLM chip',
+    pageSize: 20,
+  },
+  {
+    id: 'military-drones',
+    label: 'Military Drones',
+    emoji: '🚁',
+    query: 'military drone UAV autonomous weapon Shahed Bayraktar Reaper strike 2026',
+    pageSize: 20,
+  },
+  {
+    id: 'energy-crisis',
+    label: 'Energy & LPG',
+    emoji: '⛽',
+    query: 'LPG gas shortage oil price energy crisis Middle East war sanctions 2026',
+    pageSize: 20,
+  },
+];
+
+// ─── /api/newsapi/feeds — all categories in one request ───────────────────────
+// Returns: { feeds: { [id]: { articles, query, newsapi_url, ts } }, ts }
+app.get('/api/newsapi/feeds', async (req, res) => {
+  const cat = req.query.cat; // optional: fetch single category
+  const feeds = cat ? NEWS_FEEDS.filter(f => f.id === cat) : NEWS_FEEDS;
+  if (!feeds.length) return res.status(400).json({ error: 'Unknown category' });
+
+  const results = await Promise.allSettled(
+    feeds.map(f => fetchNewsAPI(f.query, f.pageSize, f.id).then(articles => ({ ...f, articles })))
+  );
+
+  const out = {};
+  results.forEach((r, i) => {
+    const f = feeds[i];
+    const newsapi_url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(f.query)}&language=en&sortBy=publishedAt&pageSize=${f.pageSize}&apiKey=YOUR_KEY`;
+    out[f.id] = {
+      id:          f.id,
+      label:       f.label,
+      emoji:       f.emoji,
+      query:       f.query,
+      newsapi_url,
+      articles:    r.status === 'fulfilled' ? r.value.articles : [],
+      error:       r.status === 'rejected'  ? r.reason?.message : null,
+      ts:          Date.now(),
+    };
+  });
+
+  res.json({ feeds: out, categories: feeds.map(f => ({ id: f.id, label: f.label, emoji: f.emoji })), ts: Date.now() });
+});
+
+// ─── /api/newsapi/conflict — backwards-compatible alias ───────────────────────
 app.get('/api/newsapi/conflict', async (req, res) => {
   try {
-    const [iranIsrael, lpg, war] = await Promise.allSettled([
-      fetchNewsAPI('Iran Israel war strike missile 2026', 50, 'iran-israel'),
-      fetchNewsAPI('LPG gas shortage India war Middle East energy crisis', 30, 'lpg-shortage'),
-      fetchNewsAPI('war geopolitics military conflict 2026 analysis', 30, 'war-insights'),
+    const [irnIsr, lpg, war] = await Promise.allSettled([
+      fetchNewsAPI(NEWS_FEEDS.find(f => f.id === 'iran-israel').query, 50, 'iran-israel'),
+      fetchNewsAPI(NEWS_FEEDS.find(f => f.id === 'energy-crisis').query, 30, 'energy-crisis'),
+      fetchNewsAPI(NEWS_FEEDS.find(f => f.id === 'military-drones').query, 20, 'military-drones'),
     ]);
     const articles = [
-      ...(iranIsrael.status === 'fulfilled' ? iranIsrael.value.map(a => ({ ...a, category: 'iran-israel' })) : []),
-      ...(lpg.status        === 'fulfilled' ? lpg.value.map(a => ({ ...a, category: 'lpg-energy' }))        : []),
-      ...(war.status        === 'fulfilled' ? war.value.map(a => ({ ...a, category: 'war-insights' }))      : []),
+      ...(irnIsr.status === 'fulfilled' ? irnIsr.value.map(a => ({ ...a, category: 'iran-israel' })) : []),
+      ...(lpg.status    === 'fulfilled' ? lpg.value.map(a => ({ ...a, category: 'lpg-energy' }))    : []),
+      ...(war.status    === 'fulfilled' ? war.value.map(a => ({ ...a, category: 'war-insights' }))  : []),
     ];
-    // Deduplicate by URL
     const seen = new Set();
     const unique = articles.filter(a => { if (seen.has(a.url)) return false; seen.add(a.url); return true; });
     unique.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
@@ -628,7 +719,7 @@ app.get('/api/newsapi/conflict', async (req, res) => {
   }
 });
 
-// ─── /api/newsapi/search — generic NewsAPI search ─────────────────────────────
+// ─── /api/newsapi/search — generic search ─────────────────────────────────────
 app.get('/api/newsapi/search', async (req, res) => {
   const q = (req.query.q || '').trim().slice(0, 200);
   if (!q) return res.status(400).json({ error: 'q param required' });
