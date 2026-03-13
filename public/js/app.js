@@ -556,6 +556,7 @@ const APP = (() => {
   /* ── Boot ─────────────────────────────────────────────── */
   function boot() {
     map = initMap();
+    window._leafletMap = map; // expose for CII country-click module
     EFFECTS.initClock();
     EFFECTS.initCoordHud(map);
     SIDEBAR.init();
