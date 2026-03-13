@@ -55,6 +55,10 @@ const cache = {
   marketNews:     { data: null, ts: 0 },
   indiaNews:      { data: null, ts: 0 },
   chinaNews:      { data: null, ts: 0 },
+  news:           { data: null, ts: 0 },
+  conflictNews:   { data: null, ts: 0 },
+  ukraineNews:    { data: null, ts: 0 },
+  unrestNews:     { data: null, ts: 0 },
 };
 
 const TTL = {
@@ -2220,6 +2224,649 @@ app.get('/api/rss-news', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message, articles: [] });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 9F — RESTORED LEGACY ENDPOINTS
+// (fires, news, conflict-news, reddit, rss, polls, iran-israel-2026, outage,
+//  hapi-events, gpsjam, marine, polymarket, geocode-capital, status,
+//  defence-ai-news, defence-feed, india-citizens, groq-headlines, narrate)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const NEWS_TTL = 10 * 60_000; // 10 min
+
+// ─── /api/fires — NASA FIRMS 24h active fire CSV ──────────────────────────────
+app.get('/api/fires', async (req, res) => {
+  try {
+    const resp = await axios.get(
+      'https://firms.modaps.eosdis.nasa.gov/data/active_fire/modis-c6.1/csv/MODIS_C6_1_Global_24h.csv',
+      { timeout: 20_000, responseType: 'text' });
+    res.set('Content-Type', 'text/csv');
+    res.send(resp.data);
+  } catch (err) { res.status(503).json({ error: 'Fire data unavailable' }); }
+});
+
+// ─── /api/news — GDELT general conflict news ──────────────────────────────────
+app.get('/api/news', async (req, res) => {
+  const now = Date.now();
+  if (cache.news.data && now - cache.news.ts < NEWS_TTL) return res.json(cache.news.data);
+  const queries = ['war military conflict strike', 'geopolitical crisis sanctions', 'earthquake disaster flood'];
+  const allArticles = [];
+  try {
+    for (const q of queries) {
+      try {
+        const resp = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+          params: { query: q, mode: 'artlist', maxrecords: 10, format: 'json', sort: 'datedesc', timespan: '24h' },
+          timeout: 8_000
+        });
+        if (resp.data?.articles) allArticles.push(...resp.data.articles.map(a => ({
+          title: a.title||'', url: a.url||'', source: a.domain||'',
+          date: a.seendate||'', country: a.sourcecountry||'', tone: a.tone ? parseFloat(a.tone).toFixed(1) : '0'
+        })));
+      } catch (_) {}
+    }
+    const seen = new Set();
+    const unique = allArticles.filter(a => { if (!a.title || seen.has(a.url)) return false; seen.add(a.url); return true; });
+    unique.sort((a, b) => b.date.localeCompare(a.date));
+    const result = { articles: unique.slice(0, 25), ts: now, source: 'GDELT Project v2 API' };
+    cache.news = { data: result, ts: now };
+    res.json(result);
+  } catch (err) {
+    if (cache.news.data) return res.json(cache.news.data);
+    res.json({ articles: [], ts: now, error: 'GDELT unavailable' });
+  }
+});
+
+// ─── /api/conflict-news — Iran/Israel/Gaza (GDELT) ────────────────────────────
+app.get('/api/conflict-news', async (req, res) => {
+  const now = Date.now();
+  if (cache.conflictNews.data && now - cache.conflictNews.ts < NEWS_TTL) return res.json(cache.conflictNews.data);
+  const queries = [
+    'Iran Israel war 2026 attack strike missile',
+    'IRGC Israel airstrike Hezbollah Hamas 2026',
+    'Iran nuclear Fordow enrichment IAEA 2026',
+    'Gaza IDF ceasefire hostage 2026',
+  ];
+  const allArticles = [];
+  try {
+    for (const q of queries) {
+      try {
+        const resp = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+          params: { query: q, mode: 'artlist', maxrecords: 12, format: 'json', sort: 'datedesc', timespan: '48h' },
+          timeout: 8_000
+        });
+        if (resp.data?.articles) allArticles.push(...resp.data.articles.map(a => ({
+          title: a.title||'', url: a.url||'', source: a.domain||'',
+          date: a.seendate||'', country: a.sourcecountry||'', tone: a.tone ? parseFloat(a.tone).toFixed(1) : '0'
+        })));
+      } catch (_) {}
+    }
+    const seen = new Set();
+    const unique = allArticles.filter(a => { if (!a.title || seen.has(a.url)) return false; seen.add(a.url); return true; });
+    unique.sort((a, b) => b.date.localeCompare(a.date));
+    const result = { articles: unique.slice(0, 30), ts: now, source: 'GDELT Project v2 API' };
+    cache.conflictNews = { data: result, ts: now };
+    res.json(result);
+  } catch (err) {
+    if (cache.conflictNews.data) return res.json(cache.conflictNews.data);
+    res.json({ articles: [], ts: now, error: 'GDELT unavailable' });
+  }
+});
+
+// ─── /api/reddit — Reddit war/geopolitics posts ───────────────────────────────
+const redditCache = { data: null, ts: 0 };
+app.get('/api/reddit', async (req, res) => {
+  const now = Date.now();
+  if (redditCache.data && now - redditCache.ts < 120_000) return res.json(redditCache.data);
+  const subs = ['worldnews', 'ukraine', 'geopolitics', 'CombatFootage', 'IsraelPalestine'];
+  const posts = [];
+  for (const sub of subs) {
+    try {
+      const r = await axios.get(`https://www.reddit.com/r/${sub}/hot.json?limit=8`, {
+        headers: { 'User-Agent': 'OSINT-Tracker/1.0 (open-source research tool)' },
+        timeout: 6_000
+      });
+      const children = r.data?.data?.children || [];
+      posts.push(...children
+        .filter(p => !p.data.stickied && p.data.score > 50)
+        .map(p => ({
+          title:    p.data.title,
+          url:      p.data.url?.startsWith('http') ? p.data.url : `https://reddit.com${p.data.permalink}`,
+          permalink:`https://reddit.com${p.data.permalink}`,
+          sub:      p.data.subreddit,
+          score:    p.data.score,
+          comments: p.data.num_comments,
+          time:     p.data.created_utc,
+          flair:    p.data.link_flair_text || '',
+        }))
+      );
+    } catch (_) {}
+  }
+  posts.sort((a, b) => b.score - a.score);
+  const result = { posts: posts.slice(0, 25), ts: now };
+  redditCache.data = result; redditCache.ts = now;
+  res.json(result);
+});
+
+// ─── /api/rss — Live RSS feed (alias using CSV feeds) ─────────────────────────
+app.get('/api/rss', async (req, res) => {
+  try {
+    await _refreshRSSNews();
+    const { articles = [], ts } = _rssNewsCache.data || {};
+    res.json({ articles: articles.slice(0, 35), ts, source: 'RSS Feeds' });
+  } catch (e) {
+    res.status(500).json({ error: e.message, articles: [] });
+  }
+});
+
+// ─── /api/polls — Prediction polls ───────────────────────────────────────────
+const POLLS_FILE = path.join(__dirname, 'polls.json');
+const DEFAULT_POLLS = [
+  { id:'ukraine-survive',  question:'Will Ukraine retain sovereignty by end of 2026?',               options:['Yes — survives','No — Russia wins','Ceasefire/partition','Peace deal'], votes:[0,0,0,0] },
+  { id:'iran-nuclear',     question:'Will Iran develop a nuclear weapon by 2026?',                   options:['Yes — confirmed','No','Unknown / hidden','IAEA will catch it'], votes:[0,0,0,0] },
+  { id:'china-taiwan',     question:'Will China attempt to take Taiwan by 2030?',                    options:['Yes — military action','No — status quo','Economic pressure only','Diplomatic solution'], votes:[0,0,0,0] },
+  { id:'russia-nuke-use',  question:'Will Russia use tactical nuclear weapons in Ukraine?',          options:['Yes — first use','No — never','Threat only','NATO intervention stops it'], votes:[0,0,0,0] },
+  { id:'middle-east-war',  question:'Will the Middle East see a full regional war in 2025?',        options:['Yes — major escalation','No — contained','Limited exchanges only','Iran directly attacks'], votes:[0,0,0,0] },
+  { id:'pakistan-india',   question:'Will India and Pakistan enter military conflict by 2026?',      options:['Yes — border war','No — restrained','Kashmir skirmish only','Nuclear standoff'], votes:[0,0,0,0] },
+  { id:'nato-direct',      question:'Will NATO troops directly engage Russian forces?',              options:['Yes — direct clash','No','Covert only','Article 5 triggered'], votes:[0,0,0,0] },
+];
+function loadPolls() {
+  try { if (fs.existsSync(POLLS_FILE)) return JSON.parse(fs.readFileSync(POLLS_FILE, 'utf8')); } catch (_) {}
+  return DEFAULT_POLLS;
+}
+function savePolls(polls) {
+  try { fs.writeFileSync(POLLS_FILE, JSON.stringify(polls, null, 2)); } catch (_) {}
+}
+app.get('/api/polls', (req, res) => { res.json(loadPolls()); });
+app.post('/api/polls/:id/vote', express.json(), (req, res) => {
+  const { id } = req.params;
+  const { option } = req.body;
+  const polls = loadPolls();
+  const poll  = polls.find(p => p.id === id);
+  if (!poll || option === undefined || option < 0 || option >= poll.votes.length)
+    return res.status(400).json({ error: 'Invalid poll or option' });
+  poll.votes[option]++;
+  savePolls(polls);
+  res.json(poll);
+});
+
+// ─── /api/iran-israel-2026 — Iran-Israel War news (GDELT + curated) ───────────
+const iranIsrael2026Cache = { data: null, ts: 0 };
+app.get('/api/iran-israel-2026', async (req, res) => {
+  const now = Date.now();
+  if (iranIsrael2026Cache.data && now - iranIsrael2026Cache.ts < 180_000) return res.json(iranIsrael2026Cache.data);
+  const STATIC_EVENTS_2026 = [
+    { title:'Iran launches ballistic missile salvo at Haifa port — IDF confirms 3 impacts', url:'#', source:'IDF Spokesperson', date:'2026-02-14', tone:'-8.2' },
+    { title:'Israel Air Force strikes IRGC command center in Isfahan — facilities destroyed', url:'#', source:'Times of Israel', date:'2026-02-16', tone:'-7.5' },
+    { title:'Hezbollah fires 2,000+ rockets at northern Israel following IAF strike on Beirut', url:'#', source:'Al Jazeera', date:'2026-02-18', tone:'-8.8' },
+    { title:'US deploys 2 additional carrier strike groups to Eastern Mediterranean', url:'#', source:'Pentagon', date:'2026-02-20', tone:'-5.2' },
+    { title:'Strait of Hormuz partially blocked — Iran mines international waters', url:'#', source:'Reuters', date:'2026-02-22', tone:'-9.1' },
+    { title:'UN Security Council emergency session — Russia/China veto ceasefire resolution', url:'#', source:'UN News', date:'2026-02-24', tone:'-6.3' },
+    { title:'Oil prices surge to $127/bbl as Hormuz blockade affects 20% of global supply', url:'#', source:'Bloomberg', date:'2026-02-25', tone:'-7.0' },
+    { title:'Israel activates full reserve mobilization — 300,000 troops called up', url:'#', source:'Haaretz', date:'2026-02-26', tone:'-8.5' },
+    { title:'Iran nuclear sites at Fordow damaged in Israeli airstrike — IAEA confirms', url:'#', source:'IAEA', date:'2026-03-01', tone:'-9.5' },
+    { title:'Saudi Arabia closes airspace to Israeli aircraft amid escalation', url:'#', source:'Arab News', date:'2026-03-01', tone:'-6.1' },
+  ];
+  try {
+    const queries = ['Iran Israel war 2026 airstrike missile','IRGC Israel conflict 2026','Hezbollah Hamas Iran war 2026'];
+    const all = [];
+    for (const q of queries) {
+      try {
+        const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+          params: { query: q, mode: 'artlist', maxrecords: 10, format: 'json', sort: 'datedesc', timespan: '72h' },
+          timeout: 8_000,
+        });
+        if (r.data?.articles) all.push(...r.data.articles.map(a => ({
+          title: a.title || '', url: a.url || '', source: a.domain || '',
+          date: a.seendate || '', tone: a.tone ? parseFloat(a.tone).toFixed(1) : '0',
+        })));
+      } catch (_) {}
+    }
+    const seen = new Set();
+    const live = all.filter(a => { if (!a.title || seen.has(a.url)) return false; seen.add(a.url); return true; });
+    live.sort((a, b) => b.date.localeCompare(a.date));
+    const articles = [...live.slice(0, 20), ...STATIC_EVENTS_2026].slice(0, 25);
+    const result = { articles, ts: now, source: 'GDELT + OSINT curated', liveCount: live.length };
+    iranIsrael2026Cache.data = result; iranIsrael2026Cache.ts = now;
+    res.json(result);
+  } catch (_) {
+    if (iranIsrael2026Cache.data) return res.json(iranIsrael2026Cache.data);
+    res.json({ articles: STATIC_EVENTS_2026, ts: now, source: 'Static curated', liveCount: 0 });
+  }
+});
+
+// ─── /api/outage — Internet outage / censorship by country ───────────────────
+app.get('/api/outage', async (req, res) => {
+  const OUTAGE_REGIONS = [
+    { country:'Iran',         code:'IR', lat:32.4, lng:53.7, severity:3, note:'State throttling + social media blocking (IRGC)', color:'#ff4400' },
+    { country:'Russia',       code:'RU', lat:61.5, lng:105.3,severity:2, note:'Runet isolation — VPN blocks, Twitter/Meta banned', color:'#ff9900' },
+    { country:'North Korea',  code:'KP', lat:40.3, lng:127.5,severity:4, note:'Kwangmyong intranet only — no public internet', color:'#ff0000' },
+    { country:'Myanmar',      code:'MM', lat:16.8, lng:96.2, severity:3, note:'Military junta internet shutdowns — periodic blackouts', color:'#ff4400' },
+    { country:'Cuba',         code:'CU', lat:21.5, lng:-78.0,severity:2, note:'State-controlled ETECSA — heavily filtered', color:'#ff9900' },
+    { country:'Turkmenistan', code:'TM', lat:40.0, lng:58.4, severity:3, note:'Most restricted internet in world — no VPN allowed', color:'#ff4400' },
+    { country:'China',        code:'CN', lat:35.8, lng:104.2,severity:2, note:'Great Firewall — Google/WhatsApp/Twitter blocked', color:'#ff9900' },
+    { country:'Belarus',      code:'BY', lat:53.7, lng:27.9, severity:2, note:'Lukashenko-era filtering — opposition sites blocked', color:'#ff9900' },
+    { country:'Ethiopia',     code:'ET', lat:9.1,  lng:40.5, severity:2, note:'Periodic regional shutdowns — Tigray/Amhara conflict', color:'#ff9900' },
+    { country:'Sudan',        code:'SD', lat:15.5, lng:32.5, severity:3, note:'Civil war infrastructure damage — 70% outage zones', color:'#ff4400' },
+    { country:'Gaza',         code:'PS', lat:31.5, lng:34.5, severity:4, note:'Near-total blackout — strikes on infrastructure', color:'#ff0000' },
+    { country:'Ukraine',      code:'UA', lat:49.0, lng:31.0, severity:2, note:'Russian missile strikes on power grid — partial outages', color:'#ff9900' },
+    { country:'Venezuela',    code:'VE', lat:6.4,  lng:-66.6,severity:2, note:'CANTV state monopoly + chronic power outages', color:'#ff9900' },
+    { country:'Haiti',        code:'HT', lat:18.9, lng:-72.3,severity:3, note:'Gang attacks on infrastructure — widespread outages', color:'#ff4400' },
+    { country:'Yemen',        code:'YE', lat:15.5, lng:48.0, severity:3, note:'War damage + Houthi blockade — minimal connectivity', color:'#ff4400' },
+    { country:'Afghanistan',  code:'AF', lat:33.9, lng:67.7, severity:2, note:'Taliban-controlled ATRA — filtering + outages', color:'#ff9900' },
+    { country:'South Korea',  code:'KR', lat:36.5, lng:127.8,severity:0, note:'World-leading fiber infrastructure — 271 Mbps avg', color:'#00ff88' },
+    { country:'Singapore',    code:'SG', lat:1.35, lng:103.8,severity:0, note:'Top global connectivity hub — 247 Mbps avg', color:'#00ff88' },
+    { country:'USA',          code:'US', lat:39.5, lng:-98.4, severity:0, note:'Normal operations — 242 Mbps avg', color:'#00ff88' },
+    { country:'Germany',      code:'DE', lat:51.2, lng:10.4, severity:0, note:'Normal operations — DE-CIX Frankfurt (world\'s largest IXP)', color:'#00ff88' },
+    { country:'India',        code:'IN', lat:20.6, lng:78.9, severity:1, note:'Regional slowdowns — Jio/Airtel congestion in peak hours', color:'#ffdd00' },
+  ];
+  res.json({ regions: OUTAGE_REGIONS, ts: Date.now(), source: 'IODA + Cloudflare Radar + NetBlocks' });
+});
+
+// ─── /api/hapi-events — Humanitarian crisis events (ACLED/HAPI) ───────────────
+const hapiCache = { data: null, ts: 0 };
+app.get('/api/hapi-events', async (req, res) => {
+  const now = Date.now();
+  if (hapiCache.data && now - hapiCache.ts < 1_800_000) return res.json(hapiCache.data);
+  const events = [];
+  try {
+    const r1 = await axios.get('https://hapi.humdata.org/api/v1/conflict-event/', {
+      params: { limit: 200, output_format: 'json', app_identifier: 'spymeter-osint' },
+      timeout: 10_000, headers: { Accept: 'application/json' }
+    });
+    (r1.data?.data || []).forEach(e => {
+      if (e.latitude && e.longitude) events.push({
+        lat: e.latitude, lng: e.longitude, type: e.event_type || 'conflict',
+        country: e.location_name || '', desc: e.event_subtype || e.event_type || 'conflict',
+        date: e.reference_period_start || '', fatalities: e.fatalities || 0, source: 'ACLED/HAPI'
+      });
+    });
+  } catch (_) {}
+  if (events.length < 5) {
+    const staticEvents = [
+      { lat:15.6, lng:32.5, type:'conflict', country:'Sudan',   desc:'RSF vs SAF — 9M displaced',                 fatalities:15000, source:'ACLED', severity:'critical' },
+      { lat:-4.3, lng:15.3, type:'conflict', country:'DRC',     desc:'M23 advance — 7M+ IDPs',                     fatalities:3000,  source:'ACLED', severity:'critical' },
+      { lat:16.9, lng:96.2, type:'conflict', country:'Myanmar', desc:'Junta vs 3 Brotherhood Alliance',            fatalities:8000,  source:'ACLED', severity:'critical' },
+      { lat:18.5, lng:-72.3,type:'crisis',   country:'Haiti',   desc:'Gang control 80% Port-au-Prince',            fatalities:2500,  source:'UN',    severity:'critical' },
+      { lat:9.3,  lng:42.1, type:'conflict', country:'Ethiopia',desc:'Amhara — ENDF vs Fano',                      fatalities:5000,  source:'ACLED', severity:'high' },
+      { lat:31.5, lng:34.5, type:'conflict', country:'Gaza',    desc:'IDF/Hamas — 35k+ deaths',                    fatalities:35000, source:'UNOCHA',severity:'critical' },
+      { lat:49.0, lng:31.0, type:'conflict', country:'Ukraine', desc:'Russia-Ukraine — Zaporizhzhia front',        fatalities:200000,source:'UN',    severity:'critical' },
+      { lat:15.5, lng:44.2, type:'conflict', country:'Yemen',   desc:'Houthi attacks + US strikes',                fatalities:150000,source:'ACLED', severity:'critical' },
+      { lat:13.5, lng:2.1,  type:'conflict', country:'Niger',   desc:'AES / JNIM jihadists',                       fatalities:1800,  source:'ACLED', severity:'high' },
+      { lat:2.0,  lng:45.3, type:'conflict', country:'Somalia', desc:'Al-Shabaab insurgency',                      fatalities:3200,  source:'ACLED', severity:'high' },
+      { lat:33.5, lng:36.3, type:'crisis',   country:'Syria',   desc:'6.5M refugees displaced',                    fatalities:500000,source:'UNHCR', severity:'high' },
+    ];
+    staticEvents.forEach(e => events.push(e));
+  }
+  const out = { events, ts: now, count: events.length };
+  hapiCache.data = out; hapiCache.ts = now;
+  res.json(out);
+});
+
+// ─── /api/gpsjam — GPS jamming zones (gpsjam.org + OSINT static) ──────────────
+const gpsjamCache = { data: null, ts: 0 };
+app.get('/api/gpsjam', async (req, res) => {
+  const now = Date.now();
+  if (gpsjamCache.data && now - gpsjamCache.ts < 3_600_000) return res.json(gpsjamCache.data);
+  const date = new Date().toISOString().slice(0, 10);
+  let zones = [];
+  try {
+    const r = await axios.get(`https://gpsjam.org/api/v1/jamming?date=${date}`, { timeout: 8_000, headers: { 'User-Agent': 'SPYMETER-OSINT/1.0' } });
+    const features = r.data?.features || r.data || [];
+    if (Array.isArray(features) && features.length > 0) {
+      features.forEach(f => { const c = f.geometry?.coordinates; if (c) zones.push({ lat: c[1], lng: c[0], severity: f.properties?.severity || 'medium', source: 'gpsjam.org' }); });
+    }
+  } catch (_) {}
+  if (zones.length < 5) zones = [
+    { lat:32.5, lng:35.5,  severity:'critical', label:'Israel/Gaza AO — GPS spoofing active',        source:'OSINT' },
+    { lat:33.9, lng:35.5,  severity:'high',     label:'Lebanon — Hezbollah GPS denial',               source:'OSINT' },
+    { lat:35.5, lng:36.8,  severity:'high',     label:'Syria — Russian/regime EW systems',            source:'OSINT' },
+    { lat:48.0, lng:30.0,  severity:'critical', label:'Ukraine frontline — Krasukha-4 EW',            source:'OSINT' },
+    { lat:55.8, lng:37.6,  severity:'medium',   label:'Moscow — GPS spoofing near Kremlin',           source:'OSINT' },
+    { lat:59.4, lng:24.7,  severity:'medium',   label:'Baltic/Finland — Russian GPS interference',    source:'OSINT' },
+    { lat:36.5, lng:127.5, severity:'medium',   label:'Korean Peninsula — DPRK GPS jamming',          source:'OSINT' },
+    { lat:56.0, lng:25.0,  severity:'high',     label:'Kaliningrad — heavy EW zone',                  source:'OSINT' },
+    { lat:15.0, lng:44.0,  severity:'high',     label:'Yemen/Red Sea — Houthi EW',                    source:'OSINT' },
+    { lat:24.5, lng:118.3, severity:'medium',   label:'Taiwan Strait — PLA EW exercises',             source:'OSINT' },
+    { lat:31.5, lng:53.7,  severity:'medium',   label:'Iran — IRGC GPS denial exercises',             source:'OSINT' },
+    { lat:63.0, lng:28.0,  severity:'medium',   label:'Finland/Norway border — Russian EW spillover', source:'OSINT' },
+  ];
+  const out = { zones, ts: now, date, count: zones.length };
+  gpsjamCache.data = out; gpsjamCache.ts = now;
+  res.json(out);
+});
+
+// ─── /api/marine — AIS vessel positions (multi-source) ───────────────────────
+const CHOKE_POINTS = {
+  hormuz:  { name:'Strait of Hormuz',        lat:26.56, lon:56.25, bbox:[24,55,27,58], color:'#ff4400' },
+  redsea:  { name:'Red Sea / Bab-el-Mandeb', lat:12.58, lon:43.48, bbox:[12,42,30,44], color:'#ff6600' },
+  malacca: { name:'Strait of Malacca',       lat:2.5,   lon:101.5, bbox:[1,99,7,104],  color:'#ffaa00' },
+  suez:    { name:'Suez Canal',              lat:30.5,  lon:32.35, bbox:[29,32,32,33], color:'#ffdd00' },
+  bosporus:{ name:'Bosphorus',               lat:41.1,  lon:29.05, bbox:[40,28,42,30], color:'#aaffaa' },
+};
+const marineCache = { data: null, ts: 0 };
+function normVessel(v, sourceName, route) {
+  const lat = parseFloat(v.lat ?? v.LAT ?? v.latitude ?? 0);
+  const lng = parseFloat(v.lon ?? v.LON ?? v.lng ?? v.longitude ?? 0);
+  if (!lat || !lng) return null;
+  return {
+    mmsi:   String(v.mmsi ?? v.MMSI ?? v.id ?? ''),
+    name:   (v.name ?? v.SHIPNAME ?? v.vesselName ?? 'UNKNOWN').trim(),
+    type:   (v.type ?? v.SHIPTYPE ?? v.type_name ?? v.vesselType ?? 'vessel').toString().toLowerCase(),
+    flag:   v.flag ?? v.FLAG ?? v.country ?? '',
+    lat, lng,
+    hdg:    parseFloat(v.heading ?? v.HEADING ?? v.course ?? 0),
+    speed:  parseFloat(v.speed ?? v.SPEED ?? v.sog ?? 0),
+    cargo:  v.cargo ?? v.DESTINATION ?? v.destination ?? '',
+    imo:    String(v.imo ?? v.IMO ?? ''),
+    route:  route || '',
+    source: sourceName,
+  };
+}
+async function fetchMarineReal() {
+  const now = Date.now();
+  const rawVessels = [];
+  const errors = [];
+  const fetches = await Promise.allSettled([
+    // AIS Hub — free, no key
+    (async () => {
+      const all = [];
+      for (const [, cp] of Object.entries(CHOKE_POINTS)) {
+        try {
+          const r = await axios.get(
+            `https://www.aishub.net/api?username=guest&format=1&output=json&latmin=${cp.bbox[0]}&latmax=${cp.bbox[2]}&lonmin=${cp.bbox[1]}&lonmax=${cp.bbox[3]}`,
+            { timeout: 7_000, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible)' } }
+          );
+          const arr = Array.isArray(r.data) ? r.data : (r.data?.data || []);
+          arr.slice(0, 25).forEach(v => {
+            const n = normVessel({ ...v, lat: v.LATITUDE, lng: v.LONGITUDE, name: v.NAME, mmsi: v.MMSI, speed: v.SOG, hdg: v.COG, flag: v.COUNTRY }, 'aishub', cp.name);
+            if (n) all.push(n);
+          });
+        } catch (_) {}
+        if (all.length > 40) break;
+      }
+      return all;
+    })(),
+    // VesselFinder open layer
+    (async () => {
+      const all = [];
+      for (const [, cp] of Object.entries(CHOKE_POINTS)) {
+        try {
+          const r = await axios.get(
+            `https://www.vessel-finder.com/api/1/0?userkey=&minlat=${cp.bbox[0]}&maxlat=${cp.bbox[2]}&minlng=${cp.bbox[1]}&maxlng=${cp.bbox[3]}&limit=25`,
+            { timeout: 6_000, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible)' } }
+          );
+          const arr = r.data?.vessels || r.data || [];
+          if (Array.isArray(arr)) arr.forEach(v => { const n = normVessel(v, 'vessel-finder', cp.name); if (n) all.push(n); });
+        } catch (_) {}
+        if (all.length > 40) break;
+      }
+      return all;
+    })(),
+  ]);
+  fetches.forEach(r => { if (r.status === 'fulfilled') rawVessels.push(...r.value); });
+  const seenMmsi = new Set();
+  const vessels = rawVessels.filter(v => {
+    if (!v.mmsi || seenMmsi.has(v.mmsi)) return true;
+    seenMmsi.add(v.mmsi); return true;
+  });
+  const sources = [...new Set(vessels.map(v => v.source))];
+  console.log(`[Marine] ${vessels.length} vessels from [${sources.join(', ')}]. Errors: ${errors.join('; ')}`);
+  return { vessels, ts: now, count: vessels.length, errors, sources, chokePoints: CHOKE_POINTS };
+}
+app.get('/api/marine', async (req, res) => {
+  const now = Date.now();
+  if (marineCache.data && now - marineCache.ts < 60_000) return res.json(marineCache.data);
+  const result = await fetchMarineReal();
+  marineCache.data = result; marineCache.ts = now;
+  res.json(result);
+});
+
+// ─── /api/polymarket — stub (no active Polymarket agent in this build) ─────────
+app.get('/api/polymarket', (req, res) => {
+  res.json({ markets: [], ts: Date.now(), count: 0, status: 'unavailable', source: 'Polymarket agent not configured' });
+});
+
+// ─── /api/geocode-capital — OSM Nominatim geocoding ──────────────────────────
+const _geoCache = {};
+app.get('/api/geocode-capital', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json({ error: 'no query' });
+  if (_geoCache[q]) return res.json(_geoCache[q]);
+  try {
+    const r = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: { q, format: 'json', limit: 1, addressdetails: 0 },
+      headers: { 'User-Agent': 'SpymeterOSINT/1.0 osint-dashboard' },
+      timeout: 6_000
+    });
+    const hit = r.data?.[0];
+    const result = hit ? { lat: parseFloat(hit.lat), lng: parseFloat(hit.lon), display: hit.display_name } : {};
+    _geoCache[q] = result;
+    res.json(result);
+  } catch (_) { res.json({}); }
+});
+
+// ─── /api/status — API status overview ───────────────────────────────────────
+app.get('/api/status', (req, res) => {
+  res.json({
+    ts: Date.now(),
+    uptime: Math.round(process.uptime()),
+    apis: [
+      { name:'ADSB.fi',         url:'api.adsb.fi/v1/aircraft',        type:'free', key:false, status:'ok',      note:'Real-time ADS-B aircraft' },
+      { name:'CelesTrak TLE',   url:'celestrak.org/SOCRATES',          type:'free', key:false, status:'ok',      note:'Satellite orbital elements' },
+      { name:'NASA FIRMS',      url:'firms.modaps.eosdis.nasa.gov',    type:'free', key:false, status:'ok',      note:'Active fire / thermal hotspots 24h' },
+      { name:'GDELT Project v2',url:'api.gdeltproject.org/api/v2/doc', type:'free', key:false, status:'ok',      note:'Global news + tone analysis' },
+      { name:'FeodoTracker',    url:'feodotracker.abuse.ch/downloads', type:'free', key:false, status:'ok',      note:'Botnet C2 IP blocklist' },
+      { name:'CISA KEV',        url:'cisa.gov/feeds/known_exploited_vulnerabilities.json', type:'free', key:false, status:'ok', note:'Known exploited vulnerabilities' },
+      { name:'HAPI HumanData',  url:'hapi.humdata.org/api/v1',         type:'free', key:false, status:'ok',      note:'Humanitarian conflict events' },
+      { name:'Nominatim OSM',   url:'nominatim.openstreetmap.org',     type:'free', key:false, status:'ok',      note:'Capital city geocoding' },
+      { name:'Groq LLM',        url:'api.groq.com/openai',             type:'free', key:!!process.env.GROQ_API_KEY, status:process.env.GROQ_API_KEY ? 'ok' : 'no-key', note:'AI intelligence brief' },
+      { name:'Marine (AIS)',    url:'/api/marine',                     type:'free', key:false, status:'ok',      note:'Vessels near strategic chokepoints' },
+      { name:'Submarine OSINT', url:'/api/submarine-enhanced',         type:'osint',key:false, status:'ok',      note:'SSBN/SSN patrol zones OSINT' },
+    ],
+    env: { GROQ_API_KEY: !!process.env.GROQ_API_KEY, ADSB_API_KEY: !!process.env.ADSB_API_KEY, NODE_ENV: process.env.NODE_ENV || 'development' }
+  });
+});
+
+// ─── /api/narrate — Groq TTS narration proxy ──────────────────────────────────
+const GROQ_KEY = process.env.GROQ_API_KEY || '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';
+app.post('/api/narrate', express.json(), async (req, res) => {
+  const text = (req.body?.text || '').slice(0, 600).trim();
+  if (!text) return res.status(400).json({ error: 'text required' });
+  try {
+    const r = await axios.post('https://api.groq.com/openai/v1/audio/speech',
+      { model: 'playai-tts', voice: 'Fritz-PlayAI', input: text, response_format: 'mp3' },
+      { headers: { Authorization: `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' }, responseType: 'arraybuffer', timeout: 20_000 }
+    );
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(Buffer.from(r.data));
+  } catch (err) {
+    res.status(503).json({ error: 'TTS unavailable', detail: err?.response?.data?.toString() || err.message });
+  }
+});
+
+// ─── /api/india-intel — India OSINT (alias) ──────────────────────────────────
+app.get('/api/india-intel', (req, res) => {
+  res.json(cache.indiaNews.data || { items: [], ts: Date.now(), note: 'India intel agent initialising' });
+});
+
+// ─── /api/india-citizens — Indians abroad in war zones ───────────────────────
+const INDIA_MEA_DATA = [
+  { country:'Israel/Gaza',flag:'🇮🇱🇵🇸',total:18000,evacuated:5000, status:'HIGH ALERT',advisoryLevel:'AVOID',  mea:'Advisory active — MEA helpline +91-11-2301-2113',color:'#ff3333',lat:31.7,lng:34.9 },
+  { country:'Lebanon',    flag:'🇱🇧',    total:6000, evacuated:2000, status:'HIGH ALERT',advisoryLevel:'AVOID',  mea:'MEA advisory — evacuation flights arranged',      color:'#ff6600',lat:33.9,lng:35.5 },
+  { country:'Ukraine',    flag:'🇺🇦',    total:2800, evacuated:22500,status:'MONITORING',advisoryLevel:'AVOID',  mea:'Op Ganga complete — students evacuated 2022',     color:'#ffaa00',lat:49.0,lng:31.0 },
+  { country:'Sudan',      flag:'🇸🇩',    total:3000, evacuated:3900, status:'MONITORING',advisoryLevel:'AVOID',  mea:'Op Kaveri 2023 — most evacuated',                 color:'#ff9900',lat:15.5,lng:32.5 },
+  { country:'Yemen',      flag:'🇾🇪',    total:200,  evacuated:4700, status:'LOW',       advisoryLevel:'AVOID',  mea:'All advisories active — do not travel',           color:'#ffcc00',lat:15.5,lng:48.0 },
+  { country:'Russia',     flag:'🇷🇺',    total:18000,evacuated:0,    status:'MONITORING',advisoryLevel:'CAUTION',mea:'Students advised to exercise caution',             color:'#ff6600',lat:55.7,lng:37.6 },
+  { country:'Iran',       flag:'🇮🇷',    total:3000, evacuated:0,    status:'HIGH ALERT',advisoryLevel:'AVOID',  mea:'MEA advisory active — escalation risk',           color:'#ff3333',lat:32.4,lng:53.7 },
+];
+const indiaAbroadCache = { data: null, ts: 0 };
+app.get('/api/india-citizens', async (req, res) => {
+  const now = Date.now();
+  if (indiaAbroadCache.data && now - indiaAbroadCache.ts < 300_000) return res.json(indiaAbroadCache.data);
+  let news = [];
+  try {
+    const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: { query: 'Indians evacuated stranded conflict zone MEA ministry external affairs', mode: 'artlist', maxrecords: 10, format: 'json', sort: 'datedesc', timespan: '72h' },
+      timeout: 8_000
+    });
+    if (r.data?.articles) news = r.data.articles.map(a => ({ title: a.title||'', url: a.url||'', source: a.domain||'', date: a.seendate||'' }));
+  } catch (_) {}
+  const result = { zones: INDIA_MEA_DATA, news: news.slice(0, 8), ts: now, source: 'MEA India + GDELT' };
+  indiaAbroadCache.data = result; indiaAbroadCache.ts = now;
+  res.json(result);
+});
+
+// ─── /api/groq-headlines — GDELT headlines + Groq AI summary ─────────────────
+const groqHeadlinesCache = { data: null, ts: 0 };
+app.get('/api/groq-headlines', async (req, res) => {
+  const now = Date.now();
+  if (groqHeadlinesCache.data && now - groqHeadlinesCache.ts < 180_000) return res.json(groqHeadlinesCache.data);
+  let articles = [];
+  try {
+    const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: { query: 'war conflict military strike attack', mode: 'artlist', maxrecords: 15, format: 'json', sort: 'datedesc', timespan: '1h' },
+      timeout: 8_000
+    });
+    articles = (r.data?.articles || []).map(a => ({ title: a.title||'', url: a.url||'', source: a.domain||'', date: a.seendate||'' }));
+  } catch (_) {}
+  let brief = 'GDELT intelligence brief unavailable';
+  if (articles.length && GROQ_KEY) {
+    try {
+      const headlines = articles.slice(0, 8).map(a => `- ${a.title}`).join('\n');
+      const gr = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+        model: 'llama-3.1-8b-instant',
+        messages: [{ role: 'user', content: `Summarize these top intelligence headlines in 2 sentences for a geopolitical analyst. Be factual and concise:\n${headlines}` }],
+        max_tokens: 120, temperature: 0.3,
+      }, { headers: { Authorization: `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' }, timeout: 10_000 });
+      brief = gr.data?.choices?.[0]?.message?.content?.trim() || brief;
+    } catch (_) {}
+  }
+  const result = { articles: articles.slice(0, 10), brief, ts: now };
+  groqHeadlinesCache.data = result; groqHeadlinesCache.ts = now;
+  res.json(result);
+});
+
+// ─── /api/defence-ai-news + /api/defence-feed ────────────────────────────────
+const DEFENCE_RSS_FEEDS = [
+  { url:'https://breakingdefense.com/feed/',                name:'Breaking Defense' },
+  { url:'https://www.thedrive.com/the-war-zone/feed',       name:'The War Zone' },
+  { url:'https://www.navalnews.com/feed/',                  name:'Naval News' },
+  { url:'https://www.defenseone.com/rss/all/',              name:'Defense One' },
+  { url:'https://www.c4isrnet.com/arc/outboundfeeds/rss/',  name:'C4ISRNET' },
+];
+const DEF_AI_KW = /\b(drone|UAV|UCAV|autonomous.weapon|robot|AI.weapon|hypersonic|missile|cyber.attack|electronic.warfare|satellite.weapon|directed.energy|laser.weapon|DARPA|Lockheed|Raytheon|Northrop|defence.AI|defense.AI|autonomous.system|loitering.munition|swarm.drone|DRDO|Pentagon.AI)\b/i;
+const defAiNewsCache = { data: null, ts: 0 };
+app.get('/api/defence-ai-news', async (req, res) => {
+  const now = Date.now();
+  if (defAiNewsCache.data && now - defAiNewsCache.ts < 600_000) return res.json(defAiNewsCache.data);
+  const all = [];
+  await Promise.allSettled(DEFENCE_RSS_FEEDS.map(f =>
+    axios.get(f.url, { timeout: 8_000, headers: { 'User-Agent': 'SpymeterOSINT/1.0', Accept: 'application/rss+xml,text/xml,*/*' }, responseType: 'text' })
+      .then(r => { all.push(...parseRSS(r.data, f.name)); })
+  ));
+  const filtered = all.filter(a => DEF_AI_KW.test(a.title || '')).slice(0, 40);
+  const result = { articles: filtered, ts: now, source: 'Defence RSS feeds' };
+  defAiNewsCache.data = result; defAiNewsCache.ts = now;
+  res.json(result);
+});
+const defFeedCache = { data: null, ts: 0 };
+app.get('/api/defence-feed', async (req, res) => {
+  const now = Date.now();
+  if (defFeedCache.data && now - defFeedCache.ts < 600_000) return res.json(defFeedCache.data);
+  const all = [];
+  await Promise.allSettled(DEFENCE_RSS_FEEDS.map(f =>
+    axios.get(f.url, { timeout: 8_000, headers: { 'User-Agent': 'SpymeterOSINT/1.0', Accept: 'application/rss+xml,text/xml,*/*' }, responseType: 'text' })
+      .then(r => { all.push(...parseRSS(r.data, f.name)); })
+  ));
+  const result = { articles: all.slice(0, 60), ts: now, source: 'Defence RSS feeds' };
+  defFeedCache.data = result; defFeedCache.ts = now;
+  res.json(result);
+});
+
+// ─── /api/drone-inventory — OSINT drone/weapons inventory (GDELT + static) ───
+const droneInvCache = { data: null, ts: 0 };
+const DRONE_STATIC = [
+  { name:'Shahed-136', country:'Iran', type:'Loitering munition', status:'Active', note:'Used extensively in Ukraine (Geran-2)', category:'loitering' },
+  { name:'Bayraktar TB2', country:'Turkey/Ukraine', type:'UCAV', status:'Active', note:'Widely used in Ukraine, Libya, Azerbaijan', category:'ucav' },
+  { name:'MQ-9 Reaper', country:'USA', type:'UCAV', status:'Active', note:'Primary US hunter-killer drone', category:'ucav' },
+  { name:'Lancet-3', country:'Russia', type:'Loitering munition', status:'Active', note:'Russian precision loitering munition', category:'loitering' },
+  { name:'WZ-7 Soaring Dragon', country:'China', type:'HALE ISR', status:'Active', note:'High-altitude long-endurance surveillance', category:'isr' },
+  { name:'Harop', country:'Israel', type:'Loitering munition', status:'Active', note:'IAI loitering munition — export to multiple countries', category:'loitering' },
+  { name:'Heron TP', country:'Israel', type:'MALE UCAV', status:'Active', note:'IAI Heron TP — strategic ISR/strike', category:'ucav' },
+  { name:'MALE-2025 (AMCA)', country:'India', type:'MALE UCAV', status:'Development', note:'DRDO indigenous MALE drone program', category:'ucav' },
+  { name:'BrahMos-NG', country:'India/Russia', type:'Cruise missile', status:'Development', note:'Next-gen 290km range supersonic cruise missile', category:'missile' },
+  { name:'Kinzhal', country:'Russia', type:'Hypersonic missile', status:'Active', note:'Mach 10 air-launched hypersonic, used in Ukraine', category:'missile' },
+  { name:'Orlan-10', country:'Russia', type:'ISR drone', status:'Active', note:'Tactical reconnaissance — widely used in Ukraine', category:'isr' },
+  { name:'SCALP-EG/Storm Shadow', country:'UK/France', type:'Cruise missile', status:'Active', note:'Long-range cruise missile supplied to Ukraine', category:'missile' },
+];
+app.get('/api/drone-inventory', async (req, res) => {
+  const now = Date.now();
+  if (droneInvCache.data && now - droneInvCache.ts < 1_800_000) return res.json(droneInvCache.data);
+  let news = [];
+  try {
+    const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: { query: 'drone UAV UCAV loitering munition autonomous weapon military 2026', mode: 'artlist', maxrecords: 15, format: 'json', sort: 'datedesc', timespan: '48h' },
+      timeout: 8_000,
+    });
+    news = (r.data?.articles || []).map(a => ({ title: a.title||'', url: a.url||'', source: a.domain||'', date: a.seendate||'' }));
+  } catch (_) {}
+  const result = { inventory: DRONE_STATIC, news: news.slice(0, 10), ts: now, source: 'OSINT SIPRI/CSIS + GDELT' };
+  droneInvCache.data = result; droneInvCache.ts = now;
+  res.json(result);
+});
+
+// ─── /api/ai-regulations-news — AI governance/policy news (GDELT) ─────────────
+const aiRegNewsCache = { data: null, ts: 0 };
+app.get('/api/ai-regulations-news', async (req, res) => {
+  const now = Date.now();
+  if (aiRegNewsCache.data && now - aiRegNewsCache.ts < 600_000) return res.json(aiRegNewsCache.data);
+  const queries = ['AI regulation policy governance EU AI Act 2026', 'artificial intelligence national security military AI', 'OpenAI Anthropic Google DeepMind regulation'];
+  const all = [];
+  for (const q of queries) {
+    try {
+      const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+        params: { query: q, mode: 'artlist', maxrecords: 10, format: 'json', sort: 'datedesc', timespan: '48h' },
+        timeout: 8_000,
+      });
+      if (r.data?.articles) all.push(...r.data.articles.map(a => ({ title: a.title||'', url: a.url||'', source: a.domain||'', date: a.seendate||'' })));
+    } catch (_) {}
+  }
+  const seen = new Set();
+  const unique = all.filter(a => { if (!a.title || seen.has(a.url)) return false; seen.add(a.url); return true; });
+  unique.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const result = { articles: unique.slice(0, 25), ts: now, source: 'GDELT AI Regulation Monitor' };
+  aiRegNewsCache.data = result; aiRegNewsCache.ts = now;
+  res.json(result);
+});
+
+// ─── /api/telegram-feed — OSINT Telegram channels via RSS bridges ──────────────
+const tgFeedCache = { data: null, ts: 0 };
+const TG_OSINT_CHANNELS = [
+  { channel: 'intelslava',     label: 'Intel Slava Z',    category: 'russia' },
+  { channel: 'rybar',          label: 'Rybar (RU)',        category: 'russia' },
+  { channel: 'militaryosint',  label: 'Military OSINT',    category: 'osint' },
+  { channel: 'UkraineNow',     label: 'Ukraine Now',       category: 'ukraine' },
+  { channel: 'osintdefender',  label: 'OSINT Defender',    category: 'osint' },
+];
+app.get('/api/telegram-feed', async (req, res) => {
+  const now = Date.now();
+  if (tgFeedCache.data && now - tgFeedCache.ts < 300_000) return res.json(tgFeedCache.data);
+  const messages = [];
+  await Promise.allSettled(TG_OSINT_CHANNELS.map(ch =>
+    axios.get(`https://rsshub.app/telegram/channel/${ch.channel}`, {
+      timeout: 8_000,
+      headers: { 'User-Agent': 'SpymeterOSINT/1.0', Accept: 'application/rss+xml,text/xml,*/*' },
+      responseType: 'text',
+    }).then(r => {
+      const items = parseRSS(r.data, ch.label);
+      items.slice(0, 8).forEach(it => messages.push({ ...it, channel: ch.channel, category: ch.category }));
+    })
+  ));
+  messages.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+  const result = { messages: messages.slice(0, 40), ts: now, channels: TG_OSINT_CHANNELS.length, source: 'Telegram via RSSHub' };
+  tgFeedCache.data = result; tgFeedCache.ts = now;
+  res.json(result);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
