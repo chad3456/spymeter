@@ -1043,7 +1043,7 @@ app.get('/api/cii/:country', async (req, res) => {
     const score_geopolitical = GEO_SCORE[iso2] || 0;
 
     // ── Weighted CII ──────────────────────────────────────────────────────────
-    const cii_raw = Math.round(
+    const cii_weighted = Math.round(
       score_conflict_unrest     * 0.25 +
       score_military_activity   * 0.20 +
       score_news_distress       * 0.15 +
@@ -1052,7 +1052,12 @@ app.get('/api/cii/:country', async (req, res) => {
       score_financial_stress    * 0.10 +
       score_geopolitical        * 0.05
     );
-    const cii = Math.min(100, Math.max(0, cii_raw));
+
+    // Geopolitical FLOOR: known active conflict zones can never score below their
+    // baseline threat level even if live data sources return sparse results.
+    // Floor = 65% of the geopolitical score (e.g. PS=88 → floor=57, UA=80 → floor=52)
+    const geo_floor = Math.round(score_geopolitical * 0.65);
+    const cii = Math.min(100, Math.max(0, cii_weighted, geo_floor));
 
     // ── Stability labels (7 tiers) ────────────────────────────────────────────
     let stability, stability_color;
