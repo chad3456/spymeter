@@ -3904,6 +3904,209 @@ setInterval(async () => {
 }, 15_000);
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 10B — DEFENCE DEAL TRACKER (India focus)
+// Sources: ANI, Swarajyamag, NDTV, ORF, WIRED, Livefist, The Print, SP Guide
+//          Nitter: Abhijeet Iyer-Mitra, ANI, Sidhant Sibal, Ajai Shukla, LiveFist
+//          Substacks: Geopolitics India + relevant India defence blogs
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const TRACKER_RSS_FEEDS = [
+  { url: 'https://www.aninews.in/rss/india/',                              name: 'ANI News',         country: 'IN' },
+  { url: 'https://swarajyamag.com/feed/',                                  name: 'Swarajya Mag',     country: 'IN' },
+  { url: 'https://feeds.feedburner.com/ndtvnews-india-news',               name: 'NDTV India',       country: 'IN' },
+  { url: 'https://www.orfonline.org/feed/',                                name: 'ORF Online',       country: 'IN' },
+  { url: 'https://www.wired.com/feed/rss',                                 name: 'WIRED',            country: 'US' },
+  { url: 'https://theprint.in/feed/',                                      name: 'The Print',        country: 'IN' },
+  { url: 'https://livefist.blogspot.com/feeds/posts/default',              name: 'Livefist Defence', country: 'IN' },
+  { url: 'https://www.defenseworld.net/feed',                              name: 'Defense World',    country: 'GLOBAL' },
+  { url: 'https://www.financialexpress.com/defence/feed/',                 name: 'FE Defence',       country: 'IN' },
+  { url: 'https://geopoliticsindia.substack.com/feed',                     name: 'Geopolitics India',country: 'IN' },
+  { url: 'https://theaircraftjourney.substack.com/feed',                   name: 'Aircraft Journey', country: 'IN' },
+  { url: 'https://osintindia.substack.com/feed',                           name: 'OSINT India',      country: 'IN' },
+];
+
+const TRACKER_NITTER_ACCOUNTS = [
+  { handle: 'Iyervval',      label: 'Abhijeet Iyer-Mitra', desc: 'Defence analyst · IDSA · India strategic policy' },
+  { handle: 'ANI',           label: 'ANI News',            desc: 'Asian News International · India breaking news' },
+  { handle: 'sidhant',       label: 'Sidhant Sibal',       desc: 'India · Foreign Policy · Breaking News' },
+  { handle: 'ajaishukla',    label: 'Ajai Shukla',         desc: 'Business Standard · Indian defence journalist' },
+  { handle: 'LiveFist',      label: 'Livefist / Shiv Aroor', desc: 'India defence correspondent · Shiv Aroor' },
+  { handle: 'rajfortyseven', label: 'Rajkumar Singh',      desc: 'Indian defence analyst · Strategic affairs' },
+  { handle: 'AdityaRajKaul', label: 'Aditya Raj Kaul',    desc: 'India · Kashmir · Defence · Geopolitics' },
+  { handle: 'prasanto',      label: 'Prasanto Kumar Roy',  desc: 'India tech policy · Cyberdefence' },
+];
+
+// ── Stage classification via keyword matching ──────────────────────────────
+const TRACKER_STAGE_RULES = [
+  { stage: 'inducted',  keywords: /\b(inducted|induction|commissioned|enters service|handed over|joins.*(?:navy|air force|army)|operational.*deployment|in service)\b/i },
+  { stage: 'production',keywords: /\b(serial production|manufacturing|rolling out|deliveries|HAL delivering|production order|mass production|production line)\b/i },
+  { stage: 'contract',  keywords: /\b(contract signed|contract awarded|deal signed|purchase agreement|MoU signed|MOU signed|acquisition approved|order placed|procured|letter of intent|LoI|signed.*deal|awarded.*contract)\b/i },
+  { stage: 'prototype', keywords: /\b(prototype|first flight|maiden flight|demonstrator|technology demonstrator|first test|first prototype|rolls out|rollout|unveiled)\b/i },
+  { stage: 'trials',    keywords: /\b(trial|trials|user evaluation|field test|evaluation|assessment|tested|sea trial|flight trial|user trial|acceptance test|testing phase)\b/i },
+  { stage: 'planned',   keywords: /\b(RFP|request for proposal|tender|DAC approval|Defence Acquisition Council|budget allocated|approved.*acquisition|long-term plan|LTIPP|capital acquisition)\b/i },
+  { stage: 'concept',   keywords: /\b(RFI|request for information|expression of interest|EOI|AoN|acceptance of necessity|feasibility study|exploring|considering.*acquisition|proposed.*induction|conceptual)\b/i },
+];
+
+// ── Domain classification ──────────────────────────────────────────────────
+const TRACKER_DOMAIN_RULES = [
+  { domain: 'air',       keywords: /\b(aircraft|fighter|jet|Tejas|AMCA|Rafale|helicopter|UAV|drone|UCAV|air force|IAF|MiG|Su-30|F-35|transport aircraft|AWACS|AEW)\b/i },
+  { domain: 'naval',     keywords: /\b(submarine|frigate|destroyer|carrier|warship|corvette|naval|Navy|INS|P75|P17|ship|vessel|maritime|SSBN|SSN|SSK|destroyer|landing ship)\b/i },
+  { domain: 'army',      keywords: /\b(tank|artillery|howitzer|Arjun|infantry|armoured|APC|MRAP|rifle|carbine|BMP|IFV|field gun|rocket launcher|ATGM|anti-tank|Army)\b/i },
+  { domain: 'missiles',  keywords: /\b(missile|BrahMos|Astra|Akash|QRSAM|MRSAM|LRSAM|Agni|Prithvi|cruise missile|ballistic|hypersonic|anti-ship|air-to-air|surface-to-air|SAM|ATGM|torpedo)\b/i },
+  { domain: 'space',     keywords: /\b(satellite|ISRO|GSAT|MILSAT|reconnaissance satellite|spy satellite|space|launch vehicle|PSLV|GSLV|orbit|SpaceDEX|space defence)\b/i },
+  { domain: 'cyber',     keywords: /\b(cyber|electronic warfare|EW|SIGINT|COMINT|information warfare|cyberattack|hack|jamming|GPS jam|electronic countermeasure|ECM)\b/i },
+  { domain: 'electronics',keywords: /\b(radar|sonar|sensor|AESA|EO|electro-optical|surveillance system|C4ISR|command and control|network centric|communication system|BMS|battlefield management)\b/i },
+];
+
+// ── India defence keyword filter ───────────────────────────────────────────
+const TRACKER_INDIA_KW = /\b(India|Indian|DRDO|HAL|BEL|BEML|Tejas|AMCA|BrahMos|Arjun|INS|IAF|Indian Army|Indian Navy|Indian Air Force|Defence Research|DPP|DAP|Atmanirbhar|Make in India.*defence|defence.*India|Ministry of Defence|MoD India|DPEPP|iDEX|ADA|GRSE|MDL|OFB|OFBoard|BHEL.*defence|TATA.*defence|Mahindra.*defence|L&T.*defence|Adani.*defence)\b/i;
+
+function classifyTrackerItem(title, desc) {
+  const text = `${title} ${desc}`;
+  let stage = 'concept';
+  for (const rule of TRACKER_STAGE_RULES) {
+    if (rule.keywords.test(text)) { stage = rule.stage; break; }
+  }
+  let domain = 'general';
+  for (const rule of TRACKER_DOMAIN_RULES) {
+    if (rule.keywords.test(text)) { domain = rule.domain; break; }
+  }
+  return { stage, domain };
+}
+
+// ── Extract programme name heuristically ──────────────────────────────────
+function extractProgramme(title) {
+  const KW = /\b(Tejas|AMCA|FGFA|MRFA|BrahMos|Akash|Astra|QRSAM|MRSAM|LRSAM|Agni|Prithvi|K-4|K-15|Arjun|Zulfiquar|Pinaka|ATAGS|Dhanush|CAESAR|M777|AH-64|Chinook|Apache|Rafale|F-35|Su-30|MiG-21|P8I|C-17|C-130|CH-47|Seahawk|MH-60|P17A|P75I|SSBN|S3|S4|INS\s+\w+|AESA\s+radar|Uttam|EL\/M|Barak|Iron Dome|HIMARS|NASAMS|S-400|S-500|Igla-S|Igla|VSHORADS|SPIKE|MILAN|Hermes|Heron|Searcher|Nishant|Rustom|TAPAS|ARCHER|MALE)\b/i;
+  const m = title.match(KW);
+  return m ? m[0] : null;
+}
+
+// ── Groq classification helper (optional enrichment) ──────────────────────
+async function groqClassifyBatch(items) {
+  const _gk = process.env.GROQ_API_KEY || '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';
+  if (!_gk || items.length === 0) return items;
+  const headlines = items.slice(0, 20).map((it, i) => `${i + 1}. ${it.title}`).join('\n');
+  const prompt = `You are an Indian defence procurement analyst. For each numbered headline, respond with JSON array (same order):
+[{"stage":"concept|planned|trials|prototype|contract|production|inducted","domain":"air|naval|army|missiles|space|cyber|electronics|general","programme":"extracted programme name or null","confidence":"high|medium|low"}]
+Headlines:\n${headlines}\nRespond ONLY with the JSON array.`;
+  try {
+    const r = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+      model: 'llama-3.1-8b-instant',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 800,
+      temperature: 0.1,
+    }, { headers: { Authorization: `Bearer ${_gk}`, 'Content-Type': 'application/json' }, timeout: 12_000 });
+    const raw = r.data?.choices?.[0]?.message?.content || '[]';
+    const arr = JSON.parse(raw.match(/\[[\s\S]*\]/)?.[0] || '[]');
+    return items.map((it, i) => {
+      const g = arr[i] || {};
+      return { ...it, stage: g.stage || it.stage, domain: g.domain || it.domain, programme: g.programme || it.programme, confidence: g.confidence || 'medium' };
+    });
+  } catch (_) { return items; }
+}
+
+const trackerCache = { data: null, ts: 0 };
+const TRACKER_TTL = 15 * 60_000; // 15 min
+
+app.get('/api/tracker', async (req, res) => {
+  const now = Date.now();
+  if (trackerCache.data && now - trackerCache.ts < TRACKER_TTL) return res.json(trackerCache.data);
+
+  const allItems = [];
+
+  // 1️⃣ RSS feeds (parallel)
+  await Promise.allSettled(TRACKER_RSS_FEEDS.map(f =>
+    axios.get(f.url, {
+      timeout: 8_000,
+      headers: { 'User-Agent': 'SpymeterOSINT/1.0', Accept: 'application/rss+xml,text/xml,*/*' },
+      responseType: 'text',
+    }).then(r => {
+      const parsed = parseRSS(r.data, f.name);
+      for (const item of parsed) {
+        if (!TRACKER_INDIA_KW.test(`${item.title} ${item.description}`)) continue;
+        const { stage, domain } = classifyTrackerItem(item.title, item.description || '');
+        const programme = extractProgramme(item.title);
+        allItems.push({
+          title:      item.title,
+          desc:       (item.description || '').slice(0, 200),
+          url:        item.link,
+          source:     f.name,
+          country:    f.country,
+          pub:        item.pubDate ? item.pubDate.toISOString() : null,
+          stage,
+          domain,
+          programme,
+          confidence: 'medium',
+          type:       'rss',
+        });
+      }
+    }).catch(() => {})
+  ));
+
+  // 2️⃣ Nitter feeds (parallel, best-effort)
+  const nitterResults = await Promise.allSettled(
+    TRACKER_NITTER_ACCOUNTS.map(acc => _fetchNitterFeed(acc.handle).then(posts => ({ acc, posts })))
+  );
+  for (const r of nitterResults) {
+    if (r.status !== 'fulfilled') continue;
+    const { acc, posts } = r.value;
+    for (const post of posts) {
+      if (!TRACKER_INDIA_KW.test(post.text)) continue;
+      const { stage, domain } = classifyTrackerItem(post.text, '');
+      const programme = extractProgramme(post.text);
+      allItems.push({
+        title:      post.text.slice(0, 200),
+        desc:       '',
+        url:        post.link,
+        source:     acc.label,
+        country:    'IN',
+        pub:        post.date || null,
+        stage,
+        domain,
+        programme,
+        confidence: 'medium',
+        type:       'social',
+        handle:     acc.handle,
+      });
+    }
+  }
+
+  // Deduplicate by URL + title similarity
+  const seen = new Set();
+  const unique = allItems.filter(it => {
+    const key = it.url || it.title.slice(0, 60);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Sort newest first
+  unique.sort((a, b) => {
+    const ta = a.pub ? new Date(a.pub).getTime() : 0;
+    const tb = b.pub ? new Date(b.pub).getTime() : 0;
+    return tb - ta;
+  });
+
+  // Optional Groq enrichment on first 20 items
+  const enriched = await groqClassifyBatch(unique.slice(0, 50));
+  const rest = unique.slice(50);
+  const final = [...enriched, ...rest].slice(0, 120);
+
+  // Stage stats
+  const byStage  = {};
+  const byDomain = {};
+  for (const it of final) {
+    byStage[it.stage]   = (byStage[it.stage]   || 0) + 1;
+    byDomain[it.domain] = (byDomain[it.domain] || 0) + 1;
+  }
+
+  const result = { items: final, byStage, byDomain, count: final.length, ts: now, source: 'ANI · Swarajya · NDTV · ORF · WIRED · Livefist · ThePrint + Nitter' };
+  trackerCache.data = result;
+  trackerCache.ts   = now;
+  res.json(result);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 11 — START SERVER
 // ═══════════════════════════════════════════════════════════════════════════════
 server.listen(PORT, '0.0.0.0', () => {
