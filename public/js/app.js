@@ -131,6 +131,10 @@ const APP = (() => {
               SUBMARINE.setEnabled(on);
               SIDEBAR.addFeedItem('satellite', on ? '🌊 Submarine OSINT ON — SSBN/SSN patrol zones visible' : 'Submarine layer OFF');
               break;
+            case 'cfradar':
+              CF_RADAR_LAYER.setEnabled(on);
+              SIDEBAR.addFeedItem('satellite', on ? '☁️ CF Radar ON — DDoS attacks + internet anomalies' : 'Cloudflare Radar layer OFF');
+              break;
           }
         }, 120);
       });
@@ -580,6 +584,7 @@ const APP = (() => {
     CYBER_LAYER.init(map);
     DC_LAYER.init(map);
     SUBMARINE.init(map);
+    CF_RADAR_LAYER.init(map);
     // Register overlays with the MAP CTRL panel toggles
     OVERLAYS.registerOverlay('leaders', LEADERS);
     OVERLAYS.registerOverlay('cables',  CABLES);
@@ -812,6 +817,150 @@ const DC_LAYER = (() => {
       enabled = on;
       if (on) _fetchAndRender();
       else { markers.forEach(m => { try { map?.removeLayer(m); } catch(_) {} }); markers = []; }
+    },
+  };
+})();
+
+/* ── CF_RADAR_LAYER: Cloudflare Radar DDoS arcs + anomaly circles ── */
+const CF_RADAR_LAYER = (() => {
+  let map = null, enabled = false;
+  let _arcs = [], _circles = [], _svgRenderer = null;
+  let _intervalId = null;
+
+  // Country centroids for arc drawing
+  const CENTROIDS = {
+    US:[37.1,-95.7], CN:[35.9,104.2], RU:[61.5,105.3], DE:[51.2,10.5],
+    GB:[55.4,-3.4],  FR:[46.2,2.2],   JP:[36.2,138.3], KR:[37.0,127.8],
+    IN:[20.6,79.0],  BR:[14.2,-51.9], AU:[-25.3,133.8], CA:[56.1,-106.3],
+    NL:[52.1,5.3],   SG:[1.4,103.8],  IL:[31.0,35.0],  IR:[32.4,53.7],
+    UA:[49.0,32.0],  TR:[38.9,35.2],  PL:[52.1,19.1],  SE:[63.0,18.0],
+    NO:[60.5,8.5],   FI:[64.0,25.7],  CZ:[49.8,15.5],  RO:[45.9,24.9],
+    HU:[47.2,19.5],  IT:[41.9,12.6],  ES:[40.5,-3.7],  PT:[39.6,-8.0],
+    ZA:[-30.6,22.9], NG:[9.1,8.7],    EG:[26.0,30.1],  SA:[24.0,45.0],
+    PK:[30.4,69.3],  BD:[23.7,90.4],  ID:[-0.8,113.9], MY:[4.2,108.0],
+    TH:[15.9,100.9], VN:[14.1,108.3], PH:[12.9,121.8], TW:[23.7,120.9],
+    MX:[23.6,-102.6],AR:[-38.4,-63.6],CL:[-35.7,-71.5],CO:[4.6,-74.3],
+  };
+
+  function _latLngForCode(code) { return CENTROIDS[code] || null; }
+
+  // Draw a curved arc between two lat/lng points (SVG path via Leaflet)
+  function _drawArc(lat1, lng1, lat2, lng2, color, weight, opacity) {
+    if (!map) return null;
+    const p1 = map.latLngToLayerPoint([lat1, lng1]);
+    const p2 = map.latLngToLayerPoint([lat2, lng2]);
+
+    // Use Leaflet polyline with a midpoint offset for curve effect
+    const midLat = (lat1 + lat2) / 2 + (Math.abs(lat2 - lat1) * 0.3 + 5);
+    const midLng = (lng1 + lng2) / 2;
+
+    const arc = L.polyline(
+      [[lat1, lng1], [midLat, midLng], [lat2, lng2]],
+      {
+        color, weight: weight || 1.5, opacity: opacity || 0.7,
+        renderer: _svgRenderer,
+        dashArray: '6,4',
+        className: 'cf-radar-arc',
+        smoothFactor: 3,
+      }
+    );
+    arc.addTo(map);
+    return arc;
+  }
+
+  async function _fetchAndRender() {
+    if (!enabled || !map) return;
+    try {
+      const r = await fetch('/api/cf/radar');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+
+      // Clear previous layers
+      _arcs.forEach(l => { try { map.removeLayer(l); } catch(_) {} });
+      _circles.forEach(l => { try { map.removeLayer(l); } catch(_) {} });
+      _arcs = []; _circles = [];
+
+      if (data.note) {
+        // CF_API_TOKEN not configured — show a message marker at center
+        const marker = L.marker([20, 0], {
+          icon: L.divIcon({
+            html: `<div style="background:#0a1828;border:1px solid #1a3a5a;color:#4a8aaa;font-size:8px;padding:4px 8px;border-radius:3px;white-space:nowrap">${data.note}</div>`,
+            className: '', iconAnchor: [80, 10]
+          })
+        }).addTo(map);
+        _circles.push(marker);
+        return;
+      }
+
+      // Draw attack arcs
+      (data.attacks || []).forEach(atk => {
+        const src = _latLngForCode(atk.origin);
+        const dst = _latLngForCode(atk.target);
+        if (!src || !dst) return;
+
+        const intensity = Math.min(atk.value || 1, 100);
+        const color = intensity > 70 ? '#ff2200' : intensity > 40 ? '#ff6600' : '#ff9900';
+        const weight = 0.8 + (intensity / 100) * 2.2;
+
+        const arc = _drawArc(src[0], src[1], dst[0], dst[1], color, weight, 0.6);
+        if (arc) {
+          arc.bindPopup(`
+            <div style="font-family:monospace;font-size:9px;background:#07090e;border:1px solid #ff4400;padding:6px 10px;border-radius:3px">
+              <b style="color:#ff4400">⚡ DDoS ATTACK</b><br>
+              Origin: <b style="color:#ff8866">${atk.origin}</b><br>
+              Target: <b style="color:#ff8866">${atk.target}</b><br>
+              Intensity: <b>${intensity.toFixed(1)}%</b><br>
+              Layer: <span style="color:#4a8aaa">${atk.layer || 'L3/L4'}</span>
+            </div>`, { className: 'leaflet-popup-dark' });
+          _arcs.push(arc);
+        }
+      });
+
+      // Draw anomaly circles (internet outages/shutdowns)
+      (data.anomalies || []).forEach(ano => {
+        const coords = _latLngForCode(ano.country);
+        if (!coords) return;
+
+        const col = ano.type === 'shutdown' ? '#cc00ff' : '#8800cc';
+        const circle = L.circleMarker(coords, {
+          renderer: _svgRenderer,
+          radius: 10,
+          color: col, fillColor: col,
+          fillOpacity: 0.2, weight: 1.5, opacity: 0.8,
+        });
+        circle.bindPopup(`
+          <div style="font-family:monospace;font-size:9px;background:#07090e;border:1px solid #8800cc;padding:6px 10px;border-radius:3px">
+            <b style="color:#cc00ff">📡 INTERNET ANOMALY</b><br>
+            Country: <b>${ano.country}</b><br>
+            Type: <span style="color:#cc88ff">${ano.type || 'anomaly'}</span><br>
+            ${ano.description ? `<span style="color:#4a8aaa">${ano.description}</span>` : ''}
+          </div>`, { className: 'leaflet-popup-dark' });
+        circle.addTo(map);
+        _circles.push(circle);
+      });
+
+      console.log(`[CF_RADAR] Rendered ${_arcs.length} attack arcs, ${_circles.length} anomalies`);
+    } catch (e) {
+      console.error('[CF_RADAR] fetch error:', e.message);
+    }
+  }
+
+  return {
+    init(m) {
+      map = m;
+      _svgRenderer = L.svg({ padding: 0.5 });
+    },
+    setEnabled(on) {
+      enabled = on;
+      if (on) {
+        _fetchAndRender();
+        _intervalId = setInterval(_fetchAndRender, 5 * 60 * 1000); // refresh every 5 min
+      } else {
+        clearInterval(_intervalId);
+        _arcs.forEach(l => { try { map?.removeLayer(l); } catch(_) {} });
+        _circles.forEach(l => { try { map?.removeLayer(l); } catch(_) {} });
+        _arcs = []; _circles = [];
+      }
     },
   };
 })();

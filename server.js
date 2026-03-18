@@ -3165,10 +3165,15 @@ function normVessel(v, sourceName, route) {
 }
 async function fetchMarineReal() {
   const now = Date.now();
-  const rawVessels = [];
   const errors = [];
-  const fetches = await Promise.allSettled([
-    // AIS Hub — free, no key
+
+  // ── Fetch from 3 independent AIS sources in parallel ─────────────────────
+  // Source 1: AISHub (free, no key) — https://www.aishub.net
+  // Source 2: VesselFinder open layer — https://www.vessel-finder.com
+  // Source 3: MyShipTracking public map API — https://www.myshiptracking.com
+  const [aisHubR, vesselFinderR, myShipR] = await Promise.allSettled([
+
+    // AISHub — bounding boxes for all choke points
     (async () => {
       const all = [];
       for (const [, cp] of Object.entries(CHOKE_POINTS)) {
@@ -3178,47 +3183,425 @@ async function fetchMarineReal() {
             { timeout: 7_000, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible)' } }
           );
           const arr = Array.isArray(r.data) ? r.data : (r.data?.data || []);
-          arr.slice(0, 25).forEach(v => {
+          arr.slice(0, 30).forEach(v => {
             const n = normVessel({ ...v, lat: v.LATITUDE, lng: v.LONGITUDE, name: v.NAME, mmsi: v.MMSI, speed: v.SOG, hdg: v.COG, flag: v.COUNTRY }, 'aishub', cp.name);
             if (n) all.push(n);
           });
-        } catch (_) {}
-        if (all.length > 40) break;
+        } catch (e) { errors.push('aishub:' + e.message.slice(0, 30)); }
+        if (all.length > 60) break;
       }
       return all;
     })(),
+
     // VesselFinder open layer
     (async () => {
       const all = [];
       for (const [, cp] of Object.entries(CHOKE_POINTS)) {
         try {
           const r = await axios.get(
-            `https://www.vessel-finder.com/api/1/0?userkey=&minlat=${cp.bbox[0]}&maxlat=${cp.bbox[2]}&minlng=${cp.bbox[1]}&maxlng=${cp.bbox[3]}&limit=25`,
+            `https://www.vessel-finder.com/api/1/0?userkey=&minlat=${cp.bbox[0]}&maxlat=${cp.bbox[2]}&minlng=${cp.bbox[1]}&maxlng=${cp.bbox[3]}&limit=30`,
             { timeout: 6_000, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible)' } }
           );
           const arr = r.data?.vessels || r.data || [];
           if (Array.isArray(arr)) arr.forEach(v => { const n = normVessel(v, 'vessel-finder', cp.name); if (n) all.push(n); });
-        } catch (_) {}
-        if (all.length > 40) break;
+        } catch (e) { errors.push('vessel-finder:' + e.message.slice(0, 30)); }
+        if (all.length > 60) break;
+      }
+      return all;
+    })(),
+
+    // MyShipTracking — public map endpoint (3rd source for triangulation)
+    (async () => {
+      const all = [];
+      for (const [, cp] of Object.entries(CHOKE_POINTS)) {
+        try {
+          const r = await axios.get(
+            `https://www.myshiptracking.com/requests/vesselsonmap.php?minlat=${cp.bbox[0]}&maxlat=${cp.bbox[2]}&minlon=${cp.bbox[1]}&maxlon=${cp.bbox[3]}&zoom=7`,
+            { timeout: 7_000, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', Referer: 'https://www.myshiptracking.com/' } }
+          );
+          const arr = Array.isArray(r.data) ? r.data : (r.data?.vessels || r.data?.data || []);
+          if (Array.isArray(arr)) {
+            arr.slice(0, 30).forEach(v => {
+              const n = normVessel({
+                lat: v.lat ?? v.LAT, lng: v.lon ?? v.LON ?? v.lng,
+                name: v.name ?? v.SHIPNAME, mmsi: v.mmsi ?? v.MMSI,
+                speed: v.speed ?? v.SOG, hdg: v.course ?? v.HDG ?? v.COG,
+                flag: v.flag ?? v.COUNTRY, type: v.type ?? v.SHIPTYPE,
+              }, 'myshiptracking', cp.name);
+              if (n) all.push(n);
+            });
+          }
+        } catch (e) { errors.push('myshiptracking:' + e.message.slice(0, 30)); }
+        if (all.length > 60) break;
       }
       return all;
     })(),
   ]);
-  fetches.forEach(r => { if (r.status === 'fulfilled') rawVessels.push(...r.value); });
-  const seenMmsi = new Set();
-  const vessels = rawVessels.filter(v => {
-    if (!v.mmsi || seenMmsi.has(v.mmsi)) return true;
-    seenMmsi.add(v.mmsi); return true;
+
+  // ── Aggregate raw vessels ─────────────────────────────────────────────────
+  const rawVessels = [];
+  if (aisHubR.status      === 'fulfilled') rawVessels.push(...aisHubR.value);
+  if (vesselFinderR.status === 'fulfilled') rawVessels.push(...vesselFinderR.value);
+  if (myShipR.status      === 'fulfilled') rawVessels.push(...myShipR.value);
+
+  // ── TRIANGULATION: group by MMSI, cross-verify across sources ────────────
+  // Groups: { mmsi → [vessel_from_src1, vessel_from_src2, ...] }
+  const mmsiGroups = {};
+  rawVessels.forEach(v => {
+    if (!v.mmsi) return;
+    if (!mmsiGroups[v.mmsi]) mmsiGroups[v.mmsi] = [];
+    mmsiGroups[v.mmsi].push(v);
   });
-  const sources = [...new Set(vessels.map(v => v.source))];
-  console.log(`[Marine] ${vessels.length} vessels from [${sources.join(', ')}]. Errors: ${errors.join('; ')}`);
-  return { vessels, ts: now, count: vessels.length, errors, sources, chokePoints: CHOKE_POINTS };
+
+  const vessels = Object.values(mmsiGroups).map(group => {
+    if (group.length === 1) {
+      // Single source — unverified
+      return { ...group[0], confidence: 'unverified', source_count: 1 };
+    }
+
+    // Multi-source: average position, calculate position spread
+    const avgLat = group.reduce((s, v) => s + v.lat, 0) / group.length;
+    const avgLng = group.reduce((s, v) => s + v.lng, 0) / group.length;
+    const maxDelta = Math.max(...group.map(v =>
+      Math.sqrt(Math.pow(v.lat - avgLat, 2) + Math.pow(v.lng - avgLng, 2))
+    ));
+
+    const confidence = maxDelta < 0.05 ? 'confirmed'  // < ~5km spread → confirmed
+                     : maxDelta < 0.15 ? 'probable'   // < ~15km spread → probable
+                     : 'conflicted';                   // large position disagreement
+
+    // Use the most data-rich record but with averaged position
+    const primary = group.sort((a, b) =>
+      (b.name !== 'UNKNOWN' ? 1 : 0) - (a.name !== 'UNKNOWN' ? 1 : 0)
+    )[0];
+
+    return {
+      ...primary,
+      lat:          avgLat,
+      lng:          avgLng,
+      confidence,
+      source_count: group.length,
+      sources_list: [...new Set(group.map(v => v.source))],
+      position_delta_deg: parseFloat(maxDelta.toFixed(4)),
+    };
+  });
+
+  // Add any vessels without MMSI (add all, no dedup possible)
+  rawVessels.filter(v => !v.mmsi).forEach(v => {
+    vessels.push({ ...v, confidence: 'unverified', source_count: 1 });
+  });
+
+  // ── Iran-specific threat classification ──────────────────────────────────
+  const IRAN_FLAGS = new Set(['ir', 'iran', 'islamic republic of iran']);
+  vessels.forEach(v => {
+    const flag = (v.flag || '').toLowerCase();
+    v.iran_flagged = IRAN_FLAGS.has(flag) || flag.includes('iran');
+    // Naval vessels near Hormuz get critical severity
+    if (/naval|warship|coast.*guard|patrol|corvette|frigate/i.test(v.type)) {
+      v.severity = 'critical';
+    } else if (v.iran_flagged) {
+      v.severity = 'high';
+    } else if (/tanker|lng|crude/i.test(v.type)) {
+      v.severity = 'normal';
+    } else {
+      v.severity = v.severity || 'unknown';
+    }
+  });
+
+  const sources = [...new Set(rawVessels.map(v => v.source))];
+  const confirmed_count  = vessels.filter(v => v.confidence === 'confirmed').length;
+  const iran_vessels     = vessels.filter(v => v.iran_flagged).length;
+  console.log(`[Marine] ${vessels.length} vessels (${confirmed_count} confirmed) from [${sources.join(', ')}]. Iran-flagged: ${iran_vessels}`);
+  return { vessels, ts: now, count: vessels.length, errors, sources, chokePoints: CHOKE_POINTS, confirmed_count, iran_vessels };
 }
 app.get('/api/marine', async (req, res) => {
   const now = Date.now();
   if (marineCache.data && now - marineCache.ts < 60_000) return res.json(marineCache.data);
   const result = await fetchMarineReal();
   marineCache.data = result; marineCache.ts = now;
+  res.json(result);
+});
+
+// ─── /api/hormuz-history — GDELT news + EIA crude price for time periods ─────
+// Periods: 1d | 7d | 15d
+const _hormuzHistCache = {};
+app.get('/api/hormuz-history', async (req, res) => {
+  const period = ['1d','7d','15d'].includes(req.query.period) ? req.query.period : '1d';
+  const cacheKey = 'hist_' + period;
+  const now = Date.now();
+  const TTL_HIST = period === '1d' ? 15 * 60_000 : 60 * 60_000; // 15m / 1h cache
+  if (_hormuzHistCache[cacheKey] && now - _hormuzHistCache[cacheKey].ts < TTL_HIST)
+    return res.json(_hormuzHistCache[cacheKey].data);
+
+  const days = period === '1d' ? 1 : period === '7d' ? 7 : 15;
+  const timespan = period === '1d' ? '24h' : period === '7d' ? '7d' : '2weeks';
+
+  try {
+    const [gdeltR, eiaR] = await Promise.allSettled([
+      // GDELT: Hormuz/Houthi/tanker news for period
+      axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+        params: {
+          query:      'Strait Hormuz tanker oil shipping Iran Houthi Red Sea attack vessel',
+          mode:       'artlist', maxrecords: 50, format: 'json',
+          sort:       'datedesc', timespan,
+        },
+        timeout: 10_000,
+      }),
+      // EIA: WTI crude price (weekly)
+      axios.get('https://api.eia.gov/v2/petroleum/pri/spt/data/', {
+        params: {
+          'frequency': 'weekly', 'data[0]': 'value',
+          'facets[series][]': 'RWTC', 'sort[0][column]': 'period',
+          'sort[0][direction]': 'desc', 'offset': 0, 'length': days + 2,
+          'api_key': process.env.EIA_API_KEY || 'DEMO_KEY',
+        },
+        timeout: 8_000,
+      }),
+    ]);
+
+    const articles = gdeltR.status === 'fulfilled'
+      ? (gdeltR.value.data?.articles || []).map(a => ({
+          title:  a.title  || '',
+          url:    a.url    || '',
+          source: a.domain || '',
+          date:   a.seendate || '',
+          tone:   parseFloat(a.tone || 0).toFixed(1),
+        }))
+      : [];
+
+    const crudePrices = eiaR.status === 'fulfilled'
+      ? (eiaR.value.data?.response?.data || []).map(d => ({
+          date:  d.period,
+          price: parseFloat(d.value || 0).toFixed(2),
+        }))
+      : [];
+
+    const result = { period, days, news: articles, newsCount: articles.length, crudePrices };
+    _hormuzHistCache[cacheKey] = { data: result, ts: now };
+    res.json(result);
+  } catch (e) {
+    res.status(503).json({ error: e.message, period, news: [], crudePrices: [] });
+  }
+});
+
+// ─── /api/cf/radar — Cloudflare Radar: DDoS attacks + internet anomalies ─────
+// Requires CF_API_TOKEN env var (https://dash.cloudflare.com → My Profile → API Tokens)
+// Data: Layer3/Layer7 DDoS attack origin/target countries + traffic anomalies
+const _cfRadarCache = { data: null, ts: 0 };
+const CF_RADAR_TTL  = 5 * 60_000; // 5 min
+
+app.get('/api/cf/radar', async (req, res) => {
+  const now = Date.now();
+  if (_cfRadarCache.data && now - _cfRadarCache.ts < CF_RADAR_TTL)
+    return res.json(_cfRadarCache.data);
+
+  const CF_TOKEN = process.env.CF_API_TOKEN || '';
+  if (!CF_TOKEN) {
+    return res.json({
+      attacks: [], anomalies: [], sources: [],
+      note: 'Set CF_API_TOKEN env var to enable Cloudflare Radar (free at dash.cloudflare.com)',
+      ts: now,
+    });
+  }
+
+  const cfHeaders = { Authorization: `Bearer ${CF_TOKEN}`, 'Content-Type': 'application/json' };
+  const cfBase    = 'https://api.cloudflare.com/client/v4/radar';
+
+  try {
+    const [l3originR, l3targetR, l7R, anomalyR] = await Promise.allSettled([
+      // Layer 3 DDoS — top origin countries (who is attacking)
+      axios.get(`${cfBase}/attacks/layer3/top/locations/origin`, {
+        params: { dateRange: '1d', limit: 10, format: 'json' },
+        headers: cfHeaders, timeout: 8_000,
+      }),
+      // Layer 3 DDoS — top target countries (who is being attacked)
+      axios.get(`${cfBase}/attacks/layer3/top/locations/target`, {
+        params: { dateRange: '1d', limit: 10, format: 'json' },
+        headers: cfHeaders, timeout: 8_000,
+      }),
+      // Layer 7 (application) DDoS — top origin countries
+      axios.get(`${cfBase}/attacks/layer7/top/locations`, {
+        params: { dateRange: '1d', limit: 10, format: 'json' },
+        headers: cfHeaders, timeout: 8_000,
+      }),
+      // Internet traffic anomalies (shutdowns / disruptions)
+      axios.get(`${cfBase}/traffic/anomalies/top`, {
+        params: { dateRange: '1d', limit: 20, format: 'json' },
+        headers: cfHeaders, timeout: 8_000,
+      }),
+    ]);
+
+    // Country ISO2 → lat/lng centroids for arc drawing
+    const CENTROIDS = {
+      US:[38.9,-95.7], CN:[35.9,104.2], RU:[55.8,37.6], DE:[52.5,13.4],
+      FR:[48.9,2.3],   GB:[51.5,-0.1],  IN:[20.6,78.9],  BR:[-10,-55],
+      KR:[37.6,127.0], JP:[35.7,139.7], AU:[-25.3,133.8], CA:[45.4,-75.7],
+      IR:[35.7,51.4],  KP:[39.0,125.7], TR:[39.9,32.9],  UA:[50.5,30.5],
+      PK:[33.7,73.1],  SA:[24.7,46.7],  IL:[31.8,35.2],  EG:[30.1,31.2],
+      NG:[9.1,7.4],    ZA:[-29.0,25.0], MX:[23.6,-102.6], AR:[-34.6,-58.4],
+      ID:[0.8,113.9],  MY:[3.1,101.7],  TH:[15.9,100.9], SG:[1.35,103.8],
+      VN:[16.0,108.0], PH:[12.9,121.8], BD:[23.7,90.4],  PL:[52.2,21.0],
+      NL:[52.4,4.9],   SE:[59.3,18.1],  NO:[59.9,10.7],  IT:[41.9,12.5],
+      ES:[40.4,-3.7],  PT:[38.7,-9.1],  GR:[37.9,23.7],  RO:[44.4,26.1],
+      BY:[53.7,27.9],  AZ:[40.4,47.7],  IQ:[33.3,44.4],  SY:[34.8,38.9],
+      LY:[26.3,17.2],  MA:[31.8,-7.1],  TN:[33.9,9.5],   DZ:[28.0,1.7],
+      LB:[33.8,35.5],  YE:[15.6,48.5],
+    };
+
+    const parseTop = (r) => {
+      if (r.status !== 'fulfilled') return [];
+      const d = r.value.data;
+      return (d?.result?.top_0 || d?.result?.top0 || d?.result?.locations || [])
+        .map(item => ({
+          iso2:     (item.location || item.locationCode || '').toUpperCase(),
+          name:     item.locationName || item.location || '',
+          share:    parseFloat(item.share || item.value || 0),
+          coords:   CENTROIDS[(item.location || '').toUpperCase()] || null,
+        }))
+        .filter(x => x.coords);
+    };
+
+    const l3origins  = parseTop(l3originR);
+    const l3targets  = parseTop(l3targetR);
+    const l7origins  = parseTop(l7R);
+
+    // Build attack pairs: top 5 origins → top 5 targets (cross-product, capped at 15 arcs)
+    const allOrigins = [...l3origins, ...l7origins.filter(x => !l3origins.find(y => y.iso2 === x.iso2))].slice(0, 6);
+    const allTargets = l3targets.slice(0, 5);
+    const attacks = [];
+    for (const src of allOrigins) {
+      for (const tgt of allTargets) {
+        if (src.iso2 === tgt.iso2) continue;
+        attacks.push({
+          from:     src.iso2, fromName: src.name, fromCoords: src.coords,
+          to:       tgt.iso2, toName:   tgt.name, toCoords:   tgt.coords,
+          share:    src.share,
+          layer:    l7origins.find(x => x.iso2 === src.iso2) ? 'L7' : 'L3',
+        });
+        if (attacks.length >= 18) break;
+      }
+      if (attacks.length >= 18) break;
+    }
+
+    // Internet anomalies
+    const anomalyData = anomalyR.status === 'fulfilled' ? anomalyR.value.data : null;
+    const anomalies = (anomalyData?.result?.top_0 || anomalyData?.result?.top0 || []).map(a => ({
+      iso2:    (a.location || '').toUpperCase(),
+      name:    a.locationName || a.location || '',
+      type:    a.type || 'anomaly',
+      status:  a.status || 'detected',
+      coords:  CENTROIDS[(a.location || '').toUpperCase()] || null,
+    })).filter(x => x.coords).slice(0, 20);
+
+    const result = {
+      attacks,
+      anomalies,
+      l3_origins: l3origins.slice(0, 10),
+      l3_targets: l3targets.slice(0, 10),
+      l7_origins: l7origins.slice(0, 10),
+      sources:    ['Cloudflare Radar L3 DDoS', 'Cloudflare Radar L7 DDoS', 'Cloudflare Traffic Anomalies'],
+      ts:         now,
+    };
+    _cfRadarCache.data = result;
+    _cfRadarCache.ts   = now;
+    res.json(result);
+  } catch (e) {
+    console.error('[CF Radar]', e.message);
+    res.status(503).json({ error: e.message, attacks: [], anomalies: [], ts: now });
+  }
+});
+
+// ─── /api/osint/iran-trackers — Iran conflict OSINT from Twitter/X tracker accounts
+// Uses Nitter RSS feeds (open-source Twitter frontend mirrors, no auth required)
+// Key accounts: analysts, journalists, OSINT operators tracking Iran conflict
+const _osintCache = { data: null, ts: 0 };
+const OSINT_TTL   = 10 * 60_000; // 10 min
+
+const IRAN_TRACKERS = [
+  { handle:'ragipsoylu',    label:'Ragip Soylu',       desc:'ME Correspondent · Fox News' },
+  { handle:'KhaledisHere',  label:'Khaled Iskef',      desc:'Syria/Iran conflict journalist' },
+  { handle:'IranIntl_En',   label:'Iran International',desc:'Breaking Iran news (English)' },
+  { handle:'AuroraIntel',   label:'Aurora Intel',      desc:'OSINT · conflict monitoring' },
+  { handle:'OSINTdefender', label:'OSINT Defender',    desc:'Global conflict OSINT' },
+  { handle:'natsecjeff',    label:'Jeff Seldin',       desc:'VOA · National security' },
+  { handle:'IntelCrab',     label:'Intel Crab',        desc:'Intelligence & conflict tracking' },
+  { handle:'MiddleEastEye', label:'Middle East Eye',   desc:'Regional news outlet' },
+  { handle:'BarakRavid',    label:'Barak Ravid',       desc:'Axios · Israel/Iran reporter' },
+  { handle:'iranwire',      label:'IranWire',          desc:'Independent Iran journalism' },
+];
+
+// Nitter instances (rotating fallback — community-run, no auth)
+const NITTER_HOSTS = [
+  'https://nitter.poast.org',
+  'https://nitter.privacydev.net',
+  'https://nitter.net',
+  'https://lightbrd.com',
+  'https://nitter.unixfox.eu',
+];
+
+function _parseNitterRSS(xml, handle) {
+  const items = [];
+  const regex = /<item>([\s\S]*?)<\/item>/g;
+  let m;
+  while ((m = regex.exec(xml)) !== null && items.length < 4) {
+    const chunk   = m[1];
+    const rawTitle = chunk.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/)?.[1]
+                  || chunk.match(/<title>([\s\S]*?)<\/title>/)?.[1] || '';
+    const link    = chunk.match(/<link>([\s\S]*?)<\/link>/)?.[1] || '';
+    const pubDate = chunk.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1] || '';
+    // Strip HTML from title / content
+    const text = rawTitle.replace(/<[^>]+>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').trim();
+    if (text && text.length > 5 && !text.startsWith('RT by')) {
+      items.push({ text, link: link.trim(), date: pubDate.trim(), handle });
+    }
+  }
+  return items;
+}
+
+async function _fetchNitterFeed(handle) {
+  for (const host of NITTER_HOSTS) {
+    try {
+      const r = await axios.get(`${host}/${handle}/rss`, {
+        timeout: 6_000,
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SpymeterOSINT/1.0)', Accept: 'application/rss+xml, application/xml, text/xml' },
+      });
+      if (typeof r.data === 'string' && r.data.includes('<item>')) {
+        return _parseNitterRSS(r.data, handle);
+      }
+    } catch (_) {}
+  }
+  return []; // all instances failed
+}
+
+app.get('/api/osint/iran-trackers', async (req, res) => {
+  const now = Date.now();
+  if (_osintCache.data && now - _osintCache.ts < OSINT_TTL)
+    return res.json(_osintCache.data);
+
+  // Fetch all tracker feeds in parallel (best-effort)
+  const feedResults = await Promise.allSettled(
+    IRAN_TRACKERS.map(t => _fetchNitterFeed(t.handle).then(posts => ({ ...t, posts })))
+  );
+
+  const trackers = feedResults.map((r, i) => ({
+    ...IRAN_TRACKERS[i],
+    posts:     r.status === 'fulfilled' ? r.value.posts : [],
+    available: r.status === 'fulfilled' && r.value.posts.length > 0,
+  }));
+
+  const allPosts = trackers.flatMap(t => t.posts.map(p => ({ ...p, tracker_label: t.label, tracker_desc: t.desc })))
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const result = {
+    trackers,
+    feed:       allPosts.slice(0, 60),
+    count:      allPosts.length,
+    sources:    trackers.filter(t => t.available).map(t => `@${t.handle}`),
+    note:       'Via Nitter RSS — open Twitter mirrors. No API key required.',
+    ts:         now,
+  };
+  _osintCache.data = result;
+  _osintCache.ts   = now;
   res.json(result);
 });
 

@@ -2373,6 +2373,79 @@ body.lego-mode #overlay-panel { border-color:#ffcc00; }
 .hrm-api-link:hover { border-color:#00d4ff; color:#00d4ff; }
 .hrm-ts { font-size:7px; color:#1a3a5a; margin-top:8px; text-align:right; }
 
+/* ── Hormuz: triangulation + confidence badges ── */
+.hrm-tri-panel { background:#050f1a; border:1px solid #0a2a3a; border-radius:4px; padding:6px 8px; margin:6px 0; }
+.hrm-tri-hdr   { font-size:8px; font-weight:700; color:#00d4ff; letter-spacing:1px; margin-bottom:4px; }
+.hrm-tri-stats { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:3px; }
+.hrm-tri-stat  { font-size:8px; font-weight:700; letter-spacing:0.5px; }
+.hrm-tri-note  { font-size:7px; color:#2a5a7a; }
+.hrm-conf-badge {
+  display:inline-block; font-size:7px; font-weight:700; letter-spacing:0.5px;
+  padding:1px 5px; border-radius:2px; border:1px solid; cursor:help;
+}
+.hrm-vessel-tri { margin:2px 0; display:flex; align-items:center; gap:6px; }
+.hrm-delta      { font-size:7px; color:#2a5a7a; }
+.hrm-iran-tag   { font-size:7px; background:#ff220020; color:#ff4444; border:1px solid #ff220040; padding:1px 4px; border-radius:2px; }
+
+/* ── Hormuz: Iran threat panel ── */
+.hrm-iran-panel  { background:#100008; border:1px solid #3a0010; border-radius:4px; padding:8px; margin:6px 0; }
+.hrm-iran-hdr    { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+.hrm-iran-flag   { font-size:14px; }
+.hrm-iran-title  { font-size:8px; font-weight:700; color:#ff6688; letter-spacing:1px; flex:1; }
+.hrm-threat-badge { font-size:7px; font-weight:700; padding:2px 6px; border-radius:2px; border:1px solid; }
+.hrm-iran-stats  { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:6px; }
+.hrm-iran-stat   { text-align:center; }
+.hrm-iran-stat-val { font-size:16px; font-weight:700; font-family:monospace; }
+.hrm-iran-stat-lbl { font-size:7px; color:#4a3040; letter-spacing:0.5px; }
+.hrm-zone-row    { display:flex; align-items:center; gap:6px; padding:3px 0; border-bottom:1px solid #1a0010; }
+.hrm-zone-name   { font-size:8px; color:#8a5a6a; flex:1; }
+.hrm-zone-risk   { font-size:7px; font-weight:700; }
+.hrm-zone-fly    { font-size:9px; background:none; border:none; cursor:pointer; padding:0; }
+.hrm-iran-vessel { display:flex; align-items:center; gap:6px; padding:2px 0; border-bottom:1px solid #1a0010; }
+.hrm-iran-vname  { font-size:8px; color:#cc8888; flex:1; font-weight:700; }
+.hrm-iran-vtype  { font-size:7px; color:#3a2030; }
+
+/* ── Mirrorfish panel ── */
+.hrm-mirrorfish  { background:#030d12; border:1px solid #0a2030; border-radius:4px; padding:8px; margin:6px 0; }
+.hrm-mf-hdr     { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+.hrm-mf-icon    { font-size:14px; }
+.hrm-mf-title   { font-size:8px; font-weight:700; color:#00aacc; letter-spacing:1px; flex:1; }
+.hrm-mf-ts      { font-size:7px; color:#1a4a5a; }
+.hrm-mf-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:6px; }
+.hrm-mf-sum-box { text-align:center; }
+.hrm-mf-sum-val { font-size:16px; font-weight:700; font-family:monospace; color:#00d4ff; }
+.hrm-mf-sum-lbl { font-size:7px; color:#1a4a5a; letter-spacing:0.5px; }
+.hrm-mf-zone    { margin:4px 0; }
+.hrm-mf-zone-top { display:flex; align-items:center; gap:4px; margin-bottom:2px; }
+.hrm-mf-zone-name  { font-size:8px; color:#4a8a9a; flex:1; }
+.hrm-mf-zone-count { font-size:7px; color:#1a5a6a; }
+.hrm-mf-bar-track  { height:3px; background:#0a1a2a; border-radius:2px; overflow:hidden; }
+.hrm-mf-bar-fill   { height:100%; border-radius:2px; transition:width 0.5s ease; }
+.hrm-mf-note    { font-size:7px; color:#0a2a3a; margin-top:6px; }
+
+/* ── CF Radar layer ── */
+.cf-radar-arc   { stroke-dasharray: 6,4; animation: cfArcFlow 2s linear infinite; }
+@keyframes cfArcFlow { to { stroke-dashoffset: -20; } }
+
+/* ── OSINT Tracker Feed ── */
+.osint-trk-btn {
+  font-size:7px; font-weight:700; letter-spacing:0.5px; padding:2px 6px;
+  background:#080f18; border:1px solid #1a3050; border-radius:2px; color:#3a6a9a;
+  cursor:pointer; transition:all 0.15s;
+}
+.osint-trk-btn.active, .osint-trk-btn:hover { border-color:#00d4ff; color:#00d4ff; background:#041020; }
+.osint-post-item {
+  display:block; padding:6px 8px; border-bottom:1px solid #0a1a28;
+  text-decoration:none; transition:background 0.15s;
+}
+.osint-post-item:hover { background:#05111e; }
+.osint-post-meta  { display:flex; align-items:center; gap:5px; margin-bottom:2px; flex-wrap:wrap; }
+.osint-handle     { font-size:8px; color:#00aacc; font-weight:700; }
+.osint-account-lbl{ font-size:7px; color:#2a5a7a; }
+.osint-breaking   { font-size:7px; background:#ff220015; color:#ff4444; border:1px solid #ff220040; padding:0 4px; border-radius:2px; font-weight:700; }
+.osint-ts         { font-size:7px; color:#1a3a5a; margin-left:auto; }
+.osint-post-title { font-size:9px; color:#7a9aaa; line-height:1.4; }
+
 /* ══════════════════════════════════════════════
    GLOBE GAUSSIAN GLOW
 ══════════════════════════════════════════════ */

@@ -85,6 +85,7 @@
         <button class="lbtn"        data-layer="cables"     title="Submarine Cable Routes — TeleGeography">🌊 CABLES</button>
         <button class="lbtn"        data-layer="outage"     title="Internet Outage / Disruption Worldwide">⚡ OUTAGE</button>
         <button class="lbtn"        data-layer="leaders"    title="World Leaders — Last Known Location">👤 LEADERS</button>
+        <button class="lbtn"        data-layer="cfradar"    title="Cloudflare Radar — DDoS Attacks &amp; Internet Anomalies">☁️ CF RADAR</button>
       </div>
     </div>
 
@@ -412,6 +413,21 @@
         <!-- News feed -->
         <div id="iranisr-news-feed" class="scroll-list" style="max-height:calc(100vh - 200px)">
           <div class="news-loading">⟳ Loading…</div>
+        </div>
+        <!-- OSINT Iran Trackers -->
+        <div class="panel-card" style="margin:4px">
+          <div class="card-hdr" style="display:flex;align-items:center;gap:6px">
+            <span>🕵 IRAN OSINT TRACKERS <span class="badge-live">● NITTER RSS</span></span>
+            <button class="mini-btn" onclick="loadIranOSINT(true)" style="margin-left:auto">↻</button>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;padding:4px 0 6px">
+            <button class="osint-trk-btn active" data-trk="all" onclick="filterOSINT('all',this)">ALL</button>
+            <button class="osint-trk-btn" data-trk="breaking" onclick="filterOSINT('breaking',this)">BREAKING</button>
+            <button class="osint-trk-btn" data-trk="intel" onclick="filterOSINT('intel',this)">INTEL</button>
+          </div>
+          <div id="osint-tracker-feed" style="max-height:280px;overflow-y:auto">
+            <div class="news-loading">⟳ Loading OSINT trackers…</div>
+          </div>
         </div>
         <!-- i24 live embed -->
         <div class="panel-card" style="margin:4px">
@@ -1259,7 +1275,7 @@
         // Lazy-init on first open
         if (tab === 'rss'        && !btn._rssInited)       { btn._rssInited       = true; if(window.POLLS) POLLS.loadRSSNews(); }
         if (tab === 'markets'    && !btn._mktInited)       { btn._mktInited       = true; MARKETS.init(); }
-        if (tab === 'iranisr'    && !btn._irnInited)       { btn._irnInited       = true; loadIranIsrNews(false); if (window.twttr?.widgets) window.twttr.widgets.load(); }
+        if (tab === 'iranisr'    && !btn._irnInited)       { btn._irnInited       = true; loadIranIsrNews(false); loadIranOSINT(false); if (window.twttr?.widgets) window.twttr.widgets.load(); }
         if (tab === 'defence'    && !btn._defInited)       { btn._defInited       = true; DEFENCE.init(); }
         if (tab === 'india'      && !btn._indiaInited)     { btn._indiaInited     = true; INDIA.init(); loadIndiaOsintFeed(); }
         if (tab === 'china'      && !btn._chinaInited)     { btn._chinaInited     = true; loadChinaFeed(); }
@@ -1407,6 +1423,60 @@
         _renderIranIsrNews();
       } catch (_) { el.innerHTML = '<div class="news-loading">Feed unavailable</div>'; }
     }
+
+    // ── Iran OSINT Tracker Feed (Nitter RSS) ─────────────
+    let _osintAllPosts = [];
+    let _osintFilter = 'all';
+
+    function filterOSINT(f, btn) {
+      _osintFilter = f;
+      document.querySelectorAll('[data-trk]').forEach(b => b.classList.toggle('active', b.dataset.trk === f));
+      _renderOSINTFeed();
+    }
+    window.filterOSINT = filterOSINT;
+
+    function _renderOSINTFeed() {
+      const el = document.getElementById('osint-tracker-feed');
+      if (!el) return;
+      let posts = _osintAllPosts;
+      if (_osintFilter === 'breaking') posts = posts.filter(p => /break|urgent|alert|flash/i.test(p.title));
+      else if (_osintFilter === 'intel') posts = posts.filter(p => /intel|osint|confirm|verif|intercept|source/i.test(p.title));
+      if (!posts.length) { el.innerHTML = '<div class="news-loading" style="font-size:8px;padding:8px">No posts matching filter</div>'; return; }
+      el.innerHTML = posts.slice(0, 30).map(p => {
+        const isBreaking = /break|urgent|alert|flash/i.test(p.title);
+        const rel = UTILS.timeAgo ? UTILS.timeAgo(p.date) : '';
+        return `<a class="osint-post-item" href="${p.url || '#'}" target="_blank" rel="noopener noreferrer">
+          <div class="osint-post-meta">
+            <span class="osint-handle">@${p.handle || ''}</span>
+            <span class="osint-account-lbl">${p.account || ''}</span>
+            ${isBreaking ? '<span class="osint-breaking">⚡ BREAKING</span>' : ''}
+            ${rel ? `<span class="osint-ts">${rel}</span>` : ''}
+          </div>
+          <div class="osint-post-title">${p.title || ''}</div>
+        </a>`;
+      }).join('');
+    }
+
+    async function loadIranOSINT(force = false) {
+      const el = document.getElementById('osint-tracker-feed');
+      if (!el) return;
+      el.innerHTML = '<div class="news-loading" style="font-size:8px;padding:8px">⟳ Fetching Iran OSINT trackers…</div>';
+      try {
+        const r = await fetch('/api/osint/iran-trackers');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        _osintAllPosts = data.feed || [];
+        if (!_osintAllPosts.length) {
+          el.innerHTML = `<div class="news-loading" style="font-size:8px;padding:8px;color:#2a5a7a">
+            No posts fetched (${data.sources?.length || 0} sources tried).<br>
+            Nitter mirrors may be rate-limited. Try again later.
+          </div>`;
+          return;
+        }
+        _renderOSINTFeed();
+      } catch(e) { el.innerHTML = `<div class="news-loading" style="font-size:8px;padding:8px;color:#4a2a2a">OSINT feed error: ${e.message}</div>`; }
+    }
+    window.loadIranOSINT = loadIranOSINT;
 
     // ── India OSINT Feed ──────────────────────────────────
     let _indiaArticles = [];
