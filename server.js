@@ -3136,6 +3136,203 @@ app.get('/api/gpsjam', async (req, res) => {
   res.json(out);
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 7B — AISstream.io REAL-TIME WebSocket CLIENT
+// wss://stream.aisstream.io/v0/stream  (free API key required)
+// Env var: AISSTREAM_API_KEY
+// Docs: https://aisstream.io/documentation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const AISSTREAM_URL = 'wss://stream.aisstream.io/v0/stream';
+const AISSTREAM_KEY = process.env.AISSTREAM_API_KEY || '';
+
+// Live vessel store: MMSI → enriched vessel object
+const aistreamVessels = new Map();
+let   aistreamConnected = false;
+let   aistreamWs        = null;
+let   aistreamRetryMs   = 5_000;
+let   aistreamStats     = { msgs: 0, vessels: 0, lastMsg: null };
+
+// Bounding boxes covering all strategic maritime zones (AISstream format: [[latMin,lonMin],[latMax,lonMax]])
+const AISSTREAM_BBOXES = [
+  // ── Indian Ocean region ──────────────────────────────────────────────
+  [[6,  55 ], [26, 78 ]],   // Arabian Sea (India West + Persian Gulf)
+  [[4,  78 ], [23, 100]],   // Bay of Bengal + Andaman Sea
+  [[-5, 65 ], [10, 80 ]],   // Indian Ocean South
+  // ── Strait of Hormuz + Persian Gulf ─────────────────────────────────
+  [[23, 48 ], [30, 60 ]],
+  // ── Red Sea + Bab-el-Mandeb ──────────────────────────────────────────
+  [[10, 32 ], [30, 45 ]],
+  // ── Suez Canal ────────────────────────────────────────────────────────
+  [[29, 31 ], [32, 34 ]],
+  // ── Strait of Malacca ──────────────────────────────────────────────
+  [[1,  98 ], [7,  106]],
+  // ── South China Sea + Taiwan Strait ─────────────────────────────────
+  [[5,  108], [26, 122]],
+  // ── Bosphorus / Black Sea ─────────────────────────────────────────
+  [[40, 26 ], [47, 41 ]],
+];
+
+// AIS ShipType code → human-readable category
+function aisShipType(code) {
+  const n = parseInt(code, 10) || 0;
+  if (n === 35)               return 'naval';
+  if (n >= 80 && n <= 89)     return 'tanker';
+  if (n === 84 || n === 85)   return 'lng';
+  if (n >= 70 && n <= 79)     return 'cargo';
+  if (n >= 60 && n <= 69)     return 'passenger';
+  if (n >= 40 && n <= 49)     return 'highspeed';
+  if (n === 52 || n === 53)   return 'tug';
+  if (n === 33 || n === 34)   return 'dredger';
+  if (n >= 30 && n <= 39)     return 'fishing';
+  return 'vessel';
+}
+
+function connectAISstream() {
+  if (!AISSTREAM_KEY) {
+    console.log('[AISstream] No AISSTREAM_API_KEY set — real-time WS disabled (HTTP fallback active)');
+    return;
+  }
+  if (aistreamWs) { try { aistreamWs.terminate(); } catch(_) {} }
+
+  console.log('[AISstream] Connecting to', AISSTREAM_URL);
+  const ws = new WebSocket(AISSTREAM_URL, {
+    headers: { 'User-Agent': 'SpymeterOSINT/1.0' },
+  });
+  aistreamWs = ws;
+
+  ws.on('open', () => {
+    aistreamConnected = true;
+    aistreamRetryMs   = 5_000;
+    console.log('[AISstream] Connected — subscribing to', AISSTREAM_BBOXES.length, 'bounding boxes');
+    ws.send(JSON.stringify({
+      APIKey:            AISSTREAM_KEY,
+      BoundingBoxes:     AISSTREAM_BBOXES,
+      FilterMessageTypes:['PositionReport','ShipStaticData','StandardClassBPositionReport'],
+    }));
+  });
+
+  ws.on('message', (raw) => {
+    try {
+      const msg = JSON.parse(raw);
+      const type = msg.MessageType;
+      const meta = msg.MetaData || {};
+      const mmsi = String(meta.MMSI || '');
+      if (!mmsi || mmsi === '0') return;
+
+      aistreamStats.msgs++;
+      aistreamStats.lastMsg = Date.now();
+
+      if (type === 'PositionReport' || type === 'StandardClassBPositionReport') {
+        const pr  = msg.Message?.PositionReport || msg.Message?.StandardClassBPositionReport || {};
+        const lat = parseFloat(pr.Latitude  ?? meta.latitude  ?? 0);
+        const lng = parseFloat(pr.Longitude ?? meta.longitude ?? 0);
+        if (!lat || !lng || lat < -90 || lat > 90) return;
+
+        const existing = aistreamVessels.get(mmsi) || {};
+        aistreamVessels.set(mmsi, {
+          mmsi,
+          name:         (meta.ShipName || existing.name || 'UNKNOWN').trim(),
+          type:         existing.type || 'vessel',
+          flag:         existing.flag || mmsiToCountry(mmsi) || '',
+          lat, lng,
+          hdg:          parseFloat(pr.TrueHeading ?? pr.Cog ?? 0),
+          speed:        parseFloat(pr.Sog ?? 0),
+          cargo:        existing.cargo || '',
+          imo:          existing.imo   || '',
+          route:        _nearestZone(lat, lng),
+          source:       'AISstream',
+          ts:           Date.now(),
+          nav_status:   pr.NavigationalStatus ?? null,
+          confidence:   'confirmed',
+          source_count: 1,
+        });
+        aistreamStats.vessels = aistreamVessels.size;
+
+      } else if (type === 'ShipStaticData') {
+        const sd   = msg.Message?.ShipStaticData || {};
+        const existing = aistreamVessels.get(mmsi) || {};
+        aistreamVessels.set(mmsi, {
+          ...existing,
+          mmsi,
+          name:  (sd.ShipName || meta.ShipName || existing.name || 'UNKNOWN').trim(),
+          type:  aisShipType(sd.ShipType),
+          flag:  existing.flag || mmsiToCountry(mmsi) || '',
+          imo:   String(sd.IMO || existing.imo || ''),
+          cargo: sd.Destination || existing.cargo || '',
+          ts:    existing.ts || Date.now(),
+          source:'AISstream',
+        });
+      }
+    } catch (_) {}
+  });
+
+  ws.on('close', (code) => {
+    aistreamConnected = false;
+    aistreamWs = null;
+    console.log(`[AISstream] Disconnected (code ${code}) — retry in ${aistreamRetryMs/1000}s`);
+    setTimeout(connectAISstream, aistreamRetryMs);
+    aistreamRetryMs = Math.min(aistreamRetryMs * 2, 120_000); // exponential backoff, max 2 min
+  });
+
+  ws.on('error', (err) => {
+    console.error('[AISstream] WS error:', err.message);
+    ws.terminate();
+  });
+}
+
+// Return nearest strategic zone name for a lat/lng
+function _nearestZone(lat, lng) {
+  const zones = [
+    { name:'Arabian Sea',      lats:[6,26],   lngs:[55,75]  },
+    { name:'Bay of Bengal',    lats:[4,23],   lngs:[78,100] },
+    { name:'Indian Ocean',     lats:[-5,10],  lngs:[65,80]  },
+    { name:'Strait of Hormuz', lats:[23,28],  lngs:[54,59]  },
+    { name:'Persian Gulf',     lats:[23,30],  lngs:[48,57]  },
+    { name:'Red Sea',          lats:[10,30],  lngs:[32,45]  },
+    { name:'Suez Canal',       lats:[29,32],  lngs:[31,34]  },
+    { name:'Strait of Malacca',lats:[1,7],    lngs:[98,106] },
+    { name:'South China Sea',  lats:[5,22],   lngs:[108,122]},
+    { name:'Bosphorus',        lats:[40,47],  lngs:[26,41]  },
+  ];
+  for (const z of zones) {
+    if (lat >= z.lats[0] && lat <= z.lats[1] && lng >= z.lngs[0] && lng <= z.lngs[1]) return z.name;
+  }
+  return 'Open Ocean';
+}
+
+// Evict vessels older than 8 minutes from the live store
+setInterval(() => {
+  const cutoff = Date.now() - 8 * 60_000;
+  let evicted = 0;
+  for (const [mmsi, v] of aistreamVessels) {
+    if ((v.ts || 0) < cutoff) { aistreamVessels.delete(mmsi); evicted++; }
+  }
+  if (evicted) console.log(`[AISstream] Evicted ${evicted} stale vessels; active: ${aistreamVessels.size}`);
+}, 60_000);
+
+// Start connection (no-op if no key)
+connectAISstream();
+
+// Expose AISstream status endpoint
+app.get('/api/aisstream/status', (req, res) => {
+  res.json({
+    connected:    aistreamConnected,
+    key_set:      !!AISSTREAM_KEY,
+    vessel_count: aistreamVessels.size,
+    msgs_received:aistreamStats.msgs,
+    last_msg_ago: aistreamStats.lastMsg ? Math.round((Date.now() - aistreamStats.lastMsg)/1000) : null,
+    bboxes:       AISSTREAM_BBOXES.length,
+  });
+});
+
+// Expose maritime ports JSON
+const _portsData = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'public/data/maritime_ports.json'), 'utf8')); }
+  catch (_) { return { ports: [], chokepoints: [] }; }
+})();
+app.get('/api/marine/ports', (req, res) => res.json(_portsData));
+
 // ─── /api/marine — AIS vessel positions (multi-source) ───────────────────────
 const CHOKE_POINTS = {
   hormuz:      { name:'Strait of Hormuz',         lat:26.56, lon:56.25, bbox:[24,55,27,58],    color:'#ff4400', region:'middle_east' },
@@ -3189,10 +3386,50 @@ async function fetchMarineReal() {
   const now = Date.now();
   const errors = [];
 
-  // ── Fetch from 3 independent AIS sources in parallel ─────────────────────
+  // ── PRIMARY: Use AISstream.io live WebSocket feed if connected ────────────
+  if (aistreamConnected && aistreamVessels.size > 0) {
+    const cutoff = now - 8 * 60_000;
+    const vessels = [];
+    for (const v of aistreamVessels.values()) {
+      if ((v.ts || 0) < cutoff) continue;
+      const enriched = { ...v, confidence: 'confirmed', source_count: 1, sources_list: ['aisstream'] };
+      enriched.country_derived = mmsiToCountry(v.mmsi) || v.flag || 'Unknown';
+      enriched.india_flagged  = String(v.mmsi).startsWith('419') || (v.flag||'').toLowerCase().includes('india');
+      enriched.iran_flagged   = (v.flag||'').toLowerCase().includes('iran') || String(v.mmsi).startsWith('422');
+      enriched.china_flagged  = ['412','413','414'].some(p => String(v.mmsi).startsWith(p));
+      if (/naval|warship|corvette|frigate|destroyer|ins /i.test(v.name + ' ' + (v.type||'')))
+        enriched.vessel_class = 'naval';
+      else if (/tanker|lng|crude/i.test(v.type||''))
+        enriched.vessel_class = 'tanker';
+      else
+        enriched.vessel_class = 'merchant';
+      enriched.severity = enriched.vessel_class === 'naval' ? 'critical'
+                        : enriched.iran_flagged ? 'high'
+                        : enriched.india_flagged ? 'india'
+                        : enriched.vessel_class === 'tanker' ? 'normal' : 'unknown';
+      vessels.push(enriched);
+    }
+    vessels.sort((a,b) => (b.ts||0) - (a.ts||0));
+    const confirmed_count = vessels.length; // all AISstream = confirmed
+    const india_vessels   = vessels.filter(v => v.india_flagged).length;
+    const iran_vessels    = vessels.filter(v => v.iran_flagged).length;
+    const naval_vessels   = vessels.filter(v => v.vessel_class === 'naval').length;
+    const byRegion = {}, byCountry = {};
+    vessels.forEach(v => {
+      const r = v.route || 'Other'; byRegion[r] = (byRegion[r]||0)+1;
+      const c = v.country_derived||'Unknown'; byCountry[c] = (byCountry[c]||0)+1;
+    });
+    console.log(`[Marine/AISstream] ${vessels.length} live vessels · India:${india_vessels} Iran:${iran_vessels} Naval:${naval_vessels}`);
+    return { vessels, ts: now, count: vessels.length, errors: [], sources: ['AISstream.io (live WS)'],
+             chokePoints: CHOKE_POINTS, confirmed_count, iran_vessels, india_vessels, naval_vessels,
+             byRegion, byCountry, source_type: 'aisstream' };
+  }
+
+  // ── FALLBACK: Fetch from 3 independent AIS HTTP sources in parallel ────────
   // Source 1: AISHub (free, no key) — https://www.aishub.net
   // Source 2: VesselFinder open layer — https://www.vessel-finder.com
   // Source 3: MyShipTracking public map API — https://www.myshiptracking.com
+  console.log('[Marine] AISstream not connected — using HTTP fallback sources');
   const [aisHubR, vesselFinderR, myShipR] = await Promise.allSettled([
 
     // AISHub — bounding boxes for all choke points
