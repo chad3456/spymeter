@@ -77,6 +77,41 @@
     /* Loading overlay */
     .trk-overlay{position:absolute;inset:0;background:rgba(4,6,8,.85);display:flex;align-items:center;justify-content:center;z-index:10}
     .trk-loading-box{font-size:9px;color:#00ff88;letter-spacing:1px;animation:pulse 1.5s infinite}
+
+    /* ── MARINE LIVE STYLES ──────────────────────────────────────── */
+    .mrl-header{background:rgba(0,212,255,.04);border-bottom:1px solid rgba(0,212,255,.15)}
+    .mrl-title-row{display:flex;align-items:center;gap:5px;padding:7px 10px 4px}
+    .mrl-title{color:#00d4ff;font-size:9px;font-weight:700;letter-spacing:2px}
+    .mrl-ws-dot{font-size:10px;color:#ff4444;transition:color .3s}
+    .mrl-stats{display:flex;border-bottom:1px solid #0d1e2e;overflow-x:auto}
+    .mrl-stat{flex:1;min-width:50px;text-align:center;padding:5px 2px;border-right:1px solid #0d1e2e}
+    .mrl-sv{display:block;font-size:14px;font-weight:700;line-height:1;color:#c8dff0}
+    .mrl-sl{display:block;font-size:5.5px;color:#3d5a78;letter-spacing:.5px;margin-top:2px}
+    .mrl-filter-row{display:flex;gap:3px;flex-wrap:wrap;padding:4px 8px 5px;border-bottom:1px solid #0d1e2e}
+    .mrl-cfpill{background:transparent;border:1px solid #1a3040;color:#3d5a78;font-size:7.5px;padding:2px 7px;border-radius:12px;cursor:pointer;white-space:nowrap;transition:all .15s}
+    .mrl-cfpill.active{background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.4);color:#00d4ff}
+    .mrl-cfpill:hover{border-color:#3d5a78;color:#c8dff0}
+    .mrl-rfpill{background:transparent;border:1px solid #1a3040;color:#3d5a78;font-size:7px;padding:2px 6px;border-radius:2px;cursor:pointer;white-space:nowrap;transition:all .15s}
+    .mrl-rfpill.active{background:rgba(0,212,255,.08);border-color:rgba(0,212,255,.3);color:#00d4ff}
+    .mrl-rfpill:hover{border-color:#3d5a78;color:#c8dff0}
+    /* MarineTraffic embed */
+    .mrl-map-wrap{border-bottom:1px solid #0d1e2e;background:#040608}
+    .mrl-map-tabs{display:flex;gap:0;border-bottom:1px solid #0d1e2e}
+    .mrl-mtab{flex:1;background:transparent;border:none;border-right:1px solid #0d1e2e;color:#3d5a78;font-size:7px;padding:4px 2px;cursor:pointer;letter-spacing:.3px}
+    .mrl-mtab.active{background:rgba(0,212,255,.08);color:#00d4ff}
+    .mrl-mtab:hover{color:#c8dff0;background:rgba(255,255,255,.03)}
+    /* Vessel card */
+    .mrl-vcard{display:block;padding:6px 8px;border-bottom:1px solid #0d1e2e;border-left:3px solid #333;cursor:pointer;transition:background .12s;margin-bottom:2px;border-radius:0 3px 3px 0}
+    .mrl-vcard:hover{background:rgba(0,212,255,.04);border-left-color:#00d4ff}
+    .mrl-vc-top{display:flex;align-items:center;gap:5px;margin-bottom:3px}
+    .mrl-vc-type{font-size:7px;letter-spacing:.3px;flex-shrink:0}
+    .mrl-vc-name{font-size:9px;font-weight:700;color:#c8dff0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mrl-vc-sev{font-size:6.5px;font-weight:700;letter-spacing:.5px;flex-shrink:0}
+    .mrl-vc-mid{display:flex;align-items:center;gap:4px;margin-bottom:2px}
+    .mrl-vc-bot{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+    .mrl-loading{font-size:8px;color:#3d5a78;text-align:center;padding:16px;letter-spacing:1px}
+    .mrl-footer{display:flex;align-items:center;gap:6px;padding:4px 10px;border-top:1px solid #0d1e2e;background:rgba(0,0,0,.3);font-size:7px;color:#2a4060}
+    .mrl-src-strip{color:#2a4060;font-size:6.5px}
   </style>
 </head>
 <body>
@@ -395,7 +430,8 @@
         <button class="rptab" data-rptab="telegram" style="color:#29b6f6;border-bottom-color:#29b6f6">📲 OSINT</button>
         <button class="rptab" data-rptab="hormuz"    style="color:#00d4ff;border-bottom-color:#00d4ff">⚓ HORMUZ</button>
         <button class="rptab" data-rptab="education" style="color:#a0d4ff;border-bottom-color:#a0d4ff">📚 ARMS DB</button>
-        <button class="rptab" data-rptab="tracker"   style="color:#00ff88;border-bottom-color:#00ff88">🎯 TRACKER</button>
+        <button class="rptab" data-rptab="tracker"     style="color:#00ff88;border-bottom-color:#00ff88">🎯 TRACKER</button>
+        <button class="rptab" data-rptab="marine-live" style="color:#00d4ff;border-bottom-color:#00d4ff">🚢 AIS LIVE</button>
       </div>
 
       <!-- TAB: News (GDELT) -->
@@ -1053,6 +1089,9 @@
 
       </div>
 
+      <!-- TAB: AIS Live Marine Activity ──────────────────────────── -->
+      <div class="rp-tab-body" id="rptab-marine-live" style="display:none;padding:0;position:relative;overflow:hidden"></div>
+
       <!-- TAB: India Defence Deal Tracker ──────────────────────── -->
       <div class="rp-tab-body" id="rptab-tracker" style="display:none;padding:0;position:relative;overflow:hidden"></div>
 
@@ -1328,6 +1367,7 @@
   <script src="js/hormuz.js"></script>
   <script src="js/education.js"></script>
   <script src="js/tracker.js"></script>
+  <script src="js/marine.js"></script>
   <script src="js/app.js"></script>
 
   <script>
@@ -1350,8 +1390,9 @@
         if (tab === 'ai'         && !btn._aiInited)        { btn._aiInited        = true; loadAIFeed(); }
         if (tab === 'telegram'   && !btn._tgInited)        { btn._tgInited        = true; loadTelegramPanel(); }
         if (tab === 'hormuz'     && !btn._hormuzInited)    { btn._hormuzInited    = true; HORMUZ.init(); }
-        if (tab === 'education'  && !btn._educationInited) { btn._educationInited = true; EDUCATION.init(); }
-        if (tab === 'tracker'    && !btn._trackerInited)   { btn._trackerInited   = true; TRACKER.init(); }
+        if (tab === 'education'    && !btn._educationInited)  { btn._educationInited  = true; EDUCATION.init(); }
+        if (tab === 'tracker'      && !btn._trackerInited)    { btn._trackerInited    = true; TRACKER.init(); }
+        if (tab === 'marine-live'  && !btn._marineLiveInited) { btn._marineLiveInited = true; MARINE_LIVE.init(); }
       });
     });
 
