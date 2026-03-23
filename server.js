@@ -3138,12 +3138,34 @@ app.get('/api/gpsjam', async (req, res) => {
 
 // ─── /api/marine — AIS vessel positions (multi-source) ───────────────────────
 const CHOKE_POINTS = {
-  hormuz:  { name:'Strait of Hormuz',        lat:26.56, lon:56.25, bbox:[24,55,27,58], color:'#ff4400' },
-  redsea:  { name:'Red Sea / Bab-el-Mandeb', lat:12.58, lon:43.48, bbox:[12,42,30,44], color:'#ff6600' },
-  malacca: { name:'Strait of Malacca',       lat:2.5,   lon:101.5, bbox:[1,99,7,104],  color:'#ffaa00' },
-  suez:    { name:'Suez Canal',              lat:30.5,  lon:32.35, bbox:[29,32,32,33], color:'#ffdd00' },
-  bosporus:{ name:'Bosphorus',               lat:41.1,  lon:29.05, bbox:[40,28,42,30], color:'#aaffaa' },
+  hormuz:      { name:'Strait of Hormuz',         lat:26.56, lon:56.25, bbox:[24,55,27,58],    color:'#ff4400', region:'middle_east' },
+  redsea:      { name:'Red Sea / Bab-el-Mandeb',  lat:12.58, lon:43.48, bbox:[12,42,30,44],    color:'#ff6600', region:'middle_east' },
+  malacca:     { name:'Strait of Malacca',        lat:2.5,   lon:101.5, bbox:[1,99,7,104],     color:'#ffaa00', region:'asia' },
+  suez:        { name:'Suez Canal',               lat:30.5,  lon:32.35, bbox:[29,32,32,33],    color:'#ffdd00', region:'middle_east' },
+  bosporus:    { name:'Bosphorus',                lat:41.1,  lon:29.05, bbox:[40,28,42,30],    color:'#aaffaa', region:'europe' },
+  arabian_sea: { name:'Arabian Sea (India)',       lat:15.0,  lon:67.0,  bbox:[8,60,22,75],    color:'#ff9933', region:'india' },
+  bay_of_bengal:{ name:'Bay of Bengal',           lat:13.5,  lon:86.0,  bbox:[5,80,22,98],    color:'#ff9933', region:'india' },
+  indian_ocean: { name:'Indian Ocean',            lat:8.0,   lon:73.5,  bbox:[2,68,15,80],    color:'#ff9933', region:'india' },
+  andaman:     { name:'Andaman Sea',              lat:12.0,  lon:97.0,  bbox:[8,94,18,100],   color:'#ffaa44', region:'india' },
+  south_china: { name:'South China Sea',          lat:13.0,  lon:114.0, bbox:[5,108,22,120],  color:'#ff4444', region:'asia' },
+  taiwan_str:  { name:'Taiwan Strait',            lat:24.5,  lon:119.5, bbox:[22,118,26,121], color:'#ff4444', region:'asia' },
+  persian_gulf:{ name:'Persian Gulf',             lat:27.0,  lon:51.0,  bbox:[24,48,30,56],   color:'#ff6600', region:'middle_east' },
 };
+
+// MMSI prefix → country mapping (first 3 digits = MID)
+const MMSI_COUNTRY = {
+  '419':'India','412':'China','413':'China','414':'China',
+  '422':'Iran', '432':'Japan','440':'S.Korea','441':'S.Korea',
+  '273':'Russia','338':'USA','366':'USA','367':'USA','368':'USA','369':'USA',
+  '232':'UK','233':'UK','234':'UK','235':'UK',
+  '226':'France','227':'France','228':'France',
+  '503':'Australia','525':'Indonesia','548':'Malaysia',
+  '463':'Pakistan','770':'Bangladesh','378':'Sri Lanka',
+};
+function mmsiToCountry(mmsi) {
+  const s = String(mmsi || '');
+  return MMSI_COUNTRY[s.slice(0,3)] || MMSI_COUNTRY[s.slice(0,2)] || null;
+}
 const marineCache = { data: null, ts: 0 };
 function normVessel(v, sourceName, route) {
   const lat = parseFloat(v.lat ?? v.LAT ?? v.latitude ?? 0);
@@ -3291,35 +3313,99 @@ async function fetchMarineReal() {
     vessels.push({ ...v, confidence: 'unverified', source_count: 1 });
   });
 
-  // ── Iran-specific threat classification ──────────────────────────────────
-  const IRAN_FLAGS = new Set(['ir', 'iran', 'islamic republic of iran']);
+  // ── Enrich flag from MMSI when flag is missing ────────────────────────────
   vessels.forEach(v => {
-    const flag = (v.flag || '').toLowerCase();
-    v.iran_flagged = IRAN_FLAGS.has(flag) || flag.includes('iran');
-    // Naval vessels near Hormuz get critical severity
-    if (/naval|warship|coast.*guard|patrol|corvette|frigate/i.test(v.type)) {
-      v.severity = 'critical';
+    if (!v.flag && v.mmsi) v.flag = mmsiToCountry(v.mmsi) || '';
+    v.country_derived = mmsiToCountry(v.mmsi) || v.flag || 'Unknown';
+  });
+
+  // ── Threat + severity classification ─────────────────────────────────────
+  const IRAN_FLAGS = new Set(['ir', 'iran', 'islamic republic of iran', 'Iran']);
+  const INDIA_FLAGS = new Set(['in', 'india', 'ind', 'India']);
+  const CHINA_FLAGS = new Set(['cn', 'china', 'prc', 'Chinese']);
+  vessels.forEach(v => {
+    const flag = (v.flag || v.country_derived || '').toLowerCase();
+    v.iran_flagged   = IRAN_FLAGS.has(flag) || flag.includes('iran');
+    v.india_flagged  = INDIA_FLAGS.has(flag) || flag.includes('india') || (v.mmsi && String(v.mmsi).startsWith('419'));
+    v.china_flagged  = CHINA_FLAGS.has(flag) || flag.includes('china') || ['412','413','414'].some(p => String(v.mmsi||'').startsWith(p));
+    if (/naval|warship|coast.*guard|patrol|corvette|frigate|destroyer|submarine|ins /i.test(v.name + ' ' + v.type)) {
+      v.vessel_class = 'naval'; v.severity = 'critical';
     } else if (v.iran_flagged) {
-      v.severity = 'high';
+      v.vessel_class = v.vessel_class || 'merchant'; v.severity = 'high';
+    } else if (v.india_flagged) {
+      v.vessel_class = v.vessel_class || 'merchant'; v.severity = 'india';
     } else if (/tanker|lng|crude/i.test(v.type)) {
-      v.severity = 'normal';
+      v.vessel_class = 'tanker'; v.severity = 'normal';
     } else {
-      v.severity = v.severity || 'unknown';
+      v.vessel_class = v.vessel_class || 'merchant'; v.severity = v.severity || 'unknown';
     }
   });
 
-  const sources = [...new Set(rawVessels.map(v => v.source))];
-  const confirmed_count  = vessels.filter(v => v.confidence === 'confirmed').length;
-  const iran_vessels     = vessels.filter(v => v.iran_flagged).length;
-  console.log(`[Marine] ${vessels.length} vessels (${confirmed_count} confirmed) from [${sources.join(', ')}]. Iran-flagged: ${iran_vessels}`);
-  return { vessels, ts: now, count: vessels.length, errors, sources, chokePoints: CHOKE_POINTS, confirmed_count, iran_vessels };
+  const sources         = [...new Set(rawVessels.map(v => v.source))];
+  const confirmed_count = vessels.filter(v => v.confidence === 'confirmed').length;
+  const iran_vessels    = vessels.filter(v => v.iran_flagged).length;
+  const india_vessels   = vessels.filter(v => v.india_flagged).length;
+  const naval_vessels   = vessels.filter(v => v.vessel_class === 'naval').length;
+  // Build per-region counts
+  const byRegion = {};
+  vessels.forEach(v => { const r = v.route || 'Other'; byRegion[r] = (byRegion[r] || 0) + 1; });
+  // Per-country counts (top 10)
+  const byCountry = {};
+  vessels.forEach(v => { const c = v.country_derived || 'Unknown'; byCountry[c] = (byCountry[c] || 0) + 1; });
+
+  console.log(`[Marine] ${vessels.length} vessels (${confirmed_count} confirmed) from [${sources.join(', ')}]. India:${india_vessels} Iran:${iran_vessels} Naval:${naval_vessels}`);
+  return { vessels, ts: now, count: vessels.length, errors, sources, chokePoints: CHOKE_POINTS,
+           confirmed_count, iran_vessels, india_vessels, naval_vessels, byRegion, byCountry };
 }
+
 app.get('/api/marine', async (req, res) => {
   const now = Date.now();
   if (marineCache.data && now - marineCache.ts < 60_000) return res.json(marineCache.data);
   const result = await fetchMarineReal();
   marineCache.data = result; marineCache.ts = now;
   res.json(result);
+});
+
+// ─── /api/marine/country — Filter vessels by country/flag ────────────────────
+app.get('/api/marine/country', async (req, res) => {
+  const code = (req.query.code || req.query.flag || 'IN').toUpperCase();
+  const now = Date.now();
+  if (!marineCache.data || now - marineCache.ts > 60_000) {
+    marineCache.data = await fetchMarineReal();
+    marineCache.ts = now;
+  }
+  const allVessels = marineCache.data?.vessels || [];
+  const COUNTRY_FILTERS = {
+    'IN':  v => v.india_flagged || String(v.mmsi||'').startsWith('419'),
+    'IR':  v => v.iran_flagged,
+    'CN':  v => v.china_flagged,
+    'RU':  v => ['273'].some(p => String(v.mmsi||'').startsWith(p)) || (v.flag||'').toLowerCase().includes('russia'),
+    'US':  v => ['338','366','367','368','369'].some(p => String(v.mmsi||'').startsWith(p)),
+    'ALL': v => true,
+  };
+  const filterFn = COUNTRY_FILTERS[code] || (v => (v.country_derived || '').toUpperCase().startsWith(code));
+  const filtered = allVessels.filter(filterFn);
+  res.json({ vessels: filtered, count: filtered.length, country: code, ts: marineCache.ts });
+});
+
+// ─── /api/marine/region — Filter vessels by strategic region ─────────────────
+app.get('/api/marine/region', async (req, res) => {
+  const region = req.query.name || 'india';
+  const now = Date.now();
+  if (!marineCache.data || now - marineCache.ts > 60_000) {
+    marineCache.data = await fetchMarineReal();
+    marineCache.ts = now;
+  }
+  const allVessels = marineCache.data?.vessels || [];
+  const filtered = region === 'all'
+    ? allVessels
+    : allVessels.filter(v => (v.route||'').toLowerCase().includes(region) ||
+        (CHOKE_POINTS[region] && (() => {
+          const cp = CHOKE_POINTS[region];
+          return v.lat >= cp.bbox[0] && v.lat <= cp.bbox[2] && v.lng >= cp.bbox[1] && v.lng <= cp.bbox[3];
+        })())
+      );
+  res.json({ vessels: filtered, count: filtered.length, region, ts: marineCache.ts });
 });
 
 // ─── /api/hormuz-history — GDELT news + EIA crude price for time periods ─────
@@ -3902,6 +3988,224 @@ setInterval(async () => {
     broadcast('aircraft', resp.data);
   } catch (_) {}
 }, 15_000);
+
+// ── Periodic marine push to WebSocket clients (every 30s) ─────────────────────
+setInterval(async () => {
+  if (!clients.size) return;
+  try {
+    const now = Date.now();
+    if (marineCache.data && now - marineCache.ts < 60_000) {
+      broadcast('marine', marineCache.data);
+      return;
+    }
+    const result = await fetchMarineReal();
+    marineCache.data = result; marineCache.ts = now;
+    broadcast('marine', result);
+  } catch (_) {}
+}, 30_000);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 10B — DEFENCE DEAL TRACKER (India focus)
+// Sources: ANI, Swarajyamag, NDTV, ORF, WIRED, Livefist, The Print, SP Guide
+//          Nitter: Abhijeet Iyer-Mitra, ANI, Sidhant Sibal, Ajai Shukla, LiveFist
+//          Substacks: Geopolitics India + relevant India defence blogs
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const TRACKER_RSS_FEEDS = [
+  { url: 'https://www.aninews.in/rss/india/',                              name: 'ANI News',         country: 'IN' },
+  { url: 'https://swarajyamag.com/feed/',                                  name: 'Swarajya Mag',     country: 'IN' },
+  { url: 'https://feeds.feedburner.com/ndtvnews-india-news',               name: 'NDTV India',       country: 'IN' },
+  { url: 'https://www.orfonline.org/feed/',                                name: 'ORF Online',       country: 'IN' },
+  { url: 'https://www.wired.com/feed/rss',                                 name: 'WIRED',            country: 'US' },
+  { url: 'https://theprint.in/feed/',                                      name: 'The Print',        country: 'IN' },
+  { url: 'https://livefist.blogspot.com/feeds/posts/default',              name: 'Livefist Defence', country: 'IN' },
+  { url: 'https://www.defenseworld.net/feed',                              name: 'Defense World',    country: 'GLOBAL' },
+  { url: 'https://www.financialexpress.com/defence/feed/',                 name: 'FE Defence',       country: 'IN' },
+  { url: 'https://geopoliticsindia.substack.com/feed',                     name: 'Geopolitics India',country: 'IN' },
+  { url: 'https://theaircraftjourney.substack.com/feed',                   name: 'Aircraft Journey', country: 'IN' },
+  { url: 'https://osintindia.substack.com/feed',                           name: 'OSINT India',      country: 'IN' },
+];
+
+const TRACKER_NITTER_ACCOUNTS = [
+  { handle: 'Iyervval',      label: 'Abhijeet Iyer-Mitra', desc: 'Defence analyst · IDSA · India strategic policy' },
+  { handle: 'ANI',           label: 'ANI News',            desc: 'Asian News International · India breaking news' },
+  { handle: 'sidhant',       label: 'Sidhant Sibal',       desc: 'India · Foreign Policy · Breaking News' },
+  { handle: 'ajaishukla',    label: 'Ajai Shukla',         desc: 'Business Standard · Indian defence journalist' },
+  { handle: 'LiveFist',      label: 'Livefist / Shiv Aroor', desc: 'India defence correspondent · Shiv Aroor' },
+  { handle: 'rajfortyseven', label: 'Rajkumar Singh',      desc: 'Indian defence analyst · Strategic affairs' },
+  { handle: 'AdityaRajKaul', label: 'Aditya Raj Kaul',    desc: 'India · Kashmir · Defence · Geopolitics' },
+  { handle: 'prasanto',      label: 'Prasanto Kumar Roy',  desc: 'India tech policy · Cyberdefence' },
+];
+
+// ── Stage classification via keyword matching ──────────────────────────────
+const TRACKER_STAGE_RULES = [
+  { stage: 'inducted',  keywords: /\b(inducted|induction|commissioned|enters service|handed over|joins.*(?:navy|air force|army)|operational.*deployment|in service)\b/i },
+  { stage: 'production',keywords: /\b(serial production|manufacturing|rolling out|deliveries|HAL delivering|production order|mass production|production line)\b/i },
+  { stage: 'contract',  keywords: /\b(contract signed|contract awarded|deal signed|purchase agreement|MoU signed|MOU signed|acquisition approved|order placed|procured|letter of intent|LoI|signed.*deal|awarded.*contract)\b/i },
+  { stage: 'prototype', keywords: /\b(prototype|first flight|maiden flight|demonstrator|technology demonstrator|first test|first prototype|rolls out|rollout|unveiled)\b/i },
+  { stage: 'trials',    keywords: /\b(trial|trials|user evaluation|field test|evaluation|assessment|tested|sea trial|flight trial|user trial|acceptance test|testing phase)\b/i },
+  { stage: 'planned',   keywords: /\b(RFP|request for proposal|tender|DAC approval|Defence Acquisition Council|budget allocated|approved.*acquisition|long-term plan|LTIPP|capital acquisition)\b/i },
+  { stage: 'concept',   keywords: /\b(RFI|request for information|expression of interest|EOI|AoN|acceptance of necessity|feasibility study|exploring|considering.*acquisition|proposed.*induction|conceptual)\b/i },
+];
+
+// ── Domain classification ──────────────────────────────────────────────────
+const TRACKER_DOMAIN_RULES = [
+  { domain: 'air',       keywords: /\b(aircraft|fighter|jet|Tejas|AMCA|Rafale|helicopter|UAV|drone|UCAV|air force|IAF|MiG|Su-30|F-35|transport aircraft|AWACS|AEW)\b/i },
+  { domain: 'naval',     keywords: /\b(submarine|frigate|destroyer|carrier|warship|corvette|naval|Navy|INS|P75|P17|ship|vessel|maritime|SSBN|SSN|SSK|destroyer|landing ship)\b/i },
+  { domain: 'army',      keywords: /\b(tank|artillery|howitzer|Arjun|infantry|armoured|APC|MRAP|rifle|carbine|BMP|IFV|field gun|rocket launcher|ATGM|anti-tank|Army)\b/i },
+  { domain: 'missiles',  keywords: /\b(missile|BrahMos|Astra|Akash|QRSAM|MRSAM|LRSAM|Agni|Prithvi|cruise missile|ballistic|hypersonic|anti-ship|air-to-air|surface-to-air|SAM|ATGM|torpedo)\b/i },
+  { domain: 'space',     keywords: /\b(satellite|ISRO|GSAT|MILSAT|reconnaissance satellite|spy satellite|space|launch vehicle|PSLV|GSLV|orbit|SpaceDEX|space defence)\b/i },
+  { domain: 'cyber',     keywords: /\b(cyber|electronic warfare|EW|SIGINT|COMINT|information warfare|cyberattack|hack|jamming|GPS jam|electronic countermeasure|ECM)\b/i },
+  { domain: 'electronics',keywords: /\b(radar|sonar|sensor|AESA|EO|electro-optical|surveillance system|C4ISR|command and control|network centric|communication system|BMS|battlefield management)\b/i },
+];
+
+// ── India defence keyword filter ───────────────────────────────────────────
+const TRACKER_INDIA_KW = /\b(India|Indian|DRDO|HAL|BEL|BEML|Tejas|AMCA|BrahMos|Arjun|INS|IAF|Indian Army|Indian Navy|Indian Air Force|Defence Research|DPP|DAP|Atmanirbhar|Make in India.*defence|defence.*India|Ministry of Defence|MoD India|DPEPP|iDEX|ADA|GRSE|MDL|OFB|OFBoard|BHEL.*defence|TATA.*defence|Mahindra.*defence|L&T.*defence|Adani.*defence)\b/i;
+
+function classifyTrackerItem(title, desc) {
+  const text = `${title} ${desc}`;
+  let stage = 'concept';
+  for (const rule of TRACKER_STAGE_RULES) {
+    if (rule.keywords.test(text)) { stage = rule.stage; break; }
+  }
+  let domain = 'general';
+  for (const rule of TRACKER_DOMAIN_RULES) {
+    if (rule.keywords.test(text)) { domain = rule.domain; break; }
+  }
+  return { stage, domain };
+}
+
+// ── Extract programme name heuristically ──────────────────────────────────
+function extractProgramme(title) {
+  const KW = /\b(Tejas|AMCA|FGFA|MRFA|BrahMos|Akash|Astra|QRSAM|MRSAM|LRSAM|Agni|Prithvi|K-4|K-15|Arjun|Zulfiquar|Pinaka|ATAGS|Dhanush|CAESAR|M777|AH-64|Chinook|Apache|Rafale|F-35|Su-30|MiG-21|P8I|C-17|C-130|CH-47|Seahawk|MH-60|P17A|P75I|SSBN|S3|S4|INS\s+\w+|AESA\s+radar|Uttam|EL\/M|Barak|Iron Dome|HIMARS|NASAMS|S-400|S-500|Igla-S|Igla|VSHORADS|SPIKE|MILAN|Hermes|Heron|Searcher|Nishant|Rustom|TAPAS|ARCHER|MALE)\b/i;
+  const m = title.match(KW);
+  return m ? m[0] : null;
+}
+
+// ── Groq classification helper (optional enrichment) ──────────────────────
+async function groqClassifyBatch(items) {
+  const _gk = process.env.GROQ_API_KEY || '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';
+  if (!_gk || items.length === 0) return items;
+  const headlines = items.slice(0, 20).map((it, i) => `${i + 1}. ${it.title}`).join('\n');
+  const prompt = `You are an Indian defence procurement analyst. For each numbered headline, respond with JSON array (same order):
+[{"stage":"concept|planned|trials|prototype|contract|production|inducted","domain":"air|naval|army|missiles|space|cyber|electronics|general","programme":"extracted programme name or null","confidence":"high|medium|low"}]
+Headlines:\n${headlines}\nRespond ONLY with the JSON array.`;
+  try {
+    const r = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+      model: 'llama-3.1-8b-instant',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 800,
+      temperature: 0.1,
+    }, { headers: { Authorization: `Bearer ${_gk}`, 'Content-Type': 'application/json' }, timeout: 12_000 });
+    const raw = r.data?.choices?.[0]?.message?.content || '[]';
+    const arr = JSON.parse(raw.match(/\[[\s\S]*\]/)?.[0] || '[]');
+    return items.map((it, i) => {
+      const g = arr[i] || {};
+      return { ...it, stage: g.stage || it.stage, domain: g.domain || it.domain, programme: g.programme || it.programme, confidence: g.confidence || 'medium' };
+    });
+  } catch (_) { return items; }
+}
+
+const trackerCache = { data: null, ts: 0 };
+const TRACKER_TTL = 15 * 60_000; // 15 min
+
+app.get('/api/tracker', async (req, res) => {
+  const now = Date.now();
+  if (trackerCache.data && now - trackerCache.ts < TRACKER_TTL) return res.json(trackerCache.data);
+
+  const allItems = [];
+
+  // 1️⃣ RSS feeds (parallel)
+  await Promise.allSettled(TRACKER_RSS_FEEDS.map(f =>
+    axios.get(f.url, {
+      timeout: 8_000,
+      headers: { 'User-Agent': 'SpymeterOSINT/1.0', Accept: 'application/rss+xml,text/xml,*/*' },
+      responseType: 'text',
+    }).then(r => {
+      const parsed = parseRSS(r.data, f.name);
+      for (const item of parsed) {
+        if (!TRACKER_INDIA_KW.test(`${item.title} ${item.description}`)) continue;
+        const { stage, domain } = classifyTrackerItem(item.title, item.description || '');
+        const programme = extractProgramme(item.title);
+        allItems.push({
+          title:      item.title,
+          desc:       (item.description || '').slice(0, 200),
+          url:        item.link,
+          source:     f.name,
+          country:    f.country,
+          pub:        item.pubDate ? item.pubDate.toISOString() : null,
+          stage,
+          domain,
+          programme,
+          confidence: 'medium',
+          type:       'rss',
+        });
+      }
+    }).catch(() => {})
+  ));
+
+  // 2️⃣ Nitter feeds (parallel, best-effort)
+  const nitterResults = await Promise.allSettled(
+    TRACKER_NITTER_ACCOUNTS.map(acc => _fetchNitterFeed(acc.handle).then(posts => ({ acc, posts })))
+  );
+  for (const r of nitterResults) {
+    if (r.status !== 'fulfilled') continue;
+    const { acc, posts } = r.value;
+    for (const post of posts) {
+      if (!TRACKER_INDIA_KW.test(post.text)) continue;
+      const { stage, domain } = classifyTrackerItem(post.text, '');
+      const programme = extractProgramme(post.text);
+      allItems.push({
+        title:      post.text.slice(0, 200),
+        desc:       '',
+        url:        post.link,
+        source:     acc.label,
+        country:    'IN',
+        pub:        post.date || null,
+        stage,
+        domain,
+        programme,
+        confidence: 'medium',
+        type:       'social',
+        handle:     acc.handle,
+      });
+    }
+  }
+
+  // Deduplicate by URL + title similarity
+  const seen = new Set();
+  const unique = allItems.filter(it => {
+    const key = it.url || it.title.slice(0, 60);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Sort newest first
+  unique.sort((a, b) => {
+    const ta = a.pub ? new Date(a.pub).getTime() : 0;
+    const tb = b.pub ? new Date(b.pub).getTime() : 0;
+    return tb - ta;
+  });
+
+  // Optional Groq enrichment on first 20 items
+  const enriched = await groqClassifyBatch(unique.slice(0, 50));
+  const rest = unique.slice(50);
+  const final = [...enriched, ...rest].slice(0, 120);
+
+  // Stage stats
+  const byStage  = {};
+  const byDomain = {};
+  for (const it of final) {
+    byStage[it.stage]   = (byStage[it.stage]   || 0) + 1;
+    byDomain[it.domain] = (byDomain[it.domain] || 0) + 1;
+  }
+
+  const result = { items: final, byStage, byDomain, count: final.length, ts: now, source: 'ANI · Swarajya · NDTV · ORF · WIRED · Livefist · ThePrint + Nitter' };
+  trackerCache.data = result;
+  trackerCache.ts   = now;
+  res.json(result);
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SECTION 11 — START SERVER

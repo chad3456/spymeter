@@ -32,7 +32,14 @@ const APP = (() => {
       ws.onmessage = ({ data }) => {
         try {
           const msg = JSON.parse(data);
-          if (msg.type === 'aircraft') { AIRCRAFT.handleWSUpdate(msg.data); if (globe) updateGlobePoints(); }
+          if (msg.type === 'aircraft') {
+            AIRCRAFT.handleWSUpdate(msg.data);
+            if (globe) updateGlobePoints();
+          }
+          if (msg.type === 'marine') {
+            if (window.MARINE_LAYER?._wsUpdate) MARINE_LAYER._wsUpdate(msg.data);
+            if (window.MARINE_LIVE?.handleWSUpdate) MARINE_LIVE.handleWSUpdate(msg.data);
+          }
         } catch (_) {}
       };
       ws.onclose = () => { EFFECTS.setWsStatus('reconnecting'); setTimeout(connect, 4000); };
@@ -658,8 +665,33 @@ const MARINE_LAYER = (() => {
       });
     }).catch(() => {});
   }
+  // Accept WebSocket push — re-render without a new fetch
+  function _wsUpdate(d) {
+    if (!enabled || !map || !d?.vessels) return;
+    markers.forEach(m => map.removeLayer(m)); markers = [];
+    (d.vessels || []).forEach(v => {
+      const ic = VESSEL_ICONS[v.type] || VESSEL_ICONS.cargo;
+      const icon = L.divIcon({
+        html: `<div style="font-size:${ic.size}px;color:${ic.color};text-shadow:0 0 6px ${ic.color};transform:rotate(${v.hdg||0}deg)">${ic.emoji}</div>`,
+        className:'', iconSize:[20,20], iconAnchor:[10,10]
+      });
+      const col = v.severity==='critical'?'#ff2222': v.severity==='high'?'#ff8800': v.severity==='india'?'#ff9933':'#888';
+      const popup = `<div style="font-family:monospace;font-size:9px;background:#07090e;border:1px solid ${col};padding:6px 10px;border-radius:3px">
+        <b style="color:${ic.color}">${ic.emoji} ${v.name}</b><br>
+        Type: <span style="color:${ic.color}">${v.type.toUpperCase()}</span><br>
+        Route: ${v.route||'—'}<br>Cargo: <span style="color:#ffaa00">${v.cargo||'—'}</span><br>
+        Speed: ${v.speed||0} kts · HDG: ${v.hdg||0}° ${v.flag||''}<br>
+        Confidence: <b style="color:${v.confidence==='confirmed'?'#00ff88':'#ffaa00'}">${v.confidence||'?'}</b>
+        ${v.india_flagged?'<br><span style="color:#ff9933">🇮🇳 INDIA FLAGGED</span>':''}
+      </div>`;
+      const mk = L.marker([v.lat, v.lng], { icon });
+      mk.bindPopup(popup, { className:'leaflet-popup-dark', maxWidth:200 });
+      mk.addTo(map); markers.push(mk);
+    });
+  }
   return {
     init(m) { map = m; },
+    _wsUpdate,
     setEnabled(on) {
       enabled = on;
       if (on) { _fetchAndRender(); refreshTimer = setInterval(_fetchAndRender, 60_000); }
