@@ -2374,6 +2374,7 @@ const MARKET_TICKERS = [
   { sym:'^DJI',     label:'Dow Jones',     flag:'🇺🇸', group:'us' },
   { sym:'^IXIC',    label:'Nasdaq',        flag:'🇺🇸', group:'us' },
   { sym:'^VIX',     label:'VIX Fear',      flag:'🇺🇸', group:'us' },
+  { sym:'VOO',      label:'Vanguard S&P',  flag:'🏦',  group:'us' },
   // India
   { sym:'^NSEI',    label:'Nifty 50',      flag:'🇮🇳', group:'india' },
   { sym:'^BSESN',   label:'Sensex',        flag:'🇮🇳', group:'india' },
@@ -2414,6 +2415,15 @@ const MARKET_TICKERS = [
   { sym:'BTC-USD',  label:'Bitcoin',       flag:'₿',  group:'crypto' },
   { sym:'ETH-USD',  label:'Ethereum',      flag:'Ξ',  group:'crypto' },
   { sym:'XRP-USD',  label:'XRP',           flag:'🔷', group:'crypto' },
+  // FX — currencies vs USD
+  { sym:'INR=X',    label:'USD/INR',       flag:'🇮🇳', group:'fx' },
+  { sym:'EURUSD=X', label:'EUR/USD',       flag:'🇪🇺', group:'fx' },
+  { sym:'GBPUSD=X', label:'GBP/USD',       flag:'🇬🇧', group:'fx' },
+  { sym:'JPY=X',    label:'USD/JPY',       flag:'🇯🇵', group:'fx' },
+  { sym:'CNY=X',    label:'USD/CNY',       flag:'🇨🇳', group:'fx' },
+  { sym:'RUB=X',    label:'USD/RUB',       flag:'🇷🇺', group:'fx' },
+  { sym:'AUD=X',    label:'USD/AUD',       flag:'🇦🇺', group:'fx' },
+  { sym:'CAD=X',    label:'USD/CAD',       flag:'🇨🇦', group:'fx' },
 ];
 
 async function fetchYahooQuote(sym) {
@@ -2501,6 +2511,47 @@ app.get('/api/market-news', async (req, res) => {
   const data = { articles: all.slice(0, 40), ts: now };
   cache.marketNews = { data, ts: now };
   res.json(data);
+});
+
+// ─── /api/category-news — GDELT-powered category news (no API key required) ───
+const CAT_QUERIES = {
+  conflict:      'war military attack strike bomb conflict casualties kill battle wounded',
+  political:     'election politics government coup sanctions diplomat UN NATO summit treaty',
+  environmental: 'earthquake flood wildfire drought hurricane typhoon tsunami climate pollution',
+  economic:      'economy inflation recession bank sanctions trade tariff GDP currency crisis',
+  disaster:      'earthquake flood tsunami wildfire hurricane disaster emergency evacuation',
+};
+const _catNewsCache = {};
+const CAT_NEWS_TTL = 5 * 60_000; // 5 min
+
+app.get('/api/category-news', async (req, res) => {
+  const cats = (req.query.cats || 'conflict').split(',').map(c => c.trim()).filter(c => CAT_QUERIES[c]);
+  if (!cats.length) return res.status(400).json({ error: 'Unknown category' });
+  const cacheKey = cats.sort().join(',');
+  const now = Date.now();
+  if (_catNewsCache[cacheKey] && now - _catNewsCache[cacheKey].ts < CAT_NEWS_TTL)
+    return res.json(_catNewsCache[cacheKey].data);
+
+  const query = cats.map(c => CAT_QUERIES[c]).join(' ');
+  try {
+    const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: { query, mode: 'artlist', maxrecords: 25, format: 'json', sort: 'datedesc', timespan: '6h' },
+      timeout: 10_000,
+    });
+    const articles = (r.data?.articles || []).map(a => ({
+      title:  a.title  || '',
+      url:    a.url    || '',
+      source: a.domain || '',
+      date:   a.seendate || '',
+      tone:   a.tone ? parseFloat(a.tone).toFixed(1) : '0',
+    }));
+    const data = { articles, cats, ts: now, source: 'GDELT v2' };
+    _catNewsCache[cacheKey] = { data, ts: now };
+    res.json(data);
+  } catch (err) {
+    if (_catNewsCache[cacheKey]) return res.json(_catNewsCache[cacheKey].data);
+    res.status(503).json({ error: 'Category news unavailable', detail: err.message });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
