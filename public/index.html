@@ -2481,6 +2481,7 @@
       });
 
       // Reset body sections
+      $id('cd-ai-brief').innerHTML    = '<div class="cd-loading">⟳ Generating brief…</div>';
       $id('cd-econ-grid').innerHTML   = '<div class="cd-loading">⟳ Loading…</div>';
       $id('cd-defence-grid').innerHTML = '<div class="cd-loading">⟳ Loading…</div>';
       $id('cd-defence-news').innerHTML = '<div class="cd-loading">⟳ Fetching defence news…</div>';
@@ -2643,6 +2644,14 @@
         $id('cd-stability-pill').style.color = '#ff4444';
         $id('cd-news').innerHTML = `<div class="cd-loading" style="color:#ff4444">CII unavailable — ${err.message}</div>`;
       }
+
+      // ── AI Intelligence Brief (async, independent of CII) ──
+      fetch(`/api/ai-intel/${encodeURIComponent(countryName)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          $id('cd-ai-brief').textContent = d?.brief || 'Brief unavailable';
+        })
+        .catch(() => { $id('cd-ai-brief').innerHTML = '<div class="cd-loading" style="color:#ff4444">Brief unavailable</div>'; });
     }
 
     function search(name) {
@@ -2772,6 +2781,12 @@
 
     <!-- ── Scrollable body ───────────────────────────── -->
     <div id="cd-body">
+
+      <!-- AI Intel Brief -->
+      <div class="cd-section">
+        <div class="cd-section-hdr">🤖 AI INTELLIGENCE BRIEF <span class="cd-badge cd-badge-live">● GROQ</span></div>
+        <div id="cd-ai-brief" style="font-size:11px;line-height:1.7;color:var(--text-hi);padding:4px 0;white-space:pre-wrap;"><div class="cd-loading">⟳ Generating brief…</div></div>
+      </div>
 
       <!-- Economic -->
       <div class="cd-section">

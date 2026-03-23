@@ -3738,7 +3738,7 @@ app.get('/api/status', (req, res) => {
 });
 
 // ─── /api/narrate — Groq TTS narration proxy ──────────────────────────────────
-const GROQ_KEY = process.env.GROQ_API_KEY || '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';
+const GROQ_KEY = process.env.GROQ_API_KEY;
 app.post('/api/narrate', express.json(), async (req, res) => {
   const text = (req.body?.text || '').slice(0, 600).trim();
   if (!text) return res.status(400).json({ error: 'text required' });
@@ -4084,7 +4084,7 @@ function extractProgramme(title) {
 
 // ── Groq classification helper (optional enrichment) ──────────────────────
 async function groqClassifyBatch(items) {
-  const _gk = process.env.GROQ_API_KEY || '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';
+  const _gk = process.env.GROQ_API_KEY;
   if (!_gk || items.length === 0) return items;
   const headlines = items.slice(0, 20).map((it, i) => `${i + 1}. ${it.title}`).join('\n');
   const prompt = `You are an Indian defence procurement analyst. For each numbered headline, respond with JSON array (same order):
@@ -4205,6 +4205,59 @@ app.get('/api/tracker', async (req, res) => {
   trackerCache.data = result;
   trackerCache.ts   = now;
   res.json(result);
+});
+
+// ─── /api/ai-intel/:country — GROQ AI country intelligence brief ──────────────
+const aiIntelCache = {};
+const AI_INTEL_TTL = 10 * 60_000; // 10 min
+
+app.get('/api/ai-intel/:country', async (req, res) => {
+  const country = req.params.country;
+  const lang = (req.query.lang || 'en').toLowerCase();
+  const now = Date.now();
+  const cacheKey = `${country}_${lang}`;
+
+  if (aiIntelCache[cacheKey] && now - aiIntelCache[cacheKey].ts < AI_INTEL_TTL)
+    return res.json(aiIntelCache[cacheKey].data);
+
+  if (!process.env.GROQ_API_KEY)
+    return res.status(503).json({ error: 'GROQ_API_KEY not configured' });
+
+  const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const systemPrompt = `You are a senior intelligence analyst providing comprehensive country situation briefs. Current date: ${dateStr}. Provide geopolitical context appropriate for the current date.
+Write a concise intelligence brief for the requested country covering:
+1. Current Situation - what is happening right now
+2. Military & Security Posture
+3. Key Risk Factors
+4. Regional Context
+5. Outlook & Watch Items
+Rules:
+- Be specific and analytical
+- 4-5 paragraphs, 250-350 words
+- No speculation beyond what data supports
+- Use plain language, not jargon
+- If a context snapshot is provided, explicitly reflect each non-zero signal category in the brief${lang === 'fr' ? '\n- IMPORTANT: You MUST respond ENTIRELY in English language.' : ''}`;
+
+  try {
+    const r = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Provide an intelligence brief for: ${country}` },
+      ],
+      max_tokens: 600,
+      temperature: 0.4,
+    }, { headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 20_000 });
+
+    const brief = r.data?.choices?.[0]?.message?.content?.trim() || 'Brief unavailable';
+    const result = { country, brief, model: r.data?.model, ts: now };
+    aiIntelCache[cacheKey] = { data: result, ts: now };
+    res.json(result);
+  } catch (err) {
+    if (aiIntelCache[cacheKey]) return res.json(aiIntelCache[cacheKey].data);
+    res.status(503).json({ error: 'AI intel unavailable', detail: err.message });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
