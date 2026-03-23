@@ -638,9 +638,13 @@ const APP = (() => {
     document.getElementById('reset-btn')?.addEventListener('click', resetView);
 
     // Close mobile panels when tapping map
-    document.getElementById('map')?.addEventListener('click', () => {
+    document.getElementById('map')?.addEventListener('click', e => {
       document.getElementById('left-panel')?.classList.remove('mob-open');
       document.getElementById('right-panel')?.classList.remove('mob-open');
+      // Intel brief: auto-trigger reverse geocode on map click when panel is open
+      if (window.INTEL_BRIEF && window._intelAutoTrigger) {
+        window.INTEL_BRIEF._onMapClick?.(e);
+      }
     });
 
     initWebSocket();

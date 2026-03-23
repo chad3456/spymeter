@@ -4097,6 +4097,127 @@ app.get('/api/polymarket', (req, res) => {
   res.json({ markets: [], ts: Date.now(), count: 0, status: 'unavailable', source: 'Polymarket agent not configured' });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 12 — AI INTEL BRIEF  (Groq llama-3.1-8b-instant + GDELT context)
+// Endpoint : GET /api/intel-brief?country=Ukraine&lang=en|fr
+// Prompt   : senior intelligence analyst brief — 5-section, 250-350 words
+// Cache    : 30 min per country+lang
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const intelBriefCache = {};
+app.get('/api/intel-brief', async (req, res) => {
+  const country = (req.query.country || '').trim().slice(0, 80);
+  const lang    = (req.query.lang || 'en').toLowerCase() === 'fr' ? 'fr' : 'en';
+  if (!country) return res.status(400).json({ error: 'country parameter required' });
+
+  const cacheKey = `${country.toLowerCase()}:${lang}`;
+  const now = Date.now();
+  if (intelBriefCache[cacheKey] && now - intelBriefCache[cacheKey].ts < 30 * 60_000)
+    return res.json({ ...intelBriefCache[cacheKey].data, cached: true });
+
+  // ── 1. Fetch GDELT articles for context snapshot ─────────────────────────
+  let articles = [], contextSnap = {};
+  try {
+    const gr = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: { query: `${country} conflict military security politics`, mode: 'artlist',
+                maxrecords: 20, format: 'json', sort: 'datedesc', timespan: '72h' },
+      timeout: 9_000,
+    });
+    articles = (gr.data?.articles || []).map(a => ({
+      title:  a.title  || '',
+      url:    a.url    || '',
+      source: a.domain || '',
+      tone:   a.tone   ? parseFloat(a.tone) : 0,
+      date:   a.seendate || '',
+    }));
+    const avgTone = articles.length
+      ? (articles.reduce((s, a) => s + a.tone, 0) / articles.length).toFixed(1)
+      : '0';
+    contextSnap = {
+      article_count:     articles.length,
+      avg_tone:          Number(avgTone),
+      conflict_signals:  articles.filter(a => /conflict|war|attack|strike|military|troops|missile|coup|battle/i.test(a.title)).length,
+      diplomacy_signals: articles.filter(a => /summit|treaty|talks|sanction|diplomatic|ceasefire|negotiat/i.test(a.title)).length,
+      economic_signals:  articles.filter(a => /economy|gdp|inflation|sanction|trade|oil|gas|price/i.test(a.title)).length,
+      protest_signals:   articles.filter(a => /protest|unrest|riot|demonstration|strike|civil/i.test(a.title)).length,
+      top_headlines:     articles.slice(0, 6).map(a => a.title).filter(Boolean),
+    };
+  } catch (_) {
+    contextSnap = { article_count: 0, avg_tone: 0, conflict_signals: 0, diplomacy_signals: 0, economic_signals: 0, protest_signals: 0, top_headlines: [] };
+  }
+
+  // ── 2. Build prompt (exact template provided) ─────────────────────────────
+  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const systemPrompt = `You are a senior intelligence analyst providing comprehensive country situation briefs. Current date: ${dateStr}. Provide geopolitical context appropriate for the current date.
+Write a concise intelligence brief for the requested country covering:
+1. Current Situation - what is happening right now
+2. Military & Security Posture
+3. Key Risk Factors
+4. Regional Context
+5. Outlook & Watch Items
+Rules:
+- Be specific and analytical
+- 4-5 paragraphs, 250-350 words
+- No speculation beyond what data supports
+- Use plain language, not jargon
+- If a context snapshot is provided, explicitly reflect each non-zero signal category in the brief${lang === 'fr' ? '\n- IMPORTANT: You MUST respond ENTIRELY in French language.' : ''}`;
+
+  const signalLines = Object.entries(contextSnap)
+    .filter(([k, v]) => k !== 'top_headlines' && k !== 'article_count' && Number(v) !== 0)
+    .map(([k, v]) => `  ${k}: ${v}`)
+    .join('\n');
+  const headlineLines = (contextSnap.top_headlines || []).map((h, i) => `${i + 1}. ${h}`).join('\n');
+  const userMsg = `Country: ${country}\n\nContext snapshot (GDELT 72h, ${contextSnap.article_count} articles):\n${signalLines || '  no signals'}\n\nTop headlines:\n${headlineLines || '  none'}`;
+
+  // ── 3. Call Groq ──────────────────────────────────────────────────────────
+  let brief = null;
+  try {
+    const gr = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: userMsg },
+      ],
+      max_tokens: 600,
+      temperature: 0.30,
+    }, {
+      headers: { Authorization: `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+      timeout: 18_000,
+    });
+    brief = gr.data?.choices?.[0]?.message?.content?.trim() || null;
+  } catch (e) {
+    console.error('[IntelBrief] Groq error:', e.message);
+  }
+
+  if (!brief) {
+    brief = `Intelligence brief for ${country} is temporarily unavailable.\n\nGDELT signals: ${contextSnap.article_count} articles over 72h | conflict: ${contextSnap.conflict_signals} | diplomacy: ${contextSnap.diplomacy_signals} | economic: ${contextSnap.economic_signals}\n\nPlease retry or check GROQ_API_KEY configuration.`;
+  }
+
+  const result = { country, brief, articles: articles.slice(0, 8), context: contextSnap, ts: now, lang };
+  intelBriefCache[cacheKey] = { data: result, ts: now };
+  res.json({ ...result, cached: false });
+});
+
+// ─── /api/reverse-geo — Nominatim reverse geocode (for map-click country detect)
+app.get('/api/reverse-geo', async (req, res) => {
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng);
+  if (isNaN(lat) || isNaN(lng)) return res.json({});
+  try {
+    const r = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+      params: { lat, lon: lng, format: 'json', addressdetails: 1, zoom: 3 },
+      headers: { 'User-Agent': 'SpymeterOSINT/1.0 osint-dashboard' },
+      timeout: 5_000,
+    });
+    const addr = r.data?.address || {};
+    res.json({
+      country:      addr.country      || r.data?.name || '',
+      country_code: (addr.country_code || '').toUpperCase(),
+      display:      r.data?.display_name || '',
+    });
+  } catch (_) { res.json({}); }
+});
+
 // ─── /api/geocode-capital — OSM Nominatim geocoding ──────────────────────────
 const _geoCache = {};
 app.get('/api/geocode-capital', async (req, res) => {
