@@ -246,6 +246,9 @@ const APP = (() => {
 
     globe.width(container.offsetWidth).height(container.offsetHeight);
 
+    // Pass globe reference to ATROCITIES module
+    if (window.ATROCITIES) ATROCITIES.setGlobe(globe);
+
     // Force a fresh aircraft fetch when globe opens, then start animation
     AIRCRAFT.refresh().then(() => { updateGlobePoints(); startGlobeAnimation(); })
                       .catch(() => { updateGlobePoints(); startGlobeAnimation(); });
@@ -403,17 +406,39 @@ const APP = (() => {
       .hexSideColor(d => `rgba(255,${d.sumWeight > 10 ? 60 : 140},0,0.25)`)
       .hexLabel(d => `${d.points.length} aircraft`);
 
-    // Military base rings
-    const rings = MILITARY.getBases().map(b => ({
+    // Military base rings + atrocity rings (merged)
+    _applyGlobeRings();
+
+    // Atrocity labels on globe (critical events only)
+    _applyGlobeLabels();
+  }
+
+  // Separated so ATROCITIES can call it after data loads
+  function _applyGlobeRings() {
+    if (!globe) return;
+    const milRings = MILITARY.getBases().map(b => ({
       lat: b.lat, lng: b.lng,
       maxR: 1.2, propagationSpeed: 2.0,
       repeatPeriod: 1000 + Math.random()*600,
       color: () => `rgba(255,153,0,${Math.random()*0.7+0.15})`,
     }));
+    const atrRings = window.ATROCITIES?.getGlobeRings() || [];
+    const rings    = [...milRings, ...atrRings];
     globe.ringsData(rings).ringLat(d=>d.lat).ringLng(d=>d.lng)
       .ringMaxRadius(d=>d.maxR).ringColor(d=>d.color)
       .ringPropagationSpeed(d=>d.propagationSpeed)
       .ringRepeatPeriod(d=>d.repeatPeriod);
+  }
+
+  function _applyGlobeLabels() {
+    if (!globe) return;
+    const labels = window.ATROCITIES?.getGlobeLabels() || [];
+    if (!labels.length) { globe.labelsData([]); return; }
+    globe.labelsData(labels)
+      .labelLat(d => d.lat).labelLng(d => d.lng)
+      .labelText(d => d.text).labelColor(d => d.color)
+      .labelSize(d => d.size || 0.4).labelDotRadius(d => d.dotRadius || 0.3)
+      .labelAltitude(0.005);
   }
 
   /* ── Globe conflict arcs (missile/drone strike trails) ── */
@@ -600,6 +625,14 @@ const APP = (() => {
     initLayerControls();
     initViewModes();
 
+    // Expose globe ring updater so ATROCITIES module can trigger it
+    window.APP_updateGlobeRings = () => {
+      if (globe && document.getElementById('globe-container')?.style.display !== 'none') {
+        _applyGlobeRings();
+        _applyGlobeLabels();
+      }
+    };
+
     document.getElementById('nv-btn')?.addEventListener('click', EFFECTS.toggleNightVision);
     document.getElementById('crt-btn')?.addEventListener('click', toggleCRT);
     document.getElementById('reset-btn')?.addEventListener('click', resetView);
@@ -618,7 +651,7 @@ const APP = (() => {
     SIDEBAR.addFeedItem('satellite', '🌍 SPYMETER online — OpenSky ADS-B + CelesTrak TLE active');
     SIDEBAR.addFeedItem('aircraft',  '✈ Fetching live ADS-B from OpenSky Network…');
     SIDEBAR.addFeedItem('military',  `⬡ ${MILITARY.getBases().length} military bases loaded | India nuclear sites visible`);
-    SIDEBAR.addFeedItem('satellite', '⚔ New layers: ⚓ MARINE · 🆘 CRISES · 🛡 CYBER · 🖥 DC · 🌊 SUB available');
+    SIDEBAR.addFeedItem('satellite', '⚔ New layers: ⚓ MARINE · 🆘 ATROCITIES · 🛡 CYBER · 🖥 DC · 🌊 SUB — 3D GLOBE toggle top-center');
   }
 
   document.addEventListener('DOMContentLoaded', boot);
@@ -700,37 +733,18 @@ const MARINE_LAYER = (() => {
   };
 })();
 
-/* ── HAPI Humanitarian Crisis Layer ────────────────────────
-   ACLED/UNOCHA events via HAPI HumanData API               */
+/* ── HAPI Humanitarian Crisis Layer ─────────────────────────
+   Delegates to ATROCITIES module (full HDX HAPI + Globe.gl)  */
 const HAPI_LAYER = (() => {
-  let map = null, enabled = false, markers = [];
-  function _fetchAndRender() {
-    if (!enabled || !map) return;
-    fetch('/api/hapi-events').then(r => r.json()).then(d => {
-      markers.forEach(m => map.removeLayer(m)); markers = [];
-      (d.events || []).forEach(ev => {
-        const sev = ev.severity || 'medium';
-        const col = sev==='critical'?'#ff0000': sev==='high'?'#ff8800': '#ffaa00';
-        const r   = sev==='critical'?14: sev==='high'?10:7;
-        const circle = L.circleMarker([ev.lat, ev.lng], {
-          radius:r, color:col, fillColor:col, fillOpacity:0.2, weight:1.5, opacity:0.8
-        });
-        const deaths = ev.fatalities ? `<br>Deaths: <b style="color:#ff4444">${ev.fatalities.toLocaleString()}</b>` : '';
-        circle.bindPopup(`<div style="font-family:monospace;font-size:9px;background:#07090e;border:1px solid ${col};padding:6px 10px;border-radius:3px">
-          <b style="color:${col}">🆘 ${ev.country||''}</b><br>${ev.desc||''}${deaths}
-          <br><span style="color:#3d5a78;font-size:8px">${ev.source||''} · ${ev.date||''}</span>
-        </div>`, { className:'leaflet-popup-dark' });
-        circle.addTo(map); markers.push(circle);
-      });
-    }).catch(() => {});
-  }
+  let _map = null;
   return {
-    init(m) { map = m; },
+    init(m) {
+      _map = m;
+      if (window.ATROCITIES) ATROCITIES.init(m);
+    },
     setEnabled(on) {
-      enabled = on;
-      if (on) _fetchAndRender();
-      else { markers.forEach(m => map?.removeLayer(m)); markers = []; }
-    }
+      if (window.ATROCITIES) ATROCITIES.setEnabled(on);
+    },
   };
 })();
 

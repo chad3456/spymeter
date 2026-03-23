@@ -3063,44 +3063,208 @@ app.get('/api/outage', async (req, res) => {
   res.json({ regions: OUTAGE_REGIONS, ts: Date.now(), source: 'IODA + Cloudflare Radar + NetBlocks' });
 });
 
-// ─── /api/hapi-events — Humanitarian crisis events (ACLED/HAPI) ───────────────
-const hapiCache = { data: null, ts: 0 };
-app.get('/api/hapi-events', async (req, res) => {
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION 11 — HUMAN ATROCITIES LAYER  (HDX HAPI + ACLED + UNHCR + OSINT)
+// API: https://hapi.humdata.org/api/v1/
+// Endpoints used:
+//   /conflict-event/         — ACLED conflict events (lat/lng direct)
+//   /food/food-security/     — IPC food insecurity phases by country
+//   /affected-people/refugees-asylum-seekers/ — refugee flows
+//   /affected-people/humanitarian-needs/      — PIN (people in need)
+// Env: HDX_APP_NAME (optional identifier, defaults to 'spymeter-osint')
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Country → [lat, lng] centroid lookup for non-event endpoints
+const COUNTRY_COORDS = {
+  SDN:[ 15.6, 32.5], COD:[ -4.3, 15.3], MMR:[ 16.9, 96.2], HTI:[ 18.5,-72.3],
+  ETH:[  9.3, 42.1], PSE:[ 31.5, 34.5], UKR:[ 49.0, 31.0], YEM:[ 15.5, 44.2],
+  NER:[ 13.5,  2.1], SOM:[  2.0, 45.3], SYR:[ 33.5, 36.3], AFG:[ 33.0, 65.0],
+  CAF:[  7.0, 20.0], MLI:[ 17.0, -4.0], BFA:[ 12.4, -1.6], TCD:[ 15.5, 19.0],
+  MOZ:[-18.7, 35.5], NGA:[  9.0,  8.0], CMR:[  7.4, 12.4], LBY:[ 26.3, 17.2],
+  IRQ:[ 33.2, 43.7], LBN:[ 33.9, 35.5], PAK:[ 30.4, 69.3], BGD:[ 23.7, 90.4],
+  VEN:[  6.4,-66.6], ZWE:[-20.0, 30.0], KEN:[ -0.0, 37.9], UGA:[  1.4, 32.3],
+  RWA:[ -1.9, 29.9], BDI:[ -3.4, 29.9], ZMB:[-13.1, 27.8], MWI:[-13.3, 34.3],
+  MDG:[-20.0, 47.0], GMB:[ 13.4,-15.3], GIN:[  9.9,-11.4], SLE:[  8.5,-11.8],
+  LBR:[  6.4, -9.4], CIV:[  7.5, -5.5], GHA:[  7.9, -1.0], TGO:[  8.6,  0.8],
+  BEN:[ 9.3,  2.3],  SEN:[ 14.5,-14.5], MRT:[ 20.3,-10.9], GNB:[ 11.8,-15.2],
+  ERI:[ 15.2, 39.8], DJI:[ 11.8, 42.6], KHM:[ 12.6,104.9], VNM:[ 14.1,108.3],
+  PHL:[ 12.9,121.8], IDN:[ -0.8,113.9], TLS:[ -8.8,126.0], PNG:[ -6.3,143.9],
+  HTI:[ 18.9,-72.7], VEN:[ 6.4,-66.6],  COL:[  4.6,-74.1], GTM:[ 15.8,-90.2],
+  HND:[ 15.2,-86.2], SLV:[ 13.8,-88.9], MEX:[ 23.6,-102.5],BOL:[-16.3,-63.6],
+  PRY:[-23.4,-58.4], NIC:[ 12.9,-85.2], CRI:[  9.7,-84.0], PAN:[  8.5,-80.8],
+};
+
+const ATROCITY_STATIC = [
+  // ── Ongoing conflicts (ACLED 2025 estimates) ──────────────────────────────
+  { lat:15.6, lng:32.5, type:'conflict',     country:'Sudan',        desc:'RSF vs SAF — world\'s largest displacement crisis, 12M IDPs', fatalities:150000, people_affected:25000000, source:'ACLED/UNOCHA', date:'2024-2025', severity:'critical' },
+  { lat:-3.0, lng:28.5, type:'conflict',     country:'DRC',          desc:'M23/FDLR/ADF — eastern Congo — 7M+ IDPs, mass sexual violence', fatalities:6000, people_affected:23000000, source:'ACLED/OCHA', date:'2025', severity:'critical' },
+  { lat:16.9, lng:96.2, type:'conflict',     country:'Myanmar',      desc:'Junta vs CRPH/PDF/3BA — military coup atrocities', fatalities:50000, people_affected:18000000, source:'AAPP/ACLED', date:'2021-2025', severity:'critical' },
+  { lat:31.5, lng:34.5, type:'mass_atrocity',country:'Gaza',         desc:'IDF operation — 46k+ killed, 2.2M population under siege', fatalities:46000, people_affected:2200000, source:'UNOCHA/MoH', date:'2023-2025', severity:'critical' },
+  { lat:49.2, lng:31.8, type:'conflict',     country:'Ukraine',      desc:'Russia-Ukraine war — Zaporizhzhia / Donetsk / Kherson fronts', fatalities:350000, people_affected:14000000, source:'UN/ACLED', date:'2022-2025', severity:'critical' },
+  { lat:15.5, lng:44.2, type:'conflict',     country:'Yemen',        desc:'Houthi + US/UK strikes — 21M food insecure, 4.5M displaced', fatalities:377000, people_affected:21500000, source:'ACLED/OCHA', date:'2015-2025', severity:'critical' },
+  { lat:18.5, lng:-72.3,type:'crisis',       country:'Haiti',        desc:'Gang control 85% Port-au-Prince — total state collapse', fatalities:5600, people_affected:5500000, source:'UNOCHA', date:'2024-2025', severity:'critical' },
+  { lat:33.5, lng:36.3, type:'displacement', country:'Syria',        desc:'6.5M refugees, 7.2M IDPs — Assad regime/ISIS atrocities', fatalities:570000, people_affected:13700000, source:'UNHCR/OCHA', date:'2011-2025', severity:'critical' },
+  { lat:9.3,  lng:42.1, type:'conflict',     country:'Ethiopia',     desc:'Amhara region ENDF vs Fano — post-Tigray spillover', fatalities:8000, people_affected:5000000, source:'ACLED', date:'2023-2025', severity:'high' },
+  { lat:13.5, lng:2.1,  type:'conflict',     country:'Niger/Sahel',  desc:'AES junta + JNIM/ISGS jihadists — Liptako-Gourma', fatalities:4500, people_affected:8000000, source:'ACLED', date:'2023-2025', severity:'high' },
+  { lat:2.0,  lng:45.3, type:'conflict',     country:'Somalia',      desc:'Al-Shabaab insurgency — clan violence + AMISOM drawdown', fatalities:4200, people_affected:7700000, source:'ACLED', date:'2025', severity:'high' },
+  { lat:12.3, lng:-1.5, type:'conflict',     country:'Burkina Faso', desc:'JNIM/ISGS takeover 60% territory — journalist crackdown', fatalities:6000, people_affected:6300000, source:'ACLED', date:'2023-2025', severity:'high' },
+  { lat:17.6, lng:-4.0, type:'conflict',     country:'Mali',         desc:'JNIM advance — UN peacekeepers expelled, civilians massacred', fatalities:3800, people_affected:8200000, source:'ACLED/UN', date:'2021-2025', severity:'high' },
+  { lat:7.0,  lng:20.0, type:'mass_atrocity',country:'CAR',          desc:'Wagner/FACA atrocities — Bambari, Bangassou — extrajudicial killings', fatalities:2200, people_affected:3000000, source:'MINUSCA/HRW', date:'2023-2025', severity:'high' },
+  { lat:7.4,  lng:12.4, type:'conflict',     country:'Cameroon',     desc:'Anglophone crisis — AMBAZONIA — civilian massacres', fatalities:6000, people_affected:1000000, source:'ACLED', date:'2017-2025', severity:'high' },
+  { lat:9.0,  lng:8.0,  type:'conflict',     country:'Nigeria',      desc:'Boko Haram/ISWAP + farmer-herder violence + Biafra IPoB', fatalities:12000, people_affected:8500000, source:'ACLED', date:'2025', severity:'high' },
+
+  // ── Famine / Food insecurity (IPC Phase 4-5) ─────────────────────────────
+  { lat:10.5, lng:42.8, type:'famine',       country:'Somalia',      desc:'IPC Phase 4 Emergency — 4.3M acutely food insecure', fatalities:0, people_affected:4300000, source:'IPC/FEWS NET', date:'2025', severity:'critical' },
+  { lat:8.5,  lng:37.2, type:'famine',       country:'Ethiopia',     desc:'IPC Phase 3-4 — 20M+ acutely food insecure (Tigray/Afar/Amhara)', fatalities:0, people_affected:20000000, source:'IPC', date:'2025', severity:'critical' },
+  { lat:14.5, lng:30.0, type:'famine',       country:'Sudan',        desc:'IPC Phase 5 Catastrophe (Famine declared) — North Darfur', fatalities:0, people_affected:8800000, source:'IPC/FEWS NET', date:'2024-2025', severity:'critical' },
+  { lat:15.0, lng:44.5, type:'famine',       country:'Yemen',        desc:'IPC Phase 4 Emergency — 17M acutely food insecure', fatalities:0, people_affected:17000000, source:'IPC/WFP', date:'2025', severity:'critical' },
+  { lat:18.0, lng:-73.0,type:'famine',       country:'Haiti',        desc:'IPC Phase 4 Emergency — 5.5M acute food insecurity', fatalities:0, people_affected:5500000, source:'IPC', date:'2025', severity:'critical' },
+  { lat:-18.3,lng:35.2, type:'famine',       country:'Mozambique',   desc:'IPC Phase 3 Crisis — Cabo Delgado insurgency impact', fatalities:0, people_affected:3700000, source:'IPC', date:'2025', severity:'high' },
+  { lat:13.0, lng:28.0, type:'famine',       country:'Chad',         desc:'IPC Phase 3 — 3.9M acutely food insecure + 1.3M refugees', fatalities:0, people_affected:3900000, source:'IPC/WFP', date:'2025', severity:'high' },
+
+  // ── Mass displacement (UNHCR 2025) ────────────────────────────────────────
+  { lat:35.1, lng:36.2, type:'displacement', country:'Syria→Turkey', desc:'3.2M Syrian refugees in Turkey — world\'s largest refugee host', fatalities:0, people_affected:3200000, source:'UNHCR', date:'2025', severity:'critical' },
+  { lat:34.0, lng:71.5, type:'displacement', country:'Afghanistan',  desc:'6.4M IDPs + 2.8M Afghan refugees in Pakistan/Iran', fatalities:0, people_affected:9200000, source:'UNHCR', date:'2025', severity:'critical' },
+  { lat:6.0,  lng:31.0, type:'displacement', country:'South Sudan',  desc:'2.3M refugees in neighboring states — prolonged crisis', fatalities:0, people_affected:9400000, source:'UNHCR', date:'2025', severity:'high' },
+  { lat:5.5,  lng:43.0, type:'displacement', country:'Somalia→Kenya',desc:'1.0M Somali refugees in Dadaab/Kakuma — 30+ year crisis', fatalities:0, people_affected:1000000, source:'UNHCR', date:'2025', severity:'high' },
+  { lat:6.4,  lng:-66.6,type:'displacement', country:'Venezuela',    desc:'7.7M Venezuelans displaced globally — economic collapse', fatalities:0, people_affected:7700000, source:'R4V/UNHCR', date:'2025', severity:'high' },
+
+  // ── Human rights / Atrocities ─────────────────────────────────────────────
+  { lat:23.7, lng:90.4, type:'human_rights', country:'Bangladesh',   desc:'Rohingya 1M refugees in Cox\'s Bazar — stateless, blocked repatriation', fatalities:0, people_affected:1000000, source:'UNHCR/HRW', date:'2025', severity:'critical' },
+  { lat:39.9, lng:116.4,type:'human_rights', country:'China',        desc:'Uyghur mass internment — Xinjiang — 1M+ in "re-education"', fatalities:0, people_affected:1000000, source:'HRW/AI', date:'2025', severity:'critical' },
+  { lat:39.0, lng:125.8,type:'human_rights', country:'North Korea',  desc:'Political prison camps (kwanliso) — 80-120k detained + systemic torture', fatalities:0, people_affected:120000, source:'UNHRC/AI', date:'2025', severity:'critical' },
+  { lat:33.0, lng:65.0, type:'human_rights', country:'Afghanistan',  desc:'Taliban — total erasure of women\'s rights, girls banned from education', fatalities:0, people_affected:20000000, source:'UNAMA/AI', date:'2025', severity:'critical' },
+  { lat:36.0, lng:14.0, type:'human_rights', country:'Libya',        desc:'Migrants tortured in detention — slave auctions documented by CNN', fatalities:2000, people_affected:700000, source:'UNHCR/MSF', date:'2024-2025', severity:'high' },
+  { lat:15.3, lng:39.5, type:'human_rights', country:'Eritrea',      desc:'Indefinite military conscription — forced labor — no free press', fatalities:0, people_affected:500000, source:'HRW/AI', date:'2025', severity:'high' },
+  { lat:4.3,  lng:18.6, type:'mass_atrocity',country:'CAR',          desc:'Wagner Group/FACA documented massacre at Ndele, Bria, Bambari', fatalities:1800, people_affected:600000, source:'UN PoE/HRW', date:'2024-2025', severity:'high' },
+  { lat:-4.0, lng:21.8, type:'mass_atrocity',country:'DRC',          desc:'Mass rape as weapon of war — South Kivu / North Kivu — 50k+ cases/yr', fatalities:500, people_affected:500000, source:'UNFPA/HRW', date:'2025', severity:'critical' },
+];
+
+// ─── /api/atrocities — Full HDX HAPI + static curated events ─────────────────
+const atrocitiesCache = { data: null, ts: 0 };
+async function fetchAtrocities() {
   const now = Date.now();
-  if (hapiCache.data && now - hapiCache.ts < 1_800_000) return res.json(hapiCache.data);
-  const events = [];
-  try {
-    const r1 = await axios.get('https://hapi.humdata.org/api/v1/conflict-event/', {
-      params: { limit: 200, output_format: 'json', app_identifier: 'spymeter-osint' },
-      timeout: 10_000, headers: { Accept: 'application/json' }
-    });
-    (r1.data?.data || []).forEach(e => {
-      if (e.latitude && e.longitude) events.push({
-        lat: e.latitude, lng: e.longitude, type: e.event_type || 'conflict',
-        country: e.location_name || '', desc: e.event_subtype || e.event_type || 'conflict',
-        date: e.reference_period_start || '', fatalities: e.fatalities || 0, source: 'ACLED/HAPI'
+  if (atrocitiesCache.data && now - atrocitiesCache.ts < 3_600_000) return atrocitiesCache.data;
+
+  const HDX_BASE   = 'https://hapi.humdata.org/api/v1';
+  const HDX_PARAMS = { output_format: 'json', app_identifier: process.env.HDX_APP_NAME || 'spymeter-osint' };
+  const events     = [...ATROCITY_STATIC]; // start with curated data
+
+  // Fetch live data from HDX HAPI (best-effort, failures silently skipped)
+  const [conflictR, foodR, refugeesR, needsR] = await Promise.allSettled([
+    axios.get(`${HDX_BASE}/conflict-event/`,  { params: { ...HDX_PARAMS, limit:500 }, timeout:10_000 }),
+    axios.get(`${HDX_BASE}/food/food-security`, { params: { ...HDX_PARAMS, limit:200 }, timeout:10_000 }),
+    axios.get(`${HDX_BASE}/affected-people/refugees-asylum-seekers/`, { params: { ...HDX_PARAMS, limit:200 }, timeout:10_000 }),
+    axios.get(`${HDX_BASE}/affected-people/humanitarian-needs/`, { params: { ...HDX_PARAMS, limit:200 }, timeout:10_000 }),
+  ]);
+
+  // 1. Conflict events — have direct lat/lng
+  if (conflictR.status === 'fulfilled') {
+    (conflictR.value.data?.data || []).forEach(e => {
+      if (!e.latitude || !e.longitude) return;
+      const deaths = Number(e.fatalities) || 0;
+      events.push({
+        lat: Number(e.latitude), lng: Number(e.longitude),
+        type: /explosion|bomb|blast/i.test(e.event_type||'') ? 'mass_atrocity'
+            : /protest|riot|demonstration/i.test(e.event_type||'') ? 'human_rights'
+            : 'conflict',
+        country: e.location_name || e.admin1_name || '',
+        desc: [e.event_type, e.event_subtype, e.actor_name].filter(Boolean).join(' — '),
+        date: e.reference_period_start || '',
+        fatalities: deaths,
+        people_affected: 0,
+        source: 'ACLED/HDX',
+        severity: deaths > 500 ? 'critical' : deaths > 50 ? 'high' : deaths > 5 ? 'medium' : 'low',
       });
     });
-  } catch (_) {}
-  if (events.length < 5) {
-    const staticEvents = [
-      { lat:15.6, lng:32.5, type:'conflict', country:'Sudan',   desc:'RSF vs SAF — 9M displaced',                 fatalities:15000, source:'ACLED', severity:'critical' },
-      { lat:-4.3, lng:15.3, type:'conflict', country:'DRC',     desc:'M23 advance — 7M+ IDPs',                     fatalities:3000,  source:'ACLED', severity:'critical' },
-      { lat:16.9, lng:96.2, type:'conflict', country:'Myanmar', desc:'Junta vs 3 Brotherhood Alliance',            fatalities:8000,  source:'ACLED', severity:'critical' },
-      { lat:18.5, lng:-72.3,type:'crisis',   country:'Haiti',   desc:'Gang control 80% Port-au-Prince',            fatalities:2500,  source:'UN',    severity:'critical' },
-      { lat:9.3,  lng:42.1, type:'conflict', country:'Ethiopia',desc:'Amhara — ENDF vs Fano',                      fatalities:5000,  source:'ACLED', severity:'high' },
-      { lat:31.5, lng:34.5, type:'conflict', country:'Gaza',    desc:'IDF/Hamas — 35k+ deaths',                    fatalities:35000, source:'UNOCHA',severity:'critical' },
-      { lat:49.0, lng:31.0, type:'conflict', country:'Ukraine', desc:'Russia-Ukraine — Zaporizhzhia front',        fatalities:200000,source:'UN',    severity:'critical' },
-      { lat:15.5, lng:44.2, type:'conflict', country:'Yemen',   desc:'Houthi attacks + US strikes',                fatalities:150000,source:'ACLED', severity:'critical' },
-      { lat:13.5, lng:2.1,  type:'conflict', country:'Niger',   desc:'AES / JNIM jihadists',                       fatalities:1800,  source:'ACLED', severity:'high' },
-      { lat:2.0,  lng:45.3, type:'conflict', country:'Somalia', desc:'Al-Shabaab insurgency',                      fatalities:3200,  source:'ACLED', severity:'high' },
-      { lat:33.5, lng:36.3, type:'crisis',   country:'Syria',   desc:'6.5M refugees displaced',                    fatalities:500000,source:'UNHCR', severity:'high' },
-    ];
-    staticEvents.forEach(e => events.push(e));
   }
-  const out = { events, ts: now, count: events.length };
-  hapiCache.data = out; hapiCache.ts = now;
-  res.json(out);
+
+  // 2. Food security — map country code → coords
+  if (foodR.status === 'fulfilled') {
+    (foodR.value.data?.data || []).forEach(e => {
+      const coord = COUNTRY_COORDS[e.location_code];
+      if (!coord) return;
+      const phase = Number(e.ipc_phase) || 0;
+      if (phase < 3) return; // only IPC 3+ (Crisis/Emergency/Famine)
+      const jitter = (Math.random() - 0.5) * 2;
+      events.push({
+        lat: coord[0] + jitter, lng: coord[1] + jitter,
+        type: 'famine',
+        country: e.location_name || e.location_code,
+        desc: `IPC Phase ${phase} ${phase >= 5 ? '(FAMINE)' : phase >= 4 ? '(Emergency)' : '(Crisis)'} — ${Number(e.population_in_phase||0).toLocaleString()} people`,
+        date: e.reference_period_start || '',
+        fatalities: 0,
+        people_affected: Number(e.population_in_phase) || 0,
+        source: 'IPC/HDX HAPI',
+        severity: phase >= 5 ? 'critical' : phase >= 4 ? 'high' : 'medium',
+      });
+    });
+  }
+
+  // 3. Refugees — map origin country → coords
+  if (refugeesR.status === 'fulfilled') {
+    (refugeesR.value.data?.data || []).forEach(e => {
+      const coord = COUNTRY_COORDS[e.origin_location_code] || COUNTRY_COORDS[e.location_code];
+      if (!coord) return;
+      const total = Number(e.refugees_under_unhcrs_mandate) || Number(e.asylum_seekers) || 0;
+      if (total < 50000) return;
+      const jitter = (Math.random() - 0.5) * 3;
+      events.push({
+        lat: coord[0] + jitter, lng: coord[1] + jitter,
+        type: 'displacement',
+        country: e.origin_location_name || e.location_name || '',
+        desc: `${(total/1e6).toFixed(2)}M refugees/asylum seekers — ${e.location_name || ''}`,
+        date: e.reference_period_start || '',
+        fatalities: 0,
+        people_affected: total,
+        source: 'UNHCR/HDX HAPI',
+        severity: total > 1000000 ? 'critical' : total > 500000 ? 'high' : 'medium',
+      });
+    });
+  }
+
+  // 4. Humanitarian needs — people in need by country
+  if (needsR.status === 'fulfilled') {
+    (needsR.value.data?.data || []).forEach(e => {
+      const coord = COUNTRY_COORDS[e.location_code];
+      if (!coord) return;
+      const pin = Number(e.population_in_need) || 0;
+      if (pin < 500000) return;
+      const jitter = (Math.random() - 0.5) * 2;
+      events.push({
+        lat: coord[0] + jitter, lng: coord[1] + jitter,
+        type: 'crisis',
+        country: e.location_name || e.location_code,
+        desc: `${(pin/1e6).toFixed(1)}M people in humanitarian need — ${e.sector_name || 'general'}`,
+        date: e.reference_period_start || '',
+        fatalities: 0,
+        people_affected: pin,
+        source: 'OCHA/HDX HAPI',
+        severity: pin > 5000000 ? 'critical' : pin > 1000000 ? 'high' : 'medium',
+      });
+    });
+  }
+
+  const out = { events, ts: now, count: events.length, live_count: events.length - ATROCITY_STATIC.length };
+  atrocitiesCache.data = out;
+  atrocitiesCache.ts   = now;
+  return out;
+}
+
+app.get('/api/atrocities', async (req, res) => {
+  try { res.json(await fetchAtrocities()); }
+  catch (e) { res.json({ events: ATROCITY_STATIC, ts: Date.now(), count: ATROCITY_STATIC.length, error: e.message }); }
+});
+
+// ─── /api/hapi-events — backward-compat shim ─────────────────────────────────
+const hapiCache = { data: null, ts: 0 };
+app.get('/api/hapi-events', async (req, res) => {
+  try {
+    const d = await fetchAtrocities();
+    res.json({ events: d.events, ts: d.ts, count: d.count });
+  } catch (e) {
+    res.json({ events: ATROCITY_STATIC, ts: Date.now(), count: ATROCITY_STATIC.length });
+  }
 });
 
 // ─── /api/gpsjam — GPS jamming zones (gpsjam.org + OSINT static) ──────────────
