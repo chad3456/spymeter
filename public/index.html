@@ -433,6 +433,7 @@
         <button class="rptab" data-rptab="education" style="color:#a0d4ff;border-bottom-color:#a0d4ff">📚 ARMS DB</button>
         <button class="rptab" data-rptab="tracker"     style="color:#00ff88;border-bottom-color:#00ff88">🎯 TRACKER</button>
         <button class="rptab" data-rptab="marine-live" style="color:#00d4ff;border-bottom-color:#00d4ff">🚢 AIS LIVE</button>
+        <button class="rptab" data-rptab="refugee"     style="color:#ff9900;border-bottom-color:#ff9900">🏕 REFUGEE</button>
       </div>
 
       <!-- TAB: News (GDELT) -->
@@ -1096,6 +1097,90 @@
       <!-- TAB: India Defence Deal Tracker ──────────────────────── -->
       <div class="rp-tab-body" id="rptab-tracker" style="display:none;padding:0;position:relative;overflow:hidden"></div>
 
+      <!-- TAB: Humanitarian Refugee ──────────────────────────────── -->
+      <div class="rp-tab-body" id="rptab-refugee" style="display:none;padding:0;overflow:hidden;height:calc(100vh - 100px);flex-direction:column">
+
+        <!-- Sub-tab bar -->
+        <div class="ref-subtab-bar">
+          <button class="ref-stab ref-stab-active" data-rst="overview">🌍 OVERVIEW</button>
+          <button class="ref-stab" data-rst="demographics">👥 DEMOGRAPHICS</button>
+          <button class="ref-stab" data-rst="idps">🏠 IDPs</button>
+          <button class="ref-stab ref-stab-news" data-rst="news" id="ref-news-tab-btn">📰 NEWS</button>
+        </div>
+
+        <!-- Stats header row -->
+        <div class="ref-stats-row" id="ref-stats-row">
+          <div class="ref-stat-card">
+            <div class="ref-stat-val" id="ref-stat-total">—</div>
+            <div class="ref-stat-lbl">REFUGEES</div>
+          </div>
+          <div class="ref-stat-card">
+            <div class="ref-stat-val" id="ref-stat-host">—</div>
+            <div class="ref-stat-lbl">HOST COUNTRIES</div>
+          </div>
+          <div class="ref-stat-card">
+            <div class="ref-stat-val" id="ref-stat-idps">—</div>
+            <div class="ref-stat-lbl">IDPs</div>
+          </div>
+        </div>
+
+        <!-- ── Overview sub-tab ─────────────────────────────── -->
+        <div class="ref-stab-body" id="ref-body-overview">
+          <div class="ref-subhdr">
+            TOP ASYLUM COUNTRIES <span class="ref-src-badge">● UNHCR</span>
+          </div>
+          <div id="ref-countries-list">
+            <div class="ref-loading">⟳ Loading refugee data from HAPI…</div>
+          </div>
+        </div>
+
+        <!-- ── Demographics sub-tab ─────────────────────────── -->
+        <div class="ref-stab-body" id="ref-body-demographics" style="display:none">
+          <!-- Country selector -->
+          <div class="ref-demo-ctrl">
+            <select id="ref-country-select" class="ref-select">
+              <option value="all">🌍 Global — All Countries</option>
+            </select>
+            <button id="ref-demo-load-btn" class="ref-btn-sm">↺</button>
+          </div>
+
+          <!-- Gender split -->
+          <div class="ref-subhdr">GENDER DISTRIBUTION <span class="ref-src-badge">● UNHCR</span></div>
+          <div id="ref-gender-bars">
+            <div class="ref-loading">⟳ Select country and load…</div>
+          </div>
+
+          <!-- Age pyramid -->
+          <div class="ref-subhdr" style="margin-top:10px">AGE DEMOGRAPHICS <span class="ref-src-badge">● UNHCR</span></div>
+          <div id="ref-age-bars">
+            <div class="ref-loading">⟳ Loading…</div>
+          </div>
+        </div>
+
+        <!-- ── IDPs sub-tab ──────────────────────────────────── -->
+        <div class="ref-stab-body" id="ref-body-idps" style="display:none">
+          <div class="ref-subhdr">
+            INTERNALLY DISPLACED PERSONS <span class="ref-src-badge">● IOM DTM</span>
+          </div>
+          <div id="ref-idps-list">
+            <div class="ref-loading">⟳ Loading IDP data from HAPI…</div>
+          </div>
+        </div>
+
+        <!-- ── News sub-tab ──────────────────────────────────── -->
+        <div class="ref-stab-body" id="ref-body-news" style="display:none">
+          <div class="ref-subhdr">
+            LIVE REFUGEE &amp; DISPLACEMENT NEWS
+            <span class="ref-src-badge">● GDELT 12h</span>
+            <button id="ref-news-refresh-btn" class="mini-btn" style="margin-left:auto">↻</button>
+          </div>
+          <div id="ref-news-feed">
+            <div class="ref-loading">⟳ Loading news…</div>
+          </div>
+        </div>
+
+      </div><!-- /rptab-refugee -->
+
       <!-- TAB: Education / Arms Inventory -->
       <div class="rp-tab-body" id="rptab-education" style="display:none;padding:0">
 
@@ -1380,7 +1465,7 @@
         btn.classList.add('active');
         const tab  = btn.dataset.rptab;
         const body = document.getElementById('rptab-' + tab);
-        if (body) body.style.display = 'block';
+        if (body) body.style.display = (tab === 'refugee') ? 'flex' : 'block';
         // Lazy-init on first open
         if (tab === 'rss'        && !btn._rssInited)       { btn._rssInited       = true; if(window.POLLS) POLLS.loadRSSNews(); }
         if (tab === 'markets'    && !btn._mktInited)       { btn._mktInited       = true; MARKETS.init(); }
@@ -1394,6 +1479,7 @@
         if (tab === 'education'    && !btn._educationInited)  { btn._educationInited  = true; EDUCATION.init(); }
         if (tab === 'tracker'      && !btn._trackerInited)    { btn._trackerInited    = true; TRACKER.init(); }
         if (tab === 'marine-live'  && !btn._marineLiveInited) { btn._marineLiveInited = true; MARINE_LIVE.init(); }
+        if (tab === 'refugee'      && !btn._refugeeInited)    { btn._refugeeInited    = true; REFUGEE.init(); }
       });
     });
 
@@ -3751,6 +3837,464 @@ const CMDCTR = (() => {
   return { open, close, refresh: () => { _financeInited = false; _loadFinance(true); } };
 })();
 window.CMDCTR = CMDCTR;
+</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     HUMANITARIAN REFUGEE TAB — CSS
+     ══════════════════════════════════════════════════════════ -->
+<style>
+/* ── Layout ──────────────────────────────────────────────── */
+#rptab-refugee { display: none; flex-direction: column; height: calc(100vh - 100px); }
+#rptab-refugee.rp-refugee-active { display: flex !important; }
+
+/* ── Sub-tab bar ─────────────────────────────────────────── */
+.ref-subtab-bar {
+  display: flex; flex-shrink: 0;
+  border-bottom: 1px solid #1a2a1a;
+  background: rgba(0,0,0,.2);
+  overflow-x: auto;
+}
+.ref-stab {
+  flex: 1; min-width: 52px; padding: 6px 4px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 7.5px; font-weight: 700; letter-spacing: .8px;
+  background: transparent; border: none;
+  border-bottom: 2px solid transparent;
+  color: #3d5a78; cursor: pointer;
+  transition: all .18s; white-space: nowrap;
+}
+.ref-stab:hover         { color: #ff9900; background: rgba(255,153,0,.04); }
+.ref-stab.ref-stab-active { color: #ff9900; border-bottom-color: #ff9900; background: rgba(255,153,0,.06); }
+.ref-stab-news.ref-stab-active { color: #00d4ff; border-bottom-color: #00d4ff; background: rgba(0,212,255,.06); }
+
+/* ── Stats row ───────────────────────────────────────────── */
+.ref-stats-row {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid #1a2a0a; flex-shrink: 0;
+  background: rgba(255,153,0,.03);
+}
+.ref-stat-card {
+  padding: 7px 6px; text-align: center;
+  border-right: 1px solid #1a2a0a;
+}
+.ref-stat-card:last-child { border-right: none; }
+.ref-stat-val {
+  font-size: 12px; color: #ff9900; letter-spacing: .5px;
+  font-family: 'Share Tech Mono', monospace;
+}
+.ref-stat-lbl {
+  font-size: 6px; color: #3d5a78; letter-spacing: 1px; margin-top: 2px;
+}
+
+/* ── Sub-tab bodies ──────────────────────────────────────── */
+.ref-stab-body {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+  scrollbar-width: thin; scrollbar-color: #1a3040 transparent;
+}
+.ref-stab-body::-webkit-scrollbar { width: 3px; }
+.ref-stab-body::-webkit-scrollbar-thumb { background: #1a3040; }
+
+/* ── Section header ──────────────────────────────────────── */
+.ref-subhdr {
+  font-size: 7.5px; letter-spacing: 1.5px; color: #4a6020;
+  padding: 7px 8px 5px; border-bottom: 1px solid #1a2a0a;
+  background: rgba(0,0,0,.15); flex-shrink: 0;
+  display: flex; align-items: center; gap: 6px;
+}
+.ref-src-badge {
+  font-size: 6.5px; color: #ff9900; letter-spacing: 1px;
+}
+
+/* ── Loading state ───────────────────────────────────────── */
+.ref-loading {
+  font-size: 9px; color: #3d5a78; text-align: center;
+  padding: 20px 8px; letter-spacing: 1px;
+}
+.ref-error {
+  font-size: 8.5px; color: #ff4444; text-align: center;
+  padding: 14px 8px; letter-spacing: .5px; line-height: 1.6;
+}
+
+/* ── Country cards (overview + IDPs) ────────────────────── */
+.ref-country-list { padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
+.ref-country-card {
+  background: #0c1118; border: 1px solid #0d1e2e; border-radius: 2px;
+  padding: 6px 8px; cursor: default;
+  transition: border-color .15s;
+}
+.ref-country-card:hover { border-color: rgba(255,153,0,.35); }
+.ref-country-top {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+}
+.ref-country-flag  { font-size: 13px; flex-shrink: 0; }
+.ref-country-name  { font-size: 9px; color: #8ba4c0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ref-country-count { font-size: 10px; color: #ff9900; letter-spacing: .5px; flex-shrink: 0; }
+.ref-bar-track {
+  height: 3px; background: #0d1e2e; border-radius: 2px; overflow: hidden;
+}
+.ref-bar-fill {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, #ff9900, #ffcc44);
+  transition: width .6s ease;
+}
+.ref-idp-card .ref-bar-fill {
+  background: linear-gradient(90deg, #cc44ff, #ee88ff);
+}
+.ref-country-meta {
+  font-size: 7px; color: #3d5a78; margin-top: 3px; letter-spacing: .3px;
+}
+
+/* ── Demographics ────────────────────────────────────────── */
+.ref-demo-ctrl {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 8px; border-bottom: 1px solid #0d1e2e; flex-shrink: 0;
+  background: rgba(0,0,0,.1);
+}
+.ref-select {
+  flex: 1; background: #0c1118; border: 1px solid #182030;
+  color: #8ba4c0; font-size: 9px; padding: 4px 6px;
+  font-family: 'Share Tech Mono', monospace;
+  border-radius: 2px; cursor: pointer;
+}
+.ref-select:focus { outline: none; border-color: #ff9900; }
+.ref-btn-sm {
+  background: rgba(255,153,0,.1); border: 1px solid rgba(255,153,0,.3);
+  color: #ff9900; font-size: 9px; padding: 4px 10px; cursor: pointer;
+  font-family: 'Share Tech Mono', monospace; border-radius: 2px;
+  transition: background .15s; flex-shrink: 0;
+}
+.ref-btn-sm:hover { background: rgba(255,153,0,.2); }
+
+/* Gender bars */
+.ref-gender-section { padding: 8px; }
+.ref-gender-row {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 6px;
+}
+.ref-gender-lbl { font-size: 8px; color: #8ba4c0; width: 24px; flex-shrink: 0; letter-spacing: .5px; }
+.ref-gender-bar-wrap { flex: 1; height: 12px; background: #0d1e2e; border-radius: 2px; overflow: hidden; position: relative; }
+.ref-gender-bar-fill { height: 100%; border-radius: 2px; transition: width .7s ease; }
+.ref-gender-bar-fill.ref-male   { background: linear-gradient(90deg, #0088ff, #44aaff); }
+.ref-gender-bar-fill.ref-female { background: linear-gradient(90deg, #ff44aa, #ff88cc); }
+.ref-gender-pct { font-size: 9px; width: 34px; flex-shrink: 0; letter-spacing: .3px; }
+.ref-gender-count { font-size: 7.5px; color: #3d5a78; width: 58px; flex-shrink: 0; text-align: right; }
+
+/* Age pyramid */
+.ref-age-section { padding: 8px; }
+.ref-age-row { margin-bottom: 5px; }
+.ref-age-label { font-size: 7.5px; color: #3d5a78; letter-spacing: .5px; margin-bottom: 2px; display: flex; justify-content: space-between; }
+.ref-age-bars-wrap { display: flex; height: 10px; border-radius: 2px; overflow: hidden; background: #0d1e2e; }
+.ref-age-male-bar   { background: linear-gradient(90deg, #0066cc, #0099ff); transition: width .7s ease; }
+.ref-age-female-bar { background: linear-gradient(90deg, #cc0077, #ff44aa); transition: width .7s ease; }
+.ref-age-legend {
+  display: flex; gap: 12px; padding: 6px 8px 2px; font-size: 7px; color: #3d5a78;
+}
+.ref-age-legend span { display: flex; align-items: center; gap: 4px; }
+.ref-age-legend-dot { width: 8px; height: 8px; border-radius: 1px; display: inline-block; }
+
+/* ── News feed ───────────────────────────────────────────── */
+.ref-news-list { padding: 6px 8px; display: flex; flex-direction: column; gap: 5px; }
+.ref-news-item {
+  display: block; text-decoration: none;
+  background: #0c1118; border: 1px solid #0d1e2e; border-radius: 2px;
+  padding: 7px 8px; transition: border-color .15s;
+  border-left: 2px solid #1a3050;
+}
+.ref-news-item:hover { border-color: rgba(0,212,255,.35); border-left-color: #00d4ff; }
+.ref-news-meta { display: flex; gap: 6px; font-size: 7px; color: #3d5a78; margin-bottom: 4px; }
+.ref-news-tone-pos { color: #00ff88; }
+.ref-news-tone-neg { color: #ff4444; }
+.ref-news-title { font-size: 9.5px; color: #8ba4c0; line-height: 1.5; }
+.ref-news-item:hover .ref-news-title { color: #c8dff0; }
+
+/* ── Empty state ─────────────────────────────────────────── */
+.ref-empty {
+  text-align: center; padding: 24px 12px;
+  font-size: 8.5px; color: #3d5a78; letter-spacing: 1px; line-height: 2;
+}
+</style>
+
+<!-- ══════════════════════════════════════════════════════════
+     HUMANITARIAN REFUGEE MODULE
+     ══════════════════════════════════════════════════════════ -->
+<script>
+const REFUGEE = (() => {
+  let _inited    = false;
+  let _refData   = null; // cache refugees response
+  let _idpData   = null; // cache IDPs response
+
+  // ── Helpers ───────────────────────────────────────────────
+  function $$(id) { return document.getElementById(id); }
+
+  function _fmt(n) {
+    if (n == null || isNaN(n)) return '—';
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+    if (n >= 1_000)     return (n / 1_000).toFixed(1)     + 'K';
+    return n.toString();
+  }
+
+  function _relTime(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const y = dateStr.slice(0,4), mo = dateStr.slice(4,6), d = dateStr.slice(6,8);
+      const h = dateStr.slice(9,11)||'00', m = dateStr.slice(11,13)||'00';
+      const ms = Date.now() - new Date(`${y}-${mo}-${d}T${h}:${m}:00Z`).getTime();
+      const min = Math.round(ms / 60_000);
+      if (min < 2)    return 'just now';
+      if (min < 60)   return `${min}m ago`;
+      if (min < 1440) return `${Math.round(min/60)}h ago`;
+      return `${Math.round(min/1440)}d ago`;
+    } catch (_) { return ''; }
+  }
+
+  // ISO3 → emoji flag (best-effort, covers major cases)
+  const _FLAG = { AFG:'🇦🇫',COD:'🇨🇩',SYR:'🇸🇾',SDN:'🇸🇩',SSD:'🇸🇸',VEN:'🇻🇪',ETH:'🇪🇹',
+    MMR:'🇲🇲',AFG:'🇦🇫',SOM:'🇸🇴',UKR:'🇺🇦',CAF:'🇨🇫',MOZ:'🇲🇿',HTI:'🇭🇹',YEM:'🇾🇪',
+    TUR:'🇹🇷',DEU:'🇩🇪',COL:'🇨🇴',PAK:'🇵🇰',UGA:'🇺🇬',BGD:'🇧🇩',SUD:'🇸🇩',IRN:'🇮🇷',
+    KEN:'🇰🇪',ETH:'🇪🇹',CHL:'🇨🇱',PER:'🇵🇪',ECU:'🇪🇨',IDN:'🇮🇩',IND:'🇮🇳',TZA:'🇹🇿',
+    CMR:'🇨🇲',TCD:'🇹🇩',NGA:'🇳🇬',NER:'🇳🇪',MLI:'🇲🇱',BFA:'🇧🇫',GMB:'🇬🇲',GIN:'🇬🇳',
+    LBN:'🇱🇧',JOR:'🇯🇴',IRQ:'🇮🇶',EGY:'🇪🇬',LBY:'🇱🇾',MAR:'🇲🇦',TUN:'🇹🇳',ALG:'🇩🇿',
+    DZA:'🇩🇿',ZAF:'🇿🇦',ZWE:'🇿🇼',ZMB:'🇿🇲',RWA:'🇷🇼',BDI:'🇧🇮',MWI:'🇲🇼',AGO:'🇦🇴',
+    GRC:'🇬🇷',ITA:'🇮🇹',FRA:'🇫🇷',ESP:'🇪🇸',SWE:'🇸🇪',NOR:'🇳🇴',AUT:'🇦🇹',CHE:'🇨🇭',
+    NLD:'🇳🇱',BEL:'🇧🇪',CAN:'🇨🇦',USA:'🇺🇸',MEX:'🇲🇽',BRA:'🇧🇷',ARG:'🇦🇷',AUS:'🇦🇺',
+    GBR:'🇬🇧',RUS:'🇷🇺',CHN:'🇨🇳',JPN:'🇯🇵',KOR:'🇰🇷',THA:'🇹🇭',MYS:'🇲🇾',PHL:'🇵🇭' };
+
+  function _flag(code) { return _FLAG[code] || '🏳'; }
+
+  // ── Sub-tab switching ─────────────────────────────────────
+  function _setSubTab(key) {
+    document.querySelectorAll('.ref-stab').forEach(b =>
+      b.classList.toggle('ref-stab-active', b.dataset.rst === key));
+    document.querySelectorAll('.ref-stab-body').forEach(el =>
+      el.style.display = el.id === `ref-body-${key}` ? 'flex' : 'none');
+    if (key === 'demographics') _loadDemographics($$('ref-country-select')?.value || 'all');
+    if (key === 'idps')         _loadIDPs();
+    if (key === 'news')         _loadNews();
+  }
+
+  // ── Overview — asylum countries ───────────────────────────
+  async function _loadOverview() {
+    const el = $$('ref-countries-list');
+    try {
+      const r = await fetch('/api/hapi/refugees');
+      const d = r.ok ? await r.json() : null;
+      if (!d || !r.ok) throw new Error(d?.error || 'HTTP ' + r.status);
+      _refData = d;
+
+      // Update stat cards
+      $$('ref-stat-total').textContent = _fmt(d.total);
+      $$('ref-stat-host').textContent  = d.refugees.length;
+
+      // Populate country selector for demographics tab
+      const sel = $$('ref-country-select');
+      if (sel) {
+        const existing = new Set([...sel.options].map(o => o.value));
+        d.refugees.slice(0, 60).forEach(c => {
+          if (!existing.has(c.code) && c.code) {
+            const opt = document.createElement('option');
+            opt.value = c.code; opt.textContent = `${_flag(c.code)} ${c.country}`;
+            sel.appendChild(opt);
+          }
+        });
+      }
+
+      if (!d.refugees.length) {
+        el.innerHTML = '<div class="ref-empty">No refugee data returned by HAPI API.<br>Verify HAPI_APP_ENCODER_IDENTIFER is set.</div>';
+        return;
+      }
+
+      const max = d.refugees[0]?.total || 1;
+      el.innerHTML = `<div class="ref-country-list">${
+        d.refugees.slice(0, 40).map(c => {
+          const pct = Math.round((c.total / max) * 100);
+          return `<div class="ref-country-card">
+            <div class="ref-country-top">
+              <span class="ref-country-flag">${_flag(c.code)}</span>
+              <span class="ref-country-name">${c.country}</span>
+              <span class="ref-country-count">${_fmt(c.total)}</span>
+            </div>
+            <div class="ref-bar-track">
+              <div class="ref-bar-fill" style="width:${pct}%"></div>
+            </div>
+          </div>`;
+        }).join('')
+      }</div>`;
+    } catch (err) {
+      el.innerHTML = `<div class="ref-error">⚠ ${err.message}<br><span style="font-size:7.5px;color:#3d5a78">Check HAPI_APP_ENCODER_IDENTIFER environment variable</span></div>`;
+    }
+  }
+
+  // ── Demographics — gender + age ───────────────────────────
+  async function _loadDemographics(country) {
+    $$('ref-gender-bars').innerHTML = '<div class="ref-loading">⟳ Fetching from HAPI…</div>';
+    $$('ref-age-bars').innerHTML    = '<div class="ref-loading">⟳ Fetching from HAPI…</div>';
+    try {
+      const url = `/api/hapi/demographics?country=${encodeURIComponent(country)}`;
+      const r   = await fetch(url);
+      const d   = r.ok ? await r.json() : null;
+      if (!d || !r.ok) throw new Error(d?.error || 'HTTP ' + r.status);
+
+      // ── Gender bars ──
+      const { M = 0, F = 0 } = d.gender;
+      const gTotal = M + F || 1;
+      const mPct   = ((M / gTotal) * 100).toFixed(1);
+      const fPct   = ((F / gTotal) * 100).toFixed(1);
+
+      $$('ref-gender-bars').innerHTML = `
+        <div class="ref-gender-section">
+          <div class="ref-gender-row">
+            <span class="ref-gender-lbl" style="color:#4db8ff">MALE</span>
+            <div class="ref-gender-bar-wrap">
+              <div class="ref-gender-bar-fill ref-male" style="width:${mPct}%"></div>
+            </div>
+            <span class="ref-gender-pct" style="color:#4db8ff">${mPct}%</span>
+            <span class="ref-gender-count">${_fmt(M)}</span>
+          </div>
+          <div class="ref-gender-row">
+            <span class="ref-gender-lbl" style="color:#ff88cc">FEM</span>
+            <div class="ref-gender-bar-wrap">
+              <div class="ref-gender-bar-fill ref-female" style="width:${fPct}%"></div>
+            </div>
+            <span class="ref-gender-pct" style="color:#ff88cc">${fPct}%</span>
+            <span class="ref-gender-count">${_fmt(F)}</span>
+          </div>
+        </div>`;
+
+      // ── Age pyramid ──
+      if (!d.ages.length) {
+        $$('ref-age-bars').innerHTML = '<div class="ref-empty">Age breakdown not available for this selection.</div>';
+        return;
+      }
+      const ageMax = Math.max(...d.ages.map(a => a.total)) || 1;
+      $$('ref-age-bars').innerHTML = `
+        <div class="ref-age-legend">
+          <span><span class="ref-age-legend-dot" style="background:#0099ff"></span>Male</span>
+          <span><span class="ref-age-legend-dot" style="background:#ff44aa"></span>Female</span>
+        </div>
+        <div class="ref-age-section">${
+          d.ages.map(a => {
+            const mW = ((a.M / ageMax) * 100).toFixed(1);
+            const fW = ((a.F / ageMax) * 100).toFixed(1);
+            return `<div class="ref-age-row">
+              <div class="ref-age-label">
+                <span>${a.range}</span>
+                <span style="color:#8ba4c0">${_fmt(a.total)}</span>
+              </div>
+              <div class="ref-age-bars-wrap">
+                <div class="ref-age-male-bar"   style="width:${mW}%"></div>
+                <div class="ref-age-female-bar" style="width:${fW}%"></div>
+              </div>
+            </div>`;
+          }).join('')
+        }</div>`;
+    } catch (err) {
+      const msg = `<div class="ref-error">⚠ ${err.message}</div>`;
+      $$('ref-gender-bars').innerHTML = msg;
+      $$('ref-age-bars').innerHTML    = '';
+    }
+  }
+
+  // ── IDPs ──────────────────────────────────────────────────
+  async function _loadIDPs() {
+    const el = $$('ref-idps-list');
+    if (el.dataset.loaded) return;
+    try {
+      const r = await fetch('/api/hapi/idps');
+      const d = r.ok ? await r.json() : null;
+      if (!d || !r.ok) throw new Error(d?.error || 'HTTP ' + r.status);
+      _idpData = d;
+
+      $$('ref-stat-idps').textContent = _fmt(d.total);
+
+      if (!d.idps.length) {
+        el.innerHTML = '<div class="ref-empty">No IDP data returned by HAPI API.</div>';
+        return;
+      }
+      const max = d.idps[0]?.total || 1;
+      el.innerHTML = `<div class="ref-country-list">${
+        d.idps.slice(0, 40).map(c => {
+          const pct = Math.round((c.total / max) * 100);
+          return `<div class="ref-country-card ref-idp-card">
+            <div class="ref-country-top">
+              <span class="ref-country-flag">${_flag(c.code)}</span>
+              <span class="ref-country-name">${c.country}</span>
+              <span class="ref-country-count" style="color:#cc44ff">${_fmt(c.total)}</span>
+            </div>
+            <div class="ref-bar-track">
+              <div class="ref-bar-fill ref-idp-bar" style="width:${pct}%"></div>
+            </div>
+            ${c.operation ? `<div class="ref-country-meta">${c.operation}</div>` : ''}
+          </div>`;
+        }).join('')
+      }</div>`;
+      el.dataset.loaded = '1';
+    } catch (err) {
+      el.innerHTML = `<div class="ref-error">⚠ ${err.message}<br><span style="font-size:7.5px;color:#3d5a78">Check HAPI_APP_ENCODER_IDENTIFER environment variable</span></div>`;
+    }
+  }
+
+  // ── News ──────────────────────────────────────────────────
+  async function _loadNews(force) {
+    const el = $$('ref-news-feed');
+    if (!force && el.dataset.loaded) return;
+    el.innerHTML = '<div class="ref-loading">⟳ Loading from GDELT…</div>';
+    try {
+      const r = await fetch('/api/hapi/refugee-news');
+      const d = r.ok ? await r.json() : null;
+      if (!d || !r.ok) throw new Error(d?.error || 'HTTP ' + r.status);
+
+      if (!d.articles.length) {
+        el.innerHTML = '<div class="ref-empty">No refugee news in the last 12 hours.</div>';
+        return;
+      }
+      el.innerHTML = `<div class="ref-news-list">${
+        d.articles.map(a => {
+          const tone = parseFloat(a.tone);
+          const tc   = tone < -2 ? 'ref-news-tone-neg' : tone > 1 ? 'ref-news-tone-pos' : '';
+          const rel  = _relTime(a.date);
+          return `<a class="ref-news-item" href="${a.url || '#'}" target="_blank" rel="noopener">
+            <div class="ref-news-meta">
+              <span>${a.source || ''}</span>
+              ${rel ? `<span>${rel}</span>` : ''}
+              ${a.tone ? `<span class="${tc}">${tone > 0 ? '+' : ''}${a.tone}</span>` : ''}
+            </div>
+            <div class="ref-news-title">${a.title || ''}</div>
+          </a>`;
+        }).join('')
+      }</div>`;
+      el.dataset.loaded = '1';
+    } catch (err) {
+      el.innerHTML = `<div class="ref-error">⚠ ${err.message}</div>`;
+    }
+  }
+
+  // ── Public init ───────────────────────────────────────────
+  function init() {
+    if (_inited) return;
+    _inited = true;
+
+    // Wire sub-tab buttons
+    document.querySelectorAll('.ref-stab').forEach(b =>
+      b.addEventListener('click', () => _setSubTab(b.dataset.rst)));
+
+    // Wire demographics country selector + load button
+    $$('ref-demo-load-btn')?.addEventListener('click', () =>
+      _loadDemographics($$('ref-country-select')?.value || 'all'));
+    $$('ref-country-select')?.addEventListener('change', () =>
+      _loadDemographics($$('ref-country-select').value));
+
+    // Wire news refresh
+    $$('ref-news-refresh-btn')?.addEventListener('click', () => {
+      $$('ref-news-feed').dataset.loaded = '';
+      _loadNews(true);
+    });
+
+    // Load default sub-tab content
+    _loadOverview();
+  }
+
+  return { init };
+})();
+window.REFUGEE = REFUGEE;
 </script>
 
 </body>

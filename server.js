@@ -3154,6 +3154,195 @@ app.get('/api/hapi-events', async (req, res) => {
   res.json(out);
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SECTION: HAPI HUMANITARIAN — Refugees · IDPs · Demographics
+// Auth: HAPI_APP_ENCODER_IDENTIFER env var (required)
+// Source: UNHCR (refugees/returnees) + IOM DTM (IDPs) via HDX HAPI
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const HAPI_V1 = 'https://hapi.humdata.org/api/v1';
+const HAPI_TTL = 2 * 60 * 60_000; // 2 hours — HAPI updates daily
+
+function _hapiId() { return process.env.HAPI_APP_ENCODER_IDENTIFER || ''; }
+
+// Paginate through HAPI endpoint collecting all rows (limit 1000/page)
+async function _hapiAll(path, params = {}) {
+  const appId = _hapiId();
+  if (!appId) throw new Error('HAPI_APP_ENCODER_IDENTIFER not set');
+  const LIMIT = 1000;
+  let offset = 0;
+  const all = [];
+  for (;;) {
+    const r = await axios.get(`${HAPI_V1}${path}`, {
+      params: { limit: LIMIT, offset, output_format: 'json', app_identifier: appId, ...params },
+      timeout: 15_000,
+      headers: { Accept: 'application/json' },
+    });
+    const rows = r.data?.data || [];
+    all.push(...rows);
+    if (rows.length < LIMIT) break;
+    offset += LIMIT;
+    if (offset > 50_000) break; // safety cap
+  }
+  return all;
+}
+
+// ─── /api/hapi/refugees — Top asylum countries by refugee count ───────────────
+const _hapiRefCache = { data: null, ts: 0 };
+app.get('/api/hapi/refugees', async (req, res) => {
+  const now = Date.now();
+  if (_hapiRefCache.data && now - _hapiRefCache.ts < HAPI_TTL)
+    return res.json(_hapiRefCache.data);
+  if (!_hapiId())
+    return res.status(503).json({ error: 'HAPI_APP_ENCODER_IDENTIFER not configured', refugees: [], total: 0 });
+  try {
+    const rows = await _hapiAll('/affected-people/refugees', { population_group: 'REF' });
+    // Aggregate totals per asylum country using 'all' gender rows to avoid double-count
+    const byCountry = {};
+    for (const r of rows) {
+      const name = r.asylum_country_name || r.location_name || '';
+      const code = (r.asylum_location_code || r.location_code || '').toUpperCase();
+      if (!name) continue;
+      if (!byCountry[name]) byCountry[name] = { country: name, code, total: 0 };
+      // Use rows where gender='all' for clean totals; fall back if none exist
+      if (r.gender === 'all' || r.gender === 'ALL') {
+        byCountry[name].total += (r.population || 0);
+      }
+    }
+    // If no 'all' rows landed, sum M+F rows instead
+    if (Object.values(byCountry).every(c => c.total === 0)) {
+      for (const c of Object.values(byCountry)) c.total = 0;
+      for (const r of rows) {
+        const name = r.asylum_country_name || r.location_name || '';
+        if (!name || !byCountry[name]) continue;
+        if (r.gender === 'M' || r.gender === 'F') {
+          byCountry[name].total += (r.population || 0);
+        }
+      }
+    }
+    const refugees = Object.values(byCountry)
+      .filter(c => c.total > 0)
+      .sort((a, b) => b.total - a.total);
+    const data = { refugees, total: refugees.reduce((s, c) => s + c.total, 0), ts: now, source: 'UNHCR via HAPI' };
+    _hapiRefCache.data = data; _hapiRefCache.ts = now;
+    res.json(data);
+  } catch (err) {
+    res.status(503).json({ error: 'HAPI refugees unavailable', detail: err.message, refugees: [], total: 0 });
+  }
+});
+
+// ─── /api/hapi/demographics — Gender + age breakdown (global or per country) ──
+const _hapiDemoCache = {};
+app.get('/api/hapi/demographics', async (req, res) => {
+  const country = (req.query.country || 'all').toUpperCase();
+  const now = Date.now();
+  if (_hapiDemoCache[country] && now - _hapiDemoCache[country].ts < HAPI_TTL)
+    return res.json(_hapiDemoCache[country].data);
+  if (!_hapiId())
+    return res.status(503).json({ error: 'HAPI_APP_ENCODER_IDENTIFER not configured' });
+  try {
+    const params = { population_group: 'REF' };
+    if (country !== 'ALL') params.asylum_location_code = country;
+    const rows = await _hapiAll('/affected-people/refugees', params);
+    // Build gender totals and age pyramid from disaggregated rows
+    const gender = { M: 0, F: 0 };
+    const ageMap = {};
+    for (const r of rows) {
+      const pop = r.population || 0;
+      const g = (r.gender || '').toUpperCase();
+      const age = r.age_range || '';
+      if (g === 'M') gender.M += pop;
+      else if (g === 'F') gender.F += pop;
+      if (age && g !== 'ALL' && (g === 'M' || g === 'F')) {
+        if (!ageMap[age]) ageMap[age] = { range: age, M: 0, F: 0 };
+        ageMap[age][g] += pop;
+      }
+    }
+    // Order age ranges oldest-to-youngest (typical pyramid order, reversed for display)
+    const AGE_ORDER = ['0-4','5-11','12-17','18-59','60+','0-17','18-49','50+','0+'];
+    const ages = Object.values(ageMap).sort((a, b) => {
+      const ai = AGE_ORDER.indexOf(a.range), bi = AGE_ORDER.indexOf(b.range);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      const numA = parseInt(a.range), numB = parseInt(b.range);
+      return (isNaN(numA) ? 99 : numA) - (isNaN(numB) ? 99 : numB);
+    }).map(a => ({ ...a, total: a.M + a.F }));
+    const data = { country, gender, ages, ts: now, source: 'UNHCR via HAPI' };
+    _hapiDemoCache[country] = { data, ts: now };
+    res.json(data);
+  } catch (err) {
+    res.status(503).json({ error: 'HAPI demographics unavailable', detail: err.message });
+  }
+});
+
+// ─── /api/hapi/idps — Internally Displaced Persons by country ────────────────
+const _hapiIdpCache = { data: null, ts: 0 };
+app.get('/api/hapi/idps', async (req, res) => {
+  const now = Date.now();
+  if (_hapiIdpCache.data && now - _hapiIdpCache.ts < HAPI_TTL)
+    return res.json(_hapiIdpCache.data);
+  if (!_hapiId())
+    return res.status(503).json({ error: 'HAPI_APP_ENCODER_IDENTIFER not configured', idps: [], total: 0 });
+  try {
+    const rows = await _hapiAll('/affected-people/idps', {});
+    // Per country keep the highest-round figure (most recent IOM DTM round)
+    const byCountry = {};
+    for (const r of rows) {
+      const name = r.location_name || '';
+      const code = (r.location_code || '').toUpperCase();
+      if (!name) continue;
+      const rnd = r.reporting_round || 0;
+      if (!byCountry[name] || rnd > byCountry[name].round) {
+        byCountry[name] = {
+          country: name, code,
+          total:     r.population || 0,
+          round:     rnd,
+          operation: r.operation || '',
+          type:      r.assessment_type || '',
+        };
+      }
+    }
+    const idps = Object.values(byCountry)
+      .filter(c => c.total > 0)
+      .sort((a, b) => b.total - a.total);
+    const data = { idps, total: idps.reduce((s, c) => s + c.total, 0), ts: now, source: 'IOM DTM via HAPI' };
+    _hapiIdpCache.data = data; _hapiIdpCache.ts = now;
+    res.json(data);
+  } catch (err) {
+    res.status(503).json({ error: 'HAPI IDPs unavailable', detail: err.message, idps: [], total: 0 });
+  }
+});
+
+// ─── /api/hapi/refugee-news — Live refugee/displacement news via GDELT ────────
+const _hapiNewsCache = { data: null, ts: 0 };
+const HAPI_NEWS_TTL = 10 * 60_000;
+app.get('/api/hapi/refugee-news', async (req, res) => {
+  const now = Date.now();
+  if (_hapiNewsCache.data && now - _hapiNewsCache.ts < HAPI_NEWS_TTL)
+    return res.json(_hapiNewsCache.data);
+  try {
+    const r = await axios.get('https://api.gdeltproject.org/api/v2/doc/doc', {
+      params: {
+        query: 'refugee displaced asylum seeker IDP humanitarian crisis shelter camp UNHCR',
+        mode: 'artlist', maxrecords: 30, format: 'json', sort: 'datedesc', timespan: '12h',
+      },
+      timeout: 10_000,
+    });
+    const articles = (r.data?.articles || []).map(a => ({
+      title:  a.title  || '',
+      url:    a.url    || '',
+      source: a.domain || '',
+      date:   a.seendate || '',
+      tone:   a.tone ? parseFloat(a.tone).toFixed(1) : '0',
+    }));
+    const data = { articles, ts: now, source: 'GDELT v2' };
+    _hapiNewsCache.data = data; _hapiNewsCache.ts = now;
+    res.json(data);
+  } catch (err) {
+    if (_hapiNewsCache.data) return res.json(_hapiNewsCache.data);
+    res.status(503).json({ error: 'Refugee news unavailable', detail: err.message, articles: [] });
+  }
+});
+
 // ─── /api/gpsjam — GPS jamming zones (gpsjam.org + OSINT static) ──────────────
 const gpsjamCache = { data: null, ts: 0 };
 app.get('/api/gpsjam', async (req, res) => {
