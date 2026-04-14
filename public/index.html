@@ -112,6 +112,92 @@
     .mrl-loading{font-size:8px;color:#3d5a78;text-align:center;padding:16px;letter-spacing:1px}
     .mrl-footer{display:flex;align-items:center;gap:6px;padding:4px 10px;border-top:1px solid #0d1e2e;background:rgba(0,0,0,.3);font-size:7px;color:#2a4060}
     .mrl-src-strip{color:#2a4060;font-size:6.5px}
+
+    /* ── TWITTER TRACKER STYLES ─────────────────────────────────────────── */
+    .twt-header{background:rgba(29,161,242,.04);border-bottom:1px solid rgba(29,161,242,.15);flex-shrink:0}
+    .twt-title-row{display:flex;align-items:center;gap:6px;padding:7px 10px 5px}
+    .twt-icon{font-size:13px;font-weight:900;color:#1da1f2}
+    .twt-title{color:#1da1f2;font-size:9px;font-weight:700;letter-spacing:2px}
+    .twt-live-dot{font-size:8px;color:#ff4444;animation:pulse 2s infinite}
+    .twt-view-sw{display:flex;gap:3px}
+    .twt-vsw{background:transparent;border:1px solid #1a3040;color:#3d5a78;font-size:7px;padding:2px 7px;border-radius:2px;cursor:pointer;letter-spacing:.5px;transition:all .15s}
+    .twt-vsw.active{background:rgba(29,161,242,.12);border-color:rgba(29,161,242,.45);color:#1da1f2}
+    .twt-vsw:hover{border-color:#3d5a78;color:#c8dff0}
+
+    /* Stats bar */
+    .twt-stats-bar{display:flex;border-bottom:1px solid #0d1e2e}
+    .twt-stat{flex:1;text-align:center;padding:5px 3px 4px;border-right:1px solid #0d1e2e}
+    .twt-sv{display:block;font-size:13px;font-weight:700;color:#c8dff0;line-height:1}
+    .twt-sv-ts{font-size:9px}
+    .twt-sl{display:block;font-size:5.5px;color:#3d5a78;letter-spacing:.5px;margin-top:2px}
+
+    /* Topic pills */
+    .twt-topic-row{display:flex;gap:3px;flex-wrap:wrap;padding:5px 8px;border-bottom:1px solid #0d1e2e;background:rgba(0,0,0,.15)}
+    .twt-tpill{background:transparent;border:1px solid #1a3040;color:#3d5a78;font-size:7px;padding:2px 7px;border-radius:12px;cursor:pointer;white-space:nowrap;transition:all .15s}
+    .twt-tpill.active{background:rgba(29,161,242,.12);border-color:rgba(29,161,242,.45);color:#1da1f2}
+    .twt-tpill:hover{border-color:#3d5a78;color:#c8dff0}
+
+    /* Search */
+    .twt-search-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid #0d1e2e;background:rgba(0,0,0,.2)}
+    .twt-search-input{flex:1;background:rgba(255,255,255,.04);border:1px solid #1a3040;color:#c8dff0;font-size:8px;padding:4px 8px;border-radius:2px;outline:none;font-family:inherit;letter-spacing:.3px}
+    .twt-search-input:focus{border-color:rgba(29,161,242,.5);background:rgba(29,161,242,.04)}
+    .twt-search-input::placeholder{color:#2a4060}
+    .twt-result-count{font-size:7px;color:#3d5a78;white-space:nowrap;flex-shrink:0}
+
+    /* Feed body */
+    .twt-body{flex:1;overflow-y:auto;padding:4px 6px;min-height:0}
+    .twt-body::-webkit-scrollbar{width:3px}
+    .twt-body::-webkit-scrollbar-track{background:#040608}
+    .twt-body::-webkit-scrollbar-thumb{background:#1a3040;border-radius:2px}
+    .twt-loading-msg{font-size:8px;color:#3d5a78;text-align:center;padding:20px 10px;letter-spacing:1px}
+    .twt-error-msg{font-size:8px;color:#ff6644;text-align:center;padding:20px 10px;line-height:1.6}
+    .twt-empty{font-size:8px;color:#2a4060;text-align:center;padding:20px 10px;font-style:italic}
+
+    /* Tweet card */
+    .twt-card{background:rgba(10,20,35,.75);border:1px solid #1a2840;border-left:3px solid #1a3a5a;border-radius:3px;padding:8px 9px;margin-bottom:5px;transition:border-color .15s,background .15s}
+    .twt-card:hover{border-color:#1da1f2;border-left-color:#1da1f2;background:rgba(29,161,242,.05)}
+    .twt-card-head{display:flex;align-items:flex-start;gap:7px;margin-bottom:6px}
+    .twt-avatar{width:26px;height:26px;border-radius:50%;background:rgba(29,161,242,.2);border:1px solid rgba(29,161,242,.35);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#1da1f2;flex-shrink:0;line-height:1}
+    .twt-card-meta{flex:1;min-width:0}
+    .twt-card-name{display:block;font-size:8.5px;font-weight:700;color:#c8dff0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .twt-card-handle{font-size:7px;color:#3d5a78;letter-spacing:.2px}
+    .twt-card-time{font-size:6.5px;color:#2a4060;white-space:nowrap;flex-shrink:0;padding-top:1px}
+    .twt-card-text{font-size:8.5px;color:#a0bdd0;line-height:1.55;margin-bottom:6px;word-break:break-word}
+    .twt-card-footer{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+    .twt-card-tags{display:flex;gap:3px;flex-wrap:wrap;flex:1}
+    .twt-tag{font-size:6.5px;padding:1px 5px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid #1a3040;color:#5a7a9a;letter-spacing:.3px}
+    .twt-tag-missiles{background:rgba(255,102,0,.08);border-color:rgba(255,102,0,.25);color:#ff8844}
+    .twt-tag-drones{background:rgba(155,89,255,.08);border-color:rgba(155,89,255,.25);color:#9b59ff}
+    .twt-tag-iaf{background:rgba(0,170,255,.08);border-color:rgba(0,170,255,.25);color:#00aaff}
+    .twt-tag-navy{background:rgba(0,100,200,.1);border-color:rgba(0,100,200,.3);color:#3399ff}
+    .twt-tag-army{background:rgba(0,180,100,.08);border-color:rgba(0,180,100,.25);color:#00cc77}
+    .twt-tag-drdo{background:rgba(255,200,0,.06);border-color:rgba(255,200,0,.2);color:#ffcc00}
+    .twt-tag-space{background:rgba(180,100,255,.08);border-color:rgba(180,100,255,.25);color:#cc88ff}
+    .twt-tag-geopolitics{background:rgba(255,60,60,.07);border-color:rgba(255,60,60,.2);color:#ff7777}
+    .twt-view-link{font-size:7px;color:#1da1f2;text-decoration:none;padding:2px 6px;border:1px solid rgba(29,161,242,.3);border-radius:2px;white-space:nowrap;letter-spacing:.3px;flex-shrink:0}
+    .twt-view-link:hover{background:rgba(29,161,242,.1)}
+
+    /* Accounts view */
+    .twt-acc-summary{font-size:7.5px;padding:7px 10px;border-bottom:1px solid #0d1e2e;background:rgba(0,0,0,.2)}
+    .twt-acc-row{display:flex;align-items:center;gap:7px;padding:6px 9px;border-bottom:1px solid #0a1520;transition:background .12s}
+    .twt-acc-row:hover{background:rgba(255,255,255,.02)}
+    .twt-acc-live{border-left:2px solid #00ff88}
+    .twt-acc-dead{border-left:2px solid #1a2840;opacity:.55}
+    .twt-acc-dot{font-size:8px;flex-shrink:0}
+    .twt-dot-live{color:#00ff88}
+    .twt-dot-dead{color:#ff4444}
+    .twt-acc-info{flex:1;min-width:0}
+    .twt-acc-name{font-size:8px;font-weight:700;color:#c8dff0;display:block}
+    .twt-acc-handle{font-size:7px;color:#3d5a78}
+    .twt-acc-focus{font-size:6.5px;color:#2a4060;display:block;margin-top:1px}
+    .twt-acc-count{font-size:7px;color:#3d5a78;white-space:nowrap;flex-shrink:0}
+
+    /* Pagination footer */
+    .twt-footer{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-top:1px solid #0d1e2e;background:rgba(0,0,0,.3);flex-shrink:0;gap:8px}
+    .twt-pg-btn{background:transparent;border:1px solid #1a3040;color:#3d5a78;font-size:7.5px;padding:3px 10px;border-radius:2px;cursor:pointer;letter-spacing:.5px;transition:all .15s}
+    .twt-pg-btn:hover:not(:disabled){border-color:#1da1f2;color:#1da1f2}
+    .twt-pg-btn:disabled{opacity:.3;cursor:default}
+    .twt-pg-label{font-size:7.5px;color:#3d5a78;letter-spacing:1px}
   </style>
 </head>
 <body>
@@ -432,6 +518,7 @@
         <button class="rptab" data-rptab="education" style="color:#a0d4ff;border-bottom-color:#a0d4ff">📚 ARMS DB</button>
         <button class="rptab" data-rptab="tracker"     style="color:#00ff88;border-bottom-color:#00ff88">🎯 TRACKER</button>
         <button class="rptab" data-rptab="marine-live" style="color:#00d4ff;border-bottom-color:#00d4ff">🚢 AIS LIVE</button>
+        <button class="rptab" data-rptab="twtracker"   style="color:#1da1f2;border-bottom-color:#1da1f2">𝕏 TWITTER</button>
       </div>
 
       <!-- TAB: News (GDELT) -->
@@ -1095,6 +1182,9 @@
       <!-- TAB: India Defence Deal Tracker ──────────────────────── -->
       <div class="rp-tab-body" id="rptab-tracker" style="display:none;padding:0;position:relative;overflow:hidden"></div>
 
+      <!-- TAB: India Defence Twitter Tracker ─────────────────── -->
+      <div class="rp-tab-body" id="rptab-twtracker" style="display:none;padding:0;position:relative;overflow:hidden;display:flex;flex-direction:column"></div>
+
       <!-- TAB: Education / Arms Inventory -->
       <div class="rp-tab-body" id="rptab-education" style="display:none;padding:0">
 
@@ -1368,6 +1458,7 @@
   <script src="js/education.js"></script>
   <script src="js/tracker.js"></script>
   <script src="js/marine.js"></script>
+  <script src="js/twitter-tracker.js"></script>
   <script src="js/app.js"></script>
 
   <script>
@@ -1393,6 +1484,7 @@
         if (tab === 'education'    && !btn._educationInited)  { btn._educationInited  = true; EDUCATION.init(); }
         if (tab === 'tracker'      && !btn._trackerInited)    { btn._trackerInited    = true; TRACKER.init(); }
         if (tab === 'marine-live'  && !btn._marineLiveInited) { btn._marineLiveInited = true; MARINE_LIVE.init(); }
+        if (tab === 'twtracker'    && !btn._twtInited)        { btn._twtInited        = true; TWITTER_TRACKER.init(); }
       });
     });
 
