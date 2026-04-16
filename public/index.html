@@ -198,6 +198,34 @@
     .twt-pg-btn:hover:not(:disabled){border-color:#1da1f2;color:#1da1f2}
     .twt-pg-btn:disabled{opacity:.3;cursor:default}
     .twt-pg-label{font-size:7.5px;color:#3d5a78;letter-spacing:1px}
+
+    /* ── TWITTER INTEL launch button (topbar) ──────────────────────────────── */
+    #twt-launch-btn{
+      background:linear-gradient(135deg,#ff6a00,#ee4d00);
+      color:#fff;
+      border:none;
+      border-radius:4px;
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:1.2px;
+      padding:5px 13px;
+      cursor:pointer;
+      white-space:nowrap;
+      box-shadow:0 0 10px rgba(255,106,0,.45),0 0 24px rgba(255,106,0,.2);
+      animation:twt-pulse-glow 2.4s ease-in-out infinite;
+      transition:transform .12s,box-shadow .12s;
+      position:relative;
+      flex-shrink:0;
+    }
+    #twt-launch-btn:hover{
+      transform:scale(1.06);
+      box-shadow:0 0 18px rgba(255,106,0,.7),0 0 36px rgba(255,106,0,.35);
+    }
+    #twt-launch-btn:active{ transform:scale(.97); }
+    @keyframes twt-pulse-glow{
+      0%,100%{ box-shadow:0 0 8px rgba(255,106,0,.4),0 0 20px rgba(255,106,0,.15); }
+      50%{     box-shadow:0 0 18px rgba(255,106,0,.75),0 0 38px rgba(255,106,0,.3); }
+    }
   </style>
 </head>
 <body>
@@ -282,6 +310,7 @@
         <div id="usearch-results" class="usearch-results" style="display:none"></div>
       </div>
       <div id="utc-clock">--:--:-- UTC</div>
+      <button id="twt-launch-btn" onclick="openTwitterTracker()" title="India Defence Twitter Tracker — 95 live accounts">𝕏 TWITTER INTEL</button>
       <button id="news-overlay-btn" class="ctrl-btn" onclick="NEWS_OVERLAY.open()" title="Live War News Monitor — NewsAPI real-time feeds" style="color:#ff5533;border-color:rgba(255,85,51,.35);background:rgba(255,85,51,.07)">📡 LIVE NEWS</button>
       <button id="api-status-btn" class="ctrl-btn" title="API Status — show all data sources">⬡ API</button>
       <button id="crt-btn"   class="ctrl-btn" title="CRT Scanline Effect">CRT</button>
@@ -1462,6 +1491,20 @@
   <script src="js/app.js"></script>
 
   <script>
+    // ── Twitter Intel launch button (topbar orange button) ─
+    function openTwitterTracker() {
+      // Make sure right panel is visible
+      const rp = document.getElementById('right-panel');
+      if (rp) rp.style.display = 'flex';
+
+      // Activate the twtracker tab
+      const twtBtn = document.querySelector('.rptab[data-rptab="twtracker"]');
+      if (twtBtn) twtBtn.click();
+
+      // Scroll right-panel tabs into view so user sees the active tab
+      twtBtn?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+
     // ── Right-panel tab switching ──────────────────────────
     document.querySelectorAll('.rptab').forEach(btn => {
       btn.addEventListener('click', () => {
