@@ -113,91 +113,121 @@
     .mrl-footer{display:flex;align-items:center;gap:6px;padding:4px 10px;border-top:1px solid #0d1e2e;background:rgba(0,0,0,.3);font-size:7px;color:#2a4060}
     .mrl-src-strip{color:#2a4060;font-size:6.5px}
 
-    /* ── TWITTER TRACKER STYLES ─────────────────────────────────────────── */
-    .twt-header{background:rgba(29,161,242,.04);border-bottom:1px solid rgba(29,161,242,.15);flex-shrink:0}
-    .twt-title-row{display:flex;align-items:center;gap:6px;padding:7px 10px 5px}
-    .twt-icon{font-size:13px;font-weight:900;color:#1da1f2}
-    .twt-title{color:#1da1f2;font-size:9px;font-weight:700;letter-spacing:2px}
-    .twt-live-dot{font-size:8px;color:#ff4444;animation:pulse 2s infinite}
-    .twt-view-sw{display:flex;gap:3px}
-    .twt-vsw{background:transparent;border:1px solid #1a3040;color:#3d5a78;font-size:7px;padding:2px 7px;border-radius:2px;cursor:pointer;letter-spacing:.5px;transition:all .15s}
-    .twt-vsw.active{background:rgba(29,161,242,.12);border-color:rgba(29,161,242,.45);color:#1da1f2}
-    .twt-vsw:hover{border-color:#3d5a78;color:#c8dff0}
+    /* ── TWITTER TRACKER FULL-PAGE OVERLAY ──────────────────────────────── */
+
+    /* Overlay container */
+    #twt-overlay{position:fixed;inset:0;z-index:2000;background:#04060a;display:none;flex-direction:column;overflow:hidden}
+
+    /* Header */
+    .twto-header{flex-shrink:0;background:rgba(29,161,242,.04);border-bottom:2px solid rgba(29,161,242,.18)}
+    .twto-title-row{display:flex;align-items:center;gap:10px;padding:12px 18px 10px;border-bottom:1px solid rgba(29,161,242,.1)}
+    .twto-x-icon{font-size:22px;font-weight:900;color:#ff6a00;flex-shrink:0}
+    .twto-title-block{flex:1;min-width:0}
+    .twto-title{display:block;color:#ffffff;font-size:13px;font-weight:800;letter-spacing:2px}
+    .twto-subtitle{display:block;color:#3d5a78;font-size:9px;letter-spacing:.5px;margin-top:2px}
+    .twto-live-dot{font-size:9px;color:#00ff88;letter-spacing:1px;animation:pulse 2s infinite;flex-shrink:0}
+
+    /* View switch */
+    .twto-view-sw{display:flex;gap:4px;flex-shrink:0}
+    .twto-vsw{background:transparent;border:1px solid #1a3040;color:#3d5a78;font-size:9px;padding:5px 12px;border-radius:3px;cursor:pointer;letter-spacing:.5px;transition:all .15s}
+    .twto-vsw.active{background:rgba(29,161,242,.14);border-color:rgba(29,161,242,.5);color:#1da1f2}
+    .twto-vsw:hover{border-color:#3d5a78;color:#c8dff0}
+
+    /* Refresh + close buttons */
+    .twto-refresh-btn{background:transparent;border:1px solid #1a3040;color:#3d5a78;font-size:9px;padding:5px 12px;border-radius:3px;cursor:pointer;letter-spacing:.5px;transition:all .15s;flex-shrink:0}
+    .twto-refresh-btn:hover{border-color:#ff9933;color:#ff9933}
+    .twto-close-btn{background:rgba(255,60,60,.08);border:1px solid rgba(255,60,60,.3);color:#ff6666;font-size:10px;font-weight:700;padding:5px 14px;border-radius:3px;cursor:pointer;letter-spacing:.5px;transition:all .15s;flex-shrink:0}
+    .twto-close-btn:hover{background:rgba(255,60,60,.18);border-color:#ff4444;color:#ff3333}
 
     /* Stats bar */
-    .twt-stats-bar{display:flex;border-bottom:1px solid #0d1e2e}
-    .twt-stat{flex:1;text-align:center;padding:5px 3px 4px;border-right:1px solid #0d1e2e}
-    .twt-sv{display:block;font-size:13px;font-weight:700;color:#c8dff0;line-height:1}
-    .twt-sv-ts{font-size:9px}
-    .twt-sl{display:block;font-size:5.5px;color:#3d5a78;letter-spacing:.5px;margin-top:2px}
+    .twto-stats-bar{display:flex;border-bottom:1px solid #0d1e2e}
+    .twto-stat{flex:1;text-align:center;padding:7px 4px 6px;border-right:1px solid #0d1e2e}
+    .twto-sv{display:block;font-size:18px;font-weight:700;color:#c8dff0;line-height:1}
+    .twto-sl{display:block;font-size:7px;color:#3d5a78;letter-spacing:.8px;margin-top:3px;text-transform:uppercase}
 
     /* Topic pills */
-    .twt-topic-row{display:flex;gap:3px;flex-wrap:wrap;padding:5px 8px;border-bottom:1px solid #0d1e2e;background:rgba(0,0,0,.15)}
-    .twt-tpill{background:transparent;border:1px solid #1a3040;color:#3d5a78;font-size:7px;padding:2px 7px;border-radius:12px;cursor:pointer;white-space:nowrap;transition:all .15s}
-    .twt-tpill.active{background:rgba(29,161,242,.12);border-color:rgba(29,161,242,.45);color:#1da1f2}
-    .twt-tpill:hover{border-color:#3d5a78;color:#c8dff0}
+    .twto-topic-row{display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid #0d1e2e;background:rgba(0,0,0,.2)}
+    .twto-tpill{background:transparent;border:1px solid #1a3040;color:#5a7a9a;font-size:10px;padding:5px 14px;border-radius:20px;cursor:pointer;white-space:nowrap;transition:all .15s;font-family:inherit}
+    .twto-tpill.active{background:rgba(29,161,242,.14);border-color:rgba(29,161,242,.55);color:#1da1f2;box-shadow:0 0 8px rgba(29,161,242,.2)}
+    .twto-tpill:hover{border-color:#5a7a9a;color:#c8dff0}
 
     /* Search */
-    .twt-search-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid #0d1e2e;background:rgba(0,0,0,.2)}
-    .twt-search-input{flex:1;background:rgba(255,255,255,.04);border:1px solid #1a3040;color:#c8dff0;font-size:8px;padding:4px 8px;border-radius:2px;outline:none;font-family:inherit;letter-spacing:.3px}
-    .twt-search-input:focus{border-color:rgba(29,161,242,.5);background:rgba(29,161,242,.04)}
-    .twt-search-input::placeholder{color:#2a4060}
-    .twt-result-count{font-size:7px;color:#3d5a78;white-space:nowrap;flex-shrink:0}
+    .twto-search-row{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid #0d1e2e;background:rgba(0,0,0,.3)}
+    .twto-search-icon{font-size:13px;flex-shrink:0;color:#3d5a78}
+    .twto-search-input{flex:1;background:rgba(255,255,255,.05);border:1px solid #1a3040;color:#c8dff0;font-size:11px;padding:7px 12px;border-radius:4px;outline:none;font-family:inherit;letter-spacing:.3px}
+    .twto-search-input:focus{border-color:rgba(29,161,242,.6);background:rgba(29,161,242,.06)}
+    .twto-search-input::placeholder{color:#2a4060}
+    .twto-result-count{font-size:10px;color:#3d5a78;white-space:nowrap;flex-shrink:0;letter-spacing:.5px}
 
-    /* Feed body */
-    .twt-body{flex:1;overflow-y:auto;padding:4px 6px;min-height:0}
-    .twt-body::-webkit-scrollbar{width:3px}
-    .twt-body::-webkit-scrollbar-track{background:#040608}
-    .twt-body::-webkit-scrollbar-thumb{background:#1a3040;border-radius:2px}
-    .twt-loading-msg{font-size:8px;color:#3d5a78;text-align:center;padding:20px 10px;letter-spacing:1px}
-    .twt-error-msg{font-size:8px;color:#ff6644;text-align:center;padding:20px 10px;line-height:1.6}
-    .twt-empty{font-size:8px;color:#2a4060;text-align:center;padding:20px 10px;font-style:italic}
+    /* Feed body — scrollable, hosts the grid */
+    .twto-body{flex:1;overflow-y:auto;padding:16px;min-height:0;background:#050810}
+    .twto-body::-webkit-scrollbar{width:4px}
+    .twto-body::-webkit-scrollbar-track{background:#040608}
+    .twto-body::-webkit-scrollbar-thumb{background:#1a3040;border-radius:2px}
+
+    /* Tweet grid — 4 cols desktop, 2 tablet, 1 mobile */
+    .twto-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    @media(max-width:1200px){.twto-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:800px) {.twto-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:500px) {.twto-grid{grid-template-columns:1fr}}
 
     /* Tweet card */
-    .twt-card{background:rgba(10,20,35,.75);border:1px solid #1a2840;border-left:3px solid #1a3a5a;border-radius:3px;padding:8px 9px;margin-bottom:5px;transition:border-color .15s,background .15s}
-    .twt-card:hover{border-color:#1da1f2;border-left-color:#1da1f2;background:rgba(29,161,242,.05)}
-    .twt-card-head{display:flex;align-items:flex-start;gap:7px;margin-bottom:6px}
-    .twt-avatar{width:26px;height:26px;border-radius:50%;background:rgba(29,161,242,.2);border:1px solid rgba(29,161,242,.35);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#1da1f2;flex-shrink:0;line-height:1}
-    .twt-card-meta{flex:1;min-width:0}
-    .twt-card-name{display:block;font-size:8.5px;font-weight:700;color:#c8dff0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .twt-card-handle{font-size:7px;color:#3d5a78;letter-spacing:.2px}
-    .twt-card-time{font-size:6.5px;color:#2a4060;white-space:nowrap;flex-shrink:0;padding-top:1px}
-    .twt-card-text{font-size:8.5px;color:#a0bdd0;line-height:1.55;margin-bottom:6px;word-break:break-word}
-    .twt-card-footer{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-    .twt-card-tags{display:flex;gap:3px;flex-wrap:wrap;flex:1}
-    .twt-tag{font-size:6.5px;padding:1px 5px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid #1a3040;color:#5a7a9a;letter-spacing:.3px}
-    .twt-tag-missiles{background:rgba(255,102,0,.08);border-color:rgba(255,102,0,.25);color:#ff8844}
-    .twt-tag-drones{background:rgba(155,89,255,.08);border-color:rgba(155,89,255,.25);color:#9b59ff}
-    .twt-tag-iaf{background:rgba(0,170,255,.08);border-color:rgba(0,170,255,.25);color:#00aaff}
-    .twt-tag-navy{background:rgba(0,100,200,.1);border-color:rgba(0,100,200,.3);color:#3399ff}
-    .twt-tag-army{background:rgba(0,180,100,.08);border-color:rgba(0,180,100,.25);color:#00cc77}
-    .twt-tag-drdo{background:rgba(255,200,0,.06);border-color:rgba(255,200,0,.2);color:#ffcc00}
-    .twt-tag-space{background:rgba(180,100,255,.08);border-color:rgba(180,100,255,.25);color:#cc88ff}
-    .twt-tag-geopolitics{background:rgba(255,60,60,.07);border-color:rgba(255,60,60,.2);color:#ff7777}
-    .twt-view-link{font-size:7px;color:#1da1f2;text-decoration:none;padding:2px 6px;border:1px solid rgba(29,161,242,.3);border-radius:2px;white-space:nowrap;letter-spacing:.3px;flex-shrink:0}
-    .twt-view-link:hover{background:rgba(29,161,242,.1)}
+    .twto-card{background:rgba(10,18,32,.9);border:1px solid #1a2840;border-top:3px solid #1a3a5a;border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,transform .12s,box-shadow .15s;cursor:default}
+    .twto-card:hover{border-color:#1da1f2;border-top-color:#1da1f2;transform:translateY(-2px);box-shadow:0 6px 20px rgba(29,161,242,.12)}
+    .twto-card-head{display:flex;align-items:flex-start;gap:10px}
+    .twto-avatar{width:36px;height:36px;border-radius:50%;background:rgba(29,161,242,.18);border:2px solid rgba(29,161,242,.35);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#1da1f2;flex-shrink:0}
+    .twto-avatar-sm{width:28px;height:28px;font-size:11px}
+    .twto-card-meta{flex:1;min-width:0}
+    .twto-card-name{display:block;font-size:11px;font-weight:700;color:#e0eeff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .twto-card-handle{font-size:9px;color:#3d5a78;letter-spacing:.2px}
+    .twto-card-time{font-size:9px;color:#2a4060;white-space:nowrap;flex-shrink:0;padding-top:2px}
+    .twto-card-text{font-size:11px;color:#a8c8e0;line-height:1.6;word-break:break-word;flex:1}
+    .twto-card-footer{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:auto}
+    .twto-card-tags{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+    .twto-tag{font-size:8px;padding:2px 7px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid #1a3040;color:#5a7a9a;letter-spacing:.3px}
+    .twto-tag-missiles{background:rgba(255,102,0,.1);border-color:rgba(255,102,0,.3);color:#ff8844}
+    .twto-tag-drones{background:rgba(155,89,255,.1);border-color:rgba(155,89,255,.3);color:#9b59ff}
+    .twto-tag-iaf{background:rgba(0,170,255,.1);border-color:rgba(0,170,255,.3);color:#00aaff}
+    .twto-tag-navy{background:rgba(0,100,200,.12);border-color:rgba(0,100,200,.35);color:#3399ff}
+    .twto-tag-army{background:rgba(0,180,100,.1);border-color:rgba(0,180,100,.3);color:#00cc77}
+    .twto-tag-drdo{background:rgba(255,200,0,.08);border-color:rgba(255,200,0,.25);color:#ffcc00}
+    .twto-tag-space{background:rgba(180,100,255,.1);border-color:rgba(180,100,255,.3);color:#cc88ff}
+    .twto-tag-geopolitics{background:rgba(255,60,60,.08);border-color:rgba(255,60,60,.25);color:#ff7777}
+    .twto-ext-link{font-size:9px;color:#1da1f2;text-decoration:none;padding:3px 8px;border:1px solid rgba(29,161,242,.3);border-radius:3px;white-space:nowrap;letter-spacing:.3px;flex-shrink:0;transition:background .12s}
+    .twto-ext-link:hover{background:rgba(29,161,242,.12)}
 
-    /* Accounts view */
-    .twt-acc-summary{font-size:7.5px;padding:7px 10px;border-bottom:1px solid #0d1e2e;background:rgba(0,0,0,.2)}
-    .twt-acc-row{display:flex;align-items:center;gap:7px;padding:6px 9px;border-bottom:1px solid #0a1520;transition:background .12s}
-    .twt-acc-row:hover{background:rgba(255,255,255,.02)}
-    .twt-acc-live{border-left:2px solid #00ff88}
-    .twt-acc-dead{border-left:2px solid #1a2840;opacity:.55}
-    .twt-acc-dot{font-size:8px;flex-shrink:0}
-    .twt-dot-live{color:#00ff88}
-    .twt-dot-dead{color:#ff4444}
-    .twt-acc-info{flex:1;min-width:0}
-    .twt-acc-name{font-size:8px;font-weight:700;color:#c8dff0;display:block}
-    .twt-acc-handle{font-size:7px;color:#3d5a78}
-    .twt-acc-focus{font-size:6.5px;color:#2a4060;display:block;margin-top:1px}
-    .twt-acc-count{font-size:7px;color:#3d5a78;white-space:nowrap;flex-shrink:0}
+    /* Status messages */
+    .twto-loading-msg{font-size:13px;color:#3d5a78;text-align:center;padding:60px 20px;letter-spacing:1px}
+    .twto-error-msg{font-size:12px;color:#ff6644;text-align:center;padding:60px 20px;line-height:1.8}
+    .twto-empty{font-size:12px;color:#2a4060;text-align:center;padding:60px 20px;font-style:italic}
+
+    /* Accounts grid */
+    .twto-acc-summary{font-size:11px;padding:10px 16px;border-bottom:1px solid #0d1e2e;background:rgba(0,0,0,.2)}
+    .twto-acc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px}
+    @media(max-width:1200px){.twto-acc-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:800px){.twto-acc-grid{grid-template-columns:repeat(2,1fr)}}
+    .twto-acc-card{background:rgba(10,18,32,.8);border:1px solid #1a2840;border-radius:5px;padding:10px;display:flex;flex-direction:column;gap:6px}
+    .twto-acc-live{border-left:3px solid #00ff88}
+    .twto-acc-dead{border-left:3px solid #2a1a1a;opacity:.5}
+    .twto-acc-top{display:flex;align-items:center;gap:8px}
+    .twto-acc-name{font-size:10px;font-weight:700;color:#c8dff0}
+    .twto-acc-handle{font-size:8px;color:#3d5a78}
+    .twto-acc-focus{font-size:8px;color:#2a4060}
+    .twto-acc-status{font-size:8px;white-space:nowrap;flex-shrink:0}
+    .twto-status-live{color:#00ff88}
+    .twto-status-dead{color:#ff4444}
 
     /* Pagination footer */
-    .twt-footer{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-top:1px solid #0d1e2e;background:rgba(0,0,0,.3);flex-shrink:0;gap:8px}
-    .twt-pg-btn{background:transparent;border:1px solid #1a3040;color:#3d5a78;font-size:7.5px;padding:3px 10px;border-radius:2px;cursor:pointer;letter-spacing:.5px;transition:all .15s}
-    .twt-pg-btn:hover:not(:disabled){border-color:#1da1f2;color:#1da1f2}
-    .twt-pg-btn:disabled{opacity:.3;cursor:default}
-    .twt-pg-label{font-size:7.5px;color:#3d5a78;letter-spacing:1px}
+    .twto-footer{display:flex;align-items:center;justify-content:center;padding:10px 18px;border-top:1px solid #0d1e2e;background:rgba(0,0,0,.4);flex-shrink:0;gap:14px}
+    .twto-pg-btn{background:rgba(29,161,242,.08);border:1px solid rgba(29,161,242,.3);color:#1da1f2;font-size:10px;font-weight:700;padding:7px 20px;border-radius:4px;cursor:pointer;letter-spacing:.8px;transition:all .15s;font-family:inherit}
+    .twto-pg-btn:hover:not(:disabled){background:rgba(29,161,242,.2);border-color:#1da1f2;box-shadow:0 0 10px rgba(29,161,242,.2)}
+    .twto-pg-btn:disabled{opacity:.25;cursor:default}
+    .twto-pg-label{font-size:11px;color:#5a7a9a;letter-spacing:1.5px;font-weight:700;min-width:100px;text-align:center}
+    .twto-pg-dots{display:flex;gap:5px;align-items:center}
+    .twto-dot{width:8px;height:8px;border-radius:50%;background:#1a3040;cursor:pointer;transition:all .15s;border:none;display:inline-block}
+    .twto-dot.active{background:#1da1f2;box-shadow:0 0 6px rgba(29,161,242,.5);transform:scale(1.3)}
+    .twto-dot:hover{background:#5a7a9a}
+    .twto-dot-more{font-size:9px;color:#3d5a78;letter-spacing:.5px}
 
     /* ── TWITTER INTEL launch button (topbar) ──────────────────────────────── */
     #twt-launch-btn{
@@ -1460,6 +1490,9 @@
     <button class="mnav-btn" onclick="APP.showMobilePanel('intel')">◈ INTEL</button>
   </nav>
 
+  <!-- ── Twitter Tracker Full-Page Overlay ──────────────────── -->
+  <div id="twt-overlay" style="display:none"></div>
+
   <!-- ── Scripts ─────────────────────────────────────────── -->
   <script src="js/utils.js"></script>
   <script src="js/effects.js"></script>
@@ -1493,17 +1526,12 @@
   <script>
     // ── Twitter Intel launch button (topbar orange button) ─
     function openTwitterTracker() {
-      // Make sure right panel is visible
-      const rp = document.getElementById('right-panel');
-      if (rp) rp.style.display = 'flex';
-
-      // Activate the twtracker tab
-      const twtBtn = document.querySelector('.rptab[data-rptab="twtracker"]');
-      if (twtBtn) twtBtn.click();
-
-      // Scroll right-panel tabs into view so user sees the active tab
-      twtBtn?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      TWITTER_TRACKER.init(); // init renders shell + fetches on first call; subsequent calls just open
     }
+    // Close on ESC key
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') TWITTER_TRACKER.close();
+    });
 
     // ── Right-panel tab switching ──────────────────────────
     document.querySelectorAll('.rptab').forEach(btn => {
