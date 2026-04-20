@@ -18,6 +18,7 @@ const https   = require('https');
 const XLSX    = require('xlsx');
 const path    = require('path');
 const fs      = require('fs');
+const NLP     = require('./nlp');
 const router  = express.Router();
 
 // Prevent EventEmitter warning for concurrent HTTPS connections
@@ -237,17 +238,6 @@ function _loadProfiles() {
 
 let PROFILES = _loadProfiles();
 
-// ─── Defence keyword filter ───────────────────────────────────────────────────
-const DEFENCE_KW = [
-  'missile','drone','uav','brahmos','akash','agni','tejas','lca','drdo',
-  'iaf','air force','indian navy','indian army','nuclear','hypersonic',
-  'ballistic','cruise','radar','frigate','submarine','aircraft carrier',
-  'fighter','helicopter','warship','destroyer','defence','defense',
-  'military','weapon','warfare','surgical strike','pakistan','border',
-  'lac ','loc ','isro','satellite','rocket launch','procurement','indigenous',
-];
-const _isDefence = t => DEFENCE_KW.some(kw => t.toLowerCase().includes(kw));
-
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 router.get('/india-defence', async (req, res) => {
@@ -262,32 +252,52 @@ router.get('/india-defence', async (req, res) => {
     return res.status(503).json({ error: e.message });
   }
 
+  // Flatten all posts and attach account metadata
   const allPosts = profiles
     .flatMap(p => p.posts.map(post => ({
       ...post,
       account_label:    p.label,
       account_category: p.category,
       account_focus:    p.focus_area,
-    })))
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+    })));
 
-  const defenceFeed = allPosts.filter(p => _isDefence(p.text));
+  // ── NLP filter: score every tweet, keep only signal-rich ones ────────────
+  const nlpFeed = NLP.filterTweets(allPosts);
+
+  // Category breakdown for the UI stats bar
+  const catCounts = {};
+  for (const t of nlpFeed) {
+    for (const c of (t.nlp_categories || [])) {
+      catCounts[c.id] = (catCounts[c.id] || 0) + 1;
+    }
+  }
 
   const result = {
     profiles,
-    feed:      defenceFeed,
-    all_feed:  allPosts,
-    total:     defenceFeed.length,
-    total_all: allPosts.length,
-    live:      profiles.filter(p => p.available).length,
-    sources:   profiles.filter(p => p.available).map(p => `@${p.handle}`),
-    note:      'Twitter Guest Token + GraphQL. No personal API key required.',
-    ts:        now,
+    feed:       nlpFeed,                          // NLP-filtered, scored, sorted
+    all_feed:   allPosts.sort((a,b) => new Date(b.date)-new Date(a.date)), // raw
+    total:      nlpFeed.length,
+    total_all:  allPosts.length,
+    live:       profiles.filter(p => p.available).length,
+    sources:    profiles.filter(p => p.available).map(p => `@${p.handle}`),
+    categories: catCounts,
+    nlp: {
+      min_score:    NLP.MIN_SCORE,
+      noise_removed: allPosts.length - nlpFeed.length,
+      pass_rate:    allPosts.length > 0
+                      ? Math.round((nlpFeed.length / allPosts.length) * 100) + '%'
+                      : '0%',
+    },
+    note: 'NLP-filtered via weighted defence corpus. Noise removed. Twitter Guest Token.',
+    ts:   now,
   };
 
   _cache.data = result;
   _cache.ts   = now;
-  console.log(`[FeedChannel] Done — ${result.live}/${profiles.length} live, ${defenceFeed.length} defence posts`);
+  console.log(
+    `[FeedChannel] Done — ${result.live}/${profiles.length} live | ` +
+    `${allPosts.length} raw → ${nlpFeed.length} passed NLP (${result.nlp.noise_removed} removed)`
+  );
   res.json(result);
 });
 

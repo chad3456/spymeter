@@ -5,16 +5,18 @@
 
 const TWITTER_TRACKER = (() => {
 
+  // Categories match the NLP corpus IDs in feedchannel/nlp.js
   const TOPICS = [
-    { id: 'all',         label: 'ALL',          icon: '🌐', kw: null },
-    { id: 'missiles',    label: 'MISSILES',     icon: '🚀', kw: ['missile','brahmos','akash','agni','astra','nirbhay','prithvi','bvr','ballistic','cruise missile','interceptor','hypersonic'] },
-    { id: 'drones',      label: 'DRONES / UAV', icon: '🛸', kw: ['drone','uav','uas','ucav','suas','remotely piloted','unmanned','mq-9','predator','tapas','rustom'] },
-    { id: 'iaf',         label: 'AIR FORCE',    icon: '✈️',  kw: ['iaf','air force','fighter','rafale','tejas','lca','su-30','mig','apache','chinook','helicopter','squadron','sortie'] },
-    { id: 'navy',        label: 'NAVY',         icon: '⚓',  kw: ['navy','naval','warship','frigate','destroyer','submarine','ins ','aircraft carrier','vikrant','torpedo','sonar','p-8'] },
-    { id: 'army',        label: 'ARMY',         icon: '🪖',  kw: ['army','adgpi','infantry','tank','artillery','arjun','bmp','loc','lac','border','surgical strike','corps','regiment'] },
-    { id: 'drdo',        label: 'DRDO / R&D',   icon: '🔬',  kw: ['drdo','drdl','ade ','cair','research','development','test','trial','indigenous','prototype'] },
-    { id: 'space',       label: 'SPACE',        icon: '🛰',  kw: ['isro','space','satellite','rocket','launch','orbit','asat','pslv','gslv','gaganyaan','agnikul'] },
-    { id: 'geopolitics', label: 'GEO / INTEL',  icon: '🌏',  kw: ['pakistan','china','border','lac','loc','pla','tension','conflict','standoff','quad','indo-pacific','ceasefire'] },
+    { id: 'all',              label: 'ALL',            icon: '🌐' },
+    { id: 'weapon_system',    label: 'WEAPONS',        icon: '🚀' },
+    { id: 'drone',            label: 'DRONE / UAV',    icon: '🛸' },
+    { id: 'acquisition',      label: 'ACQUISITION',    icon: '📋' },
+    { id: 'modernisation',    label: 'MODERNISATION',  icon: '⚙️'  },
+    { id: 'ai_tech',          label: 'AI / TECH',      icon: '🤖' },
+    { id: 'drdo_research',    label: 'DRDO / R&D',     icon: '🔬' },
+    { id: 'national_security',label: 'SECURITY',       icon: '🛡'  },
+    { id: 'geopolitics',      label: 'GEOPOLITICS',    icon: '🌏' },
+    { id: 'space_defence',    label: 'SPACE',          icon: '🛰'  },
   ];
 
   const PAGE_SIZE = 10;
@@ -93,10 +95,11 @@ const TWITTER_TRACKER = (() => {
         <div class="twto-stats-bar">
           <div class="twto-stat"><span class="twto-sv" id="twts-accounts">—</span><span class="twto-sl">ACCOUNTS</span></div>
           <div class="twto-stat"><span class="twto-sv" id="twts-live" style="color:#00ff88">—</span><span class="twto-sl">LIVE</span></div>
-          <div class="twto-stat"><span class="twto-sv" id="twts-posts">—</span><span class="twto-sl">TOTAL POSTS</span></div>
-          <div class="twto-stat"><span class="twto-sv" id="twts-defence" style="color:#ff9933">—</span><span class="twto-sl">DEFENCE POSTS</span></div>
-          <div class="twto-stat" style="flex:2"><span class="twto-sv" id="twts-ts" style="font-size:11px">—</span><span class="twto-sl">LAST FETCHED</span></div>
-          <div class="twto-stat" style="flex:2"><span class="twto-sv" id="twts-page" style="font-size:11px">—</span><span class="twto-sl">PAGE</span></div>
+          <div class="twto-stat"><span class="twto-sv" id="twts-posts">—</span><span class="twto-sl">RAW TWEETS</span></div>
+          <div class="twto-stat"><span class="twto-sv" id="twts-defence" style="color:#ff9933">—</span><span class="twto-sl">NLP PASSED</span></div>
+          <div class="twto-stat"><span class="twto-sv" id="twts-nlp" style="color:#00ff88;font-size:11px">—</span><span class="twto-sl">SIGNAL RATE</span></div>
+          <div class="twto-stat"><span class="twto-sv" id="twts-ts" style="font-size:11px">—</span><span class="twto-sl">LAST FETCH</span></div>
+          <div class="twto-stat"><span class="twto-sv" id="twts-page" style="font-size:11px">—</span><span class="twto-sl">PAGE</span></div>
         </div>
 
         <!-- Topic pills -->
@@ -139,19 +142,21 @@ const TWITTER_TRACKER = (() => {
       </button>`).join('');
   }
 
-  // ── Filters ────────────────────────────────────────────────────────────────
+  // ── Filters (use NLP categories from server, no client-side keyword scan) ──
   function _applyFilters() {
     if (!_data) { _filtered = []; return; }
-    let pool = (_data.feed && _data.feed.length > 0) ? _data.feed : (_data.all_feed || []);
+    // Always start from the NLP-filtered feed (noise already removed server-side)
+    let pool = _data.feed || [];
 
-    const topicDef = TOPICS.find(t => t.id === _topic);
-    if (topicDef && topicDef.kw) {
-      pool = pool.filter(p => {
-        const lower = p.text.toLowerCase();
-        return topicDef.kw.some(kw => lower.includes(kw));
-      });
+    // Category filter — match against nlp_categories array from server
+    if (_topic !== 'all') {
+      pool = pool.filter(p =>
+        Array.isArray(p.nlp_categories) &&
+        p.nlp_categories.some(c => c.id === _topic)
+      );
     }
 
+    // Search filter
     if (_search.trim()) {
       const q = _search.trim().toLowerCase();
       pool = pool.filter(p =>
@@ -172,6 +177,11 @@ const TWITTER_TRACKER = (() => {
     _set('twts-live',     _data.live     !== undefined ? _data.live : '—');
     _set('twts-posts',    _data.total_all !== undefined ? _data.total_all : '—');
     _set('twts-defence',  _data.total    !== undefined ? _data.total : '—');
+    // NLP pass-rate stat
+    if (_data.nlp) {
+      const nlpEl = document.getElementById('twts-nlp');
+      if (nlpEl) nlpEl.textContent = _data.nlp.pass_rate + ' signal';
+    }
     if (_data.ts) {
       const d = new Date(_data.ts);
       _set('twts-ts', d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -226,10 +236,12 @@ const TWITTER_TRACKER = (() => {
     const relTime  = _relativeTime(p.date);
     const absTime  = p.date ? new Date(p.date).toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
     const initial  = (p.account_label || p.handle || '?')[0].toUpperCase();
-    const tags     = _detectTopics(p.text);
-    const tweetUrl = p.link
-      ? p.link.replace(/nitter\.[^/]+/, 'twitter.com').replace(/lightbrd\.com/, 'twitter.com')
-      : '#';
+    // Use server-side NLP categories (colour-coded by the nlp.js corpus)
+    const cats     = Array.isArray(p.nlp_categories) ? p.nlp_categories : [];
+    const score    = p.nlp_score || 0;
+    // Score → signal bar width (capped at 100%)
+    const sigPct   = Math.min(100, Math.round((score / 20) * 100));
+    const sigColor = score >= 12 ? '#ff3366' : score >= 8 ? '#ff9933' : score >= 5 ? '#1da1f2' : '#3d5a78';
 
     return `
       <div class="twto-card">
@@ -241,10 +253,20 @@ const TWITTER_TRACKER = (() => {
           </div>
           <span class="twto-card-time" title="${_esc(absTime)}">${_esc(relTime)}</span>
         </div>
+        <!-- NLP signal bar -->
+        <div class="twto-sig-bar" title="NLP signal score: ${score}">
+          <div class="twto-sig-fill" style="width:${sigPct}%;background:${sigColor}"></div>
+        </div>
         <div class="twto-card-text">${_esc(p.text)}</div>
         <div class="twto-card-footer">
-          <div class="twto-card-tags">${tags.map(t => `<span class="twto-tag twto-tag-${t.id}">${t.icon} ${t.label}</span>`).join('')}</div>
-          ${tweetUrl !== '#' ? `<a class="twto-ext-link" href="${_esc(tweetUrl)}" target="_blank" rel="noopener">↗ VIEW</a>` : ''}
+          <div class="twto-card-tags">
+            ${cats.map(c => `<span class="twto-tag" style="border-color:${c.color}33;color:${c.color};background:${c.color}11">${c.icon} ${c.label}</span>`).join('')}
+          </div>
+          <div class="twto-card-meta-right">
+            ${p.likes    ? `<span class="twto-stat-pill">♥ ${p.likes}</span>` : ''}
+            ${p.retweets ? `<span class="twto-stat-pill">↺ ${p.retweets}</span>` : ''}
+            ${p.link ? `<a class="twto-ext-link" href="${_esc(p.link)}" target="_blank" rel="noopener">↗ VIEW</a>` : ''}
+          </div>
         </div>
       </div>`;
   }
@@ -279,11 +301,6 @@ const TWITTER_TRACKER = (() => {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-  function _detectTopics(text) {
-    const lower = text.toLowerCase();
-    return TOPICS.filter(t => t.kw && t.kw.some(kw => lower.includes(kw))).slice(0, 2);
-  }
-
   function _relativeTime(dateStr) {
     if (!dateStr) return '';
     const diff = Date.now() - new Date(dateStr).getTime();
