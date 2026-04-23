@@ -18,6 +18,7 @@ const https   = require('https');
 const XLSX    = require('xlsx');
 const path    = require('path');
 const fs      = require('fs');
+const cron    = require('node-cron');
 const NLP     = require('./nlp');
 const router  = express.Router();
 
@@ -120,7 +121,7 @@ async function _getUserId(handle) {
 }
 
 // ─── Fetch tweets for a single handle ────────────────────────────────────────
-async function _fetchTweets(handle, count = 8) {
+async function _fetchTweets(handle, count = 20) {
   try {
     const gt  = await _getGuestToken();
     const uid = await _getUserId(handle);
@@ -238,18 +239,21 @@ function _loadProfiles() {
 
 let PROFILES = _loadProfiles();
 
-// ─── Routes ───────────────────────────────────────────────────────────────────
+// ─── 90-day recency cutoff ────────────────────────────────────────────────────
+const RECENCY_CUTOFF_MS = 90 * 24 * 60 * 60_000;
 
-router.get('/india-defence', async (req, res) => {
-  const now = Date.now();
-  if (_cache.data && now - _cache.ts < TTL) return res.json(_cache.data);
-
+// ─── Shared cache-build helper (used by route + cron) ────────────────────────
+async function _refreshCache() {
+  const now      = Date.now();
+  const cutoff   = now - RECENCY_CUTOFF_MS;
   console.log(`[FeedChannel] Fetching tweets for ${PROFILES.length} accounts…`);
-  let profiles;
-  try {
-    profiles = await _fetchAll(PROFILES);
-  } catch (e) {
-    return res.status(503).json({ error: e.message });
+
+  const profiles = await _fetchAll(PROFILES);
+
+  // Drop tweets older than 90 days
+  for (const p of profiles) {
+    p.posts = p.posts.filter(post => new Date(post.date).getTime() > cutoff);
+    p.available = p.posts.length > 0;
   }
 
   // Flatten all posts and attach account metadata
@@ -261,7 +265,7 @@ router.get('/india-defence', async (req, res) => {
       account_focus:    p.focus_area,
     })));
 
-  // ── NLP filter: score every tweet, keep only signal-rich ones ────────────
+  // NLP filter: score every tweet, keep only signal-rich ones
   const nlpFeed = NLP.filterTweets(allPosts);
 
   // Category breakdown for the UI stats bar
@@ -274,21 +278,21 @@ router.get('/india-defence', async (req, res) => {
 
   const result = {
     profiles,
-    feed:       nlpFeed,                          // NLP-filtered, scored, sorted
-    all_feed:   allPosts.sort((a,b) => new Date(b.date)-new Date(a.date)), // raw
+    feed:       nlpFeed,
+    all_feed:   allPosts.sort((a, b) => new Date(b.date) - new Date(a.date)),
     total:      nlpFeed.length,
     total_all:  allPosts.length,
     live:       profiles.filter(p => p.available).length,
     sources:    profiles.filter(p => p.available).map(p => `@${p.handle}`),
     categories: catCounts,
     nlp: {
-      min_score:    NLP.MIN_SCORE,
+      min_score:     NLP.MIN_SCORE,
       noise_removed: allPosts.length - nlpFeed.length,
-      pass_rate:    allPosts.length > 0
-                      ? Math.round((nlpFeed.length / allPosts.length) * 100) + '%'
-                      : '0%',
+      pass_rate:     allPosts.length > 0
+                       ? Math.round((nlpFeed.length / allPosts.length) * 100) + '%'
+                       : '0%',
     },
-    note: 'NLP-filtered via weighted defence corpus. Noise removed. Twitter Guest Token.',
+    note: 'NLP-filtered via weighted defence corpus. 90-day recency filter. Twitter Guest Token.',
     ts:   now,
   };
 
@@ -298,7 +302,31 @@ router.get('/india-defence', async (req, res) => {
     `[FeedChannel] Done — ${result.live}/${profiles.length} live | ` +
     `${allPosts.length} raw → ${nlpFeed.length} passed NLP (${result.nlp.noise_removed} removed)`
   );
-  res.json(result);
+  return result;
+}
+
+// ─── Background cron: pre-warm cache every 15 minutes ────────────────────────
+cron.schedule('*/15 * * * *', async () => {
+  try {
+    await _refreshCache();
+    console.log('[FeedChannel] Cron refresh complete.');
+  } catch (e) {
+    console.error('[FeedChannel] Cron refresh error:', e.message);
+  }
+});
+
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+router.get('/india-defence', async (req, res) => {
+  const now = Date.now();
+  if (_cache.data && now - _cache.ts < TTL) return res.json(_cache.data);
+
+  try {
+    const result = await _refreshCache();
+    res.json(result);
+  } catch (e) {
+    res.status(503).json({ error: e.message });
+  }
 });
 
 router.get('/india-defence/accounts', (_req, res) => {

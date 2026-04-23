@@ -15,7 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── Minimum score to pass the filter ────────────────────────────────────────
-const MIN_SCORE = 4;
+const MIN_SCORE = 3;
 
 // ─── NOISE CORPUS — hard-reject patterns ─────────────────────────────────────
 // If any of these match, the tweet is discarded immediately regardless of score.
@@ -237,6 +237,21 @@ const CATEGORIES = [
       { p: 'mark ii',                       w: 3 },
       { p: 'improved version',              w: 3 },
       { p: 'advanced variant',              w: 3 },
+      { p: 'inducted into service',         w: 5 },
+      { p: 'induction into',                w: 4 },
+      { p: 'fleet modernisation',           w: 4 },
+      { p: 'fleet modernization',           w: 4 },
+      { p: 'decommissioned',                w: 3 },
+      { p: 'commissioned',                  w: 3 },
+      { p: 'latest version',                w: 2 },
+      { p: 'upgraded variant',              w: 4 },
+      { p: 'enhanced capability',           w: 4 },
+      { p: 'new generation',                w: 2 },
+      { p: 'fielded',                        w: 3 },
+      { p: 'cleared for service',           w: 4 },
+      { p: 'inducted',                       w: 3 },
+      { p: 'upgrade contract',              w: 4 },
+      { p: 'upgraded',                       w: 2 },
     ],
   },
 
@@ -445,8 +460,8 @@ function filterTweets(tweets) {
       out.push({ ...t, nlp_score: result.score, nlp_categories: result.categories });
     }
   }
-  // Sort by NLP score desc within same date bucket
-  return out.sort((a, b) => b.nlp_score - a.nlp_score || new Date(b.date) - new Date(a.date));
+  // Sort by date desc (newest first), break ties by NLP score
+  return out.sort((a, b) => new Date(b.date) - new Date(a.date) || b.nlp_score - a.nlp_score);
 }
 
 module.exports = { score, filterTweets, CATEGORIES, MIN_SCORE };
