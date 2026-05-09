@@ -3691,9 +3691,129 @@ app.get('/api/osint/iran-trackers', async (req, res) => {
   res.json(result);
 });
 
-// ─── /api/polymarket — stub (no active Polymarket agent in this build) ─────────
-app.get('/api/polymarket', (req, res) => {
-  res.json({ markets: [], ts: Date.now(), count: 0, status: 'unavailable', source: 'Polymarket agent not configured' });
+// ─── /api/polymarket + /api/predico — live Polymarket Gamma API ──────────────
+const _pmCache = { data: null, ts: 0 };
+const PM_TTL   = 10 * 60_000; // 10 minutes
+
+const PM_KEYWORDS = [
+  'war', 'iran', 'nuclear', 'ukraine', 'russia', 'china taiwan',
+  'drone strike', 'military', 'sanctions', 'invasion', 'ceasefire',
+  'missile', 'nato', 'arms', 'bomb', 'attack', 'conflict'
+];
+
+function _pmCategory(question) {
+  const q = (question || '').toLowerCase();
+  if (/nuclear|nuke|warhead|atomic/.test(q))          return 'nuclear';
+  if (/ceasefire|peace|negotiat|treaty|truce/.test(q)) return 'ceasefire';
+  if (/iran/.test(q))                                  return 'iran';
+  if (/drone/.test(q))                                 return 'drone';
+  if (/ukraine|russia/.test(q))                        return 'ukraine';
+  if (/china|taiwan/.test(q))                          return 'china';
+  if (/sanction|embargo/.test(q))                      return 'sanctions';
+  if (/coup|overthrow/.test(q))                        return 'coup';
+  if (/arms|weapon|missile|bomb/.test(q))              return 'arms';
+  if (/military|army|navy|troops|soldier/.test(q))     return 'military';
+  return 'conflict';
+}
+
+function _pmGeo(question) {
+  const q = (question || '').toLowerCase();
+  if (/iran/.test(q))                        return { lat: 32.4, lng: 53.7 };
+  if (/ukraine/.test(q))                     return { lat: 49.0, lng: 31.0 };
+  if (/russia/.test(q))                      return { lat: 61.0, lng: 105.0 };
+  if (/china/.test(q))                       return { lat: 35.0, lng: 105.0 };
+  if (/taiwan/.test(q))                      return { lat: 23.7, lng: 121.0 };
+  if (/israel|gaza|middle east/.test(q))     return { lat: 31.5, lng: 35.0 };
+  if (/north korea|dprk/.test(q))            return { lat: 40.0, lng: 127.0 };
+  if (/pakistan/.test(q))                    return { lat: 30.0, lng: 70.0 };
+  if (/nato/.test(q))                        return { lat: 50.8, lng: 4.3 };
+  return null;
+}
+
+async function _pmFetch() {
+  const now = Date.now();
+  if (_pmCache.data && now - _pmCache.ts < PM_TTL) return _pmCache.data;
+
+  const results = await Promise.allSettled(
+    PM_KEYWORDS.map(kw =>
+      axios.get('https://gamma-api.polymarket.com/markets', {
+        params: { q: kw, active: true, limit: 100, order: 'volume', ascending: false },
+        timeout: 9_000,
+        headers: { 'Accept': 'application/json', 'User-Agent': 'Spymeter-OSINT/1.0' }
+      }).then(r => Array.isArray(r.data) ? r.data : [])
+    )
+  );
+
+  const seen = new Set();
+  const markets = [];
+  for (const r of results) {
+    if (r.status !== 'fulfilled') continue;
+    for (const m of r.value) {
+      if (!m.id || seen.has(m.id) || !m.active || m.closed || m.archived) continue;
+      seen.add(m.id);
+      const prices  = m.outcomePrices || [];
+      const prob    = prices.length ? Math.min(1, Math.max(0, parseFloat(prices[0]) || 0.5)) : 0.5;
+      markets.push({
+        id:           m.id,
+        question:     m.question || '',
+        probability:  isNaN(prob) ? 0.5 : prob,
+        volume:       m.volumeNum || m.volume || 0,
+        volume24h:    m.volume24hr || 0,
+        liquidity:    m.liquidityNum || m.liquidity || 0,
+        endDate:      m.endDate || '',
+        createdAt:    m.createdAt || '',
+        slug:         m.slug || '',
+        url:          `https://polymarket.com/event/${m.slug || m.id}`,
+        category:     _pmCategory(m.question),
+        outcomes:     m.outcomes || ['Yes','No'],
+        outcomePrices: prices,
+        geo:          _pmGeo(m.question),
+        featured:     m.featured || false,
+        isNew:        m.new || false,
+      });
+    }
+  }
+
+  markets.sort((a, b) => b.volume - a.volume);
+
+  const totalVol  = markets.reduce((s, m) => s + m.volume, 0);
+  const warRisk   = totalVol > 0
+    ? markets.reduce((s, m) => s + m.probability * m.volume, 0) / totalVol : 0.5;
+  const highRisk  = markets.filter(m => m.probability >= 0.6).length;
+
+  const payload = {
+    markets: markets.slice(0, 250),
+    total:      markets.length,
+    totalVolume: totalVol,
+    warRiskScore: Math.round(warRisk * 100),
+    highRisk,
+    ts:     now,
+    source: 'Polymarket Gamma API',
+  };
+  _pmCache.data = payload;
+  _pmCache.ts   = now;
+  console.log(`[Predico] ${markets.length} markets | war-risk ${payload.warRiskScore}%`);
+  return payload;
+}
+
+app.get('/api/polymarket', async (req, res) => {
+  try {
+    if (req.query.flush) { _pmCache.data = null; _pmCache.ts = 0; }
+    res.json(await _pmFetch());
+  } catch (e) {
+    if (_pmCache.data) return res.json({ ..._pmCache.data, stale: true });
+    res.status(503).json({ error: e.message, markets: [] });
+  }
+});
+
+app.get('/api/predico', async (req, res) => {
+  try {
+    if (req.query.flush) { _pmCache.data = null; _pmCache.ts = 0; }
+    res.json(await _pmFetch());
+  } catch (e) {
+    if (_pmCache.data) return res.json({ ..._pmCache.data, stale: true });
+    res.status(503).json({ error: e.message, markets: [] });
+  }
 });
 
 // ─── /api/geocode-capital — OSM Nominatim geocoding ──────────────────────────

@@ -586,7 +586,11 @@
         <button class="rptab" data-rptab="tracker"     style="color:#00ff88;border-bottom-color:#00ff88">🎯 TRACKER</button>
         <button class="rptab" data-rptab="marine-live" style="color:#00d4ff;border-bottom-color:#00d4ff">🚢 AIS LIVE</button>
         <button class="rptab" data-rptab="twtracker"   style="color:#1da1f2;border-bottom-color:#1da1f2">𝕏 TWITTER</button>
+        <button class="rptab" data-rptab="predico"     style="color:#ff4444;border-bottom-color:#ff4444;font-weight:700">🎲 PREDICO</button>
       </div>
+
+      <!-- TAB: Predico — Polymarket War Intelligence -->
+      <div class="rp-tab-body" id="rptab-predico" style="display:none;padding:0;overflow:hidden"></div>
 
       <!-- TAB: News (GDELT) -->
       <div class="rp-tab-body" id="rptab-news">
@@ -1529,6 +1533,7 @@
   <script src="js/tracker.js"></script>
   <script src="js/marine.js"></script>
   <script src="js/twitter-tracker.js"></script>
+  <script src="js/predico.js"></script>
   <script src="js/app.js"></script>
 
   <script>
@@ -1564,6 +1569,7 @@
         if (tab === 'tracker'      && !btn._trackerInited)    { btn._trackerInited    = true; TRACKER.init(); }
         if (tab === 'marine-live'  && !btn._marineLiveInited) { btn._marineLiveInited = true; MARINE_LIVE.init(); }
         if (tab === 'twtracker'    && !btn._twtInited)        { btn._twtInited        = true; TWITTER_TRACKER.init(); }
+        if (tab === 'predico'      && !btn._predicoInited)    { btn._predicoInited    = true; PREDICO.init(); }
       });
     });
 
