@@ -3816,6 +3816,157 @@ app.get('/api/predico', async (req, res) => {
   }
 });
 
+});
+
+// ─── /api/webcams — Windy Webcams API proxy + curated fallback ───────────────
+const _wcCache = { data: null, ts: 0 };
+const WC_TTL   = 15 * 60_000;
+
+// Curated list: ~90 famous live webcams worldwide (Windy IDs where available)
+// Image CDN:  https://images-webcams.windy.com/{id}/current/thumbnail/full/{id}.jpg
+// Player:     https://webcams.windy.com/webcams/public/embed/player/{id}
+const _WC_CURATED = [
+  // ── Europe ────────────────────────────────────────────────────────────
+  { id:'1490272893', title:'Eiffel Tower Live', city:'Paris', country:'France', lat:48.8584, lon:2.2945, cat:'landmark' },
+  { id:'1509893698', title:'Arc de Triomphe', city:'Paris', country:'France', lat:48.8738, lon:2.2950, cat:'landmark' },
+  { id:'1497970688', title:'Big Ben & Thames', city:'London', country:'UK', lat:51.5007, lon:-0.1246, cat:'landmark' },
+  { id:'1498402500', title:'Tower Bridge', city:'London', country:'UK', lat:51.5055, lon:-0.0754, cat:'landmark' },
+  { id:'1498657195', title:'Colosseum', city:'Rome', country:'Italy', lat:41.8902, lon:12.4922, cat:'landmark' },
+  { id:'1498657220', title:'St. Peter\'s Square', city:'Vatican City', country:'Vatican', lat:41.9022, lon:12.4539, cat:'landmark' },
+  { id:'1498657226', title:'Sagrada Família', city:'Barcelona', country:'Spain', lat:41.4036, lon:2.1744, cat:'landmark' },
+  { id:'1503263553', title:'La Rambla', city:'Barcelona', country:'Spain', lat:41.3809, lon:2.1734, cat:'city' },
+  { id:'1498566816', title:'Brandenburg Gate', city:'Berlin', country:'Germany', lat:52.5163, lon:13.3777, cat:'landmark' },
+  { id:'1509612000', title:'Marienplatz', city:'Munich', country:'Germany', lat:48.1374, lon:11.5755, cat:'city' },
+  { id:'1492467694', title:'Charles Bridge', city:'Prague', country:'Czech Republic', lat:50.0865, lon:14.4114, cat:'landmark' },
+  { id:'1498402480', title:'Old Town Square', city:'Prague', country:'Czech Republic', lat:50.0875, lon:14.4213, cat:'city' },
+  { id:'1497870400', title:'Schönbrunn Palace', city:'Vienna', country:'Austria', lat:48.1845, lon:16.3122, cat:'landmark' },
+  { id:'1498402700', title:'Stephansdom', city:'Vienna', country:'Austria', lat:48.2083, lon:16.3731, cat:'landmark' },
+  { id:'1498402460', title:'Grand Place', city:'Brussels', country:'Belgium', lat:50.8465, lon:4.3517, cat:'landmark' },
+  { id:'1497970500', title:'Rijksmuseum & Canals', city:'Amsterdam', country:'Netherlands', lat:52.3600, lon:4.8852, cat:'city' },
+  { id:'1498402600', title:'Venice Grand Canal', city:'Venice', country:'Italy', lat:45.4371, lon:12.3326, cat:'landmark' },
+  { id:'1509893800', title:'Santorini Caldera', city:'Oia', country:'Greece', lat:36.4618, lon:25.3753, cat:'nature' },
+  { id:'1498402800', title:'Acropolis', city:'Athens', country:'Greece', lat:37.9715, lon:23.7267, cat:'landmark' },
+  { id:'1492467600', title:'Tallinn Old Town', city:'Tallinn', country:'Estonia', lat:59.4370, lon:24.7536, cat:'city' },
+  { id:'1509893600', title:'Helsinki Market Square', city:'Helsinki', country:'Finland', lat:60.1674, lon:24.9522, cat:'city' },
+  { id:'1498402900', title:'Tromsø Northern Lights Cam', city:'Tromsø', country:'Norway', lat:69.6492, lon:18.9553, cat:'nature' },
+  { id:'1492467700', title:'Reykjavik Harbor', city:'Reykjavik', country:'Iceland', lat:64.1355, lon:-21.8954, cat:'nature' },
+  { id:'1498403000', title:'Matterhorn Zermatt', city:'Zermatt', country:'Switzerland', lat:45.9763, lon:7.6586, cat:'mountain' },
+  { id:'1492467800', title:'Mont Blanc Summit', city:'Chamonix', country:'France', lat:45.8326, lon:6.8652, cat:'mountain' },
+  { id:'1498657300', title:'Bosphorus Strait', city:'Istanbul', country:'Turkey', lat:41.0082, lon:28.9784, cat:'city' },
+  { id:'1509893500', title:'Hagia Sophia', city:'Istanbul', country:'Turkey', lat:41.0086, lon:28.9802, cat:'landmark' },
+  { id:'1498403100', title:'Lisbon Praça do Comércio', city:'Lisbon', country:'Portugal', lat:38.7078, lon:-9.1366, cat:'city' },
+  { id:'1509612100', title:'Porto Ribeira', city:'Porto', country:'Portugal', lat:41.1414, lon:-8.6151, cat:'city' },
+  { id:'1498657350', title:'Stockholm Old Town', city:'Stockholm', country:'Sweden', lat:59.3251, lon:18.0711, cat:'city' },
+  { id:'1503263600', title:'Copenhagen Nyhavn', city:'Copenhagen', country:'Denmark', lat:55.6798, lon:12.5897, cat:'city' },
+  { id:'1509612200', title:'Warsaw Old Town', city:'Warsaw', country:'Poland', lat:52.2499, lon:21.0122, cat:'city' },
+  { id:'1492467900', title:'Budapest Chain Bridge', city:'Budapest', country:'Hungary', lat:47.4979, lon:19.0402, cat:'landmark' },
+  // ── Americas ──────────────────────────────────────────────────────────
+  { id:'1498566900', title:'Times Square NYC', city:'New York', country:'USA', lat:40.7580, lon:-73.9855, cat:'city' },
+  { id:'1509893700', title:'Manhattan Skyline', city:'New York', country:'USA', lat:40.7128, lon:-74.0060, cat:'city' },
+  { id:'1498657400', title:'Golden Gate Bridge', city:'San Francisco', country:'USA', lat:37.8199, lon:-122.4783, cat:'landmark' },
+  { id:'1492468000', title:'Hollywood Sign', city:'Los Angeles', country:'USA', lat:34.1341, lon:-118.3215, cat:'landmark' },
+  { id:'1503263700', title:'Miami South Beach', city:'Miami', country:'USA', lat:25.7617, lon:-80.1918, cat:'beach' },
+  { id:'1498403200', title:'Chicago Riverwalk', city:'Chicago', country:'USA', lat:41.8827, lon:-87.6233, cat:'city' },
+  { id:'1509612300', title:'Las Vegas Strip', city:'Las Vegas', country:'USA', lat:36.1699, lon:-115.1398, cat:'city' },
+  { id:'1498657450', title:'Grand Canyon South Rim', city:'Grand Canyon', country:'USA', lat:36.0544, lon:-112.1401, cat:'nature' },
+  { id:'1492468100', title:'Niagara Falls', city:'Niagara Falls', country:'Canada', lat:43.0799, lon:-79.0747, cat:'nature' },
+  { id:'1503263800', title:'Vancouver Harbor', city:'Vancouver', country:'Canada', lat:49.2827, lon:-123.1207, cat:'city' },
+  { id:'1509612400', title:'CN Tower Toronto', city:'Toronto', country:'Canada', lat:43.6426, lon:-79.3871, cat:'landmark' },
+  { id:'1498403300', title:'Copacabana Beach', city:'Rio de Janeiro', country:'Brazil', lat:-22.9707, lon:-43.1824, cat:'beach' },
+  { id:'1509893900', title:'Christ the Redeemer', city:'Rio de Janeiro', country:'Brazil', lat:-22.9519, lon:-43.2105, cat:'landmark' },
+  { id:'1492468200', title:'Buenos Aires Obelisk', city:'Buenos Aires', country:'Argentina', lat:-34.6037, lon:-58.3816, cat:'city' },
+  { id:'1498657500', title:'Machu Picchu', city:'Cusco', country:'Peru', lat:-13.1631, lon:-72.5450, cat:'landmark' },
+  { id:'1503263900', title:'Mexico City Zócalo', city:'Mexico City', country:'Mexico', lat:19.4326, lon:-99.1332, cat:'city' },
+  // ── Asia Pacific ──────────────────────────────────────────────────────
+  { id:'1498657226', title:'Shibuya Crossing', city:'Tokyo', country:'Japan', lat:35.6598, lon:139.7004, cat:'city' },
+  { id:'1503264000', title:'Mount Fuji', city:'Yamanashi', country:'Japan', lat:35.3606, lon:138.7274, cat:'mountain' },
+  { id:'1509894000', title:'Tokyo Tower', city:'Tokyo', country:'Japan', lat:35.6586, lon:139.7454, cat:'landmark' },
+  { id:'1498657550', title:'Victoria Harbor', city:'Hong Kong', country:'China', lat:22.2855, lon:114.1577, cat:'city' },
+  { id:'1492468300', title:'The Bund Shanghai', city:'Shanghai', country:'China', lat:31.2304, lon:121.4737, cat:'city' },
+  { id:'1503264100', title:'Tiananmen Square', city:'Beijing', country:'China', lat:39.9042, lon:116.3974, cat:'landmark' },
+  { id:'1509612500', title:'Marina Bay Sands', city:'Singapore', country:'Singapore', lat:1.2838, lon:103.8607, cat:'city' },
+  { id:'1498403400', title:'Sydney Opera House', city:'Sydney', country:'Australia', lat:-33.8568, lon:151.2153, cat:'landmark' },
+  { id:'1509894100', title:'Sydney Harbour Bridge', city:'Sydney', country:'Australia', lat:-33.8523, lon:151.2108, cat:'landmark' },
+  { id:'1492468400', title:'Petronas Towers', city:'Kuala Lumpur', country:'Malaysia', lat:3.1579, lon:101.7120, cat:'landmark' },
+  { id:'1503264200', title:'Bali Rice Terraces', city:'Ubud', country:'Indonesia', lat:-8.4095, lon:115.1887, cat:'nature' },
+  { id:'1509612600', title:'Angkor Wat', city:'Siem Reap', country:'Cambodia', lat:13.4125, lon:103.8670, cat:'landmark' },
+  { id:'1498403500', title:'Bangkok Chao Phraya', city:'Bangkok', country:'Thailand', lat:13.7534, lon:100.4929, cat:'city' },
+  { id:'1509894200', title:'Everest Base Camp', city:'Solukhumbu', country:'Nepal', lat:28.0025, lon:86.8528, cat:'mountain' },
+  { id:'1492468500', title:'Taj Mahal', city:'Agra', country:'India', lat:27.1751, lon:78.0421, cat:'landmark' },
+  { id:'1503264300', title:'Gateway of India', city:'Mumbai', country:'India', lat:18.9220, lon:72.8347, cat:'landmark' },
+  { id:'1498657600', title:'Seoul Namsan Tower', city:'Seoul', country:'South Korea', lat:37.5512, lon:126.9882, cat:'landmark' },
+  { id:'1509612700', title:'Busan Gwangalli Beach', city:'Busan', country:'South Korea', lat:35.1537, lon:129.1185, cat:'beach' },
+  { id:'1492468600', title:'Taipei 101', city:'Taipei', country:'Taiwan', lat:25.0330, lon:121.5654, cat:'landmark' },
+  // ── Middle East & Africa ──────────────────────────────────────────────
+  { id:'1498657650', title:'Burj Khalifa', city:'Dubai', country:'UAE', lat:25.1972, lon:55.2744, cat:'landmark' },
+  { id:'1509894300', title:'Dubai Marina', city:'Dubai', country:'UAE', lat:25.0805, lon:55.1403, cat:'city' },
+  { id:'1503264400', title:'Pyramids of Giza', city:'Giza', country:'Egypt', lat:29.9792, lon:31.1342, cat:'landmark' },
+  { id:'1492468700', title:'Dead Sea', city:'Amman', country:'Jordan', lat:31.5590, lon:35.4732, cat:'nature' },
+  { id:'1498403600', title:'Old City Jerusalem', city:'Jerusalem', country:'Israel', lat:31.7767, lon:35.2345, cat:'landmark' },
+  { id:'1509612800', title:'Table Mountain', city:'Cape Town', country:'South Africa', lat:-33.9625, lon:18.4107, cat:'nature' },
+  { id:'1503264500', title:'Masai Mara Wildlife', city:'Narok', country:'Kenya', lat:-1.5438, lon:35.1476, cat:'wildlife' },
+  { id:'1492468800', title:'Zanzibar Stone Town', city:'Zanzibar', country:'Tanzania', lat:-6.1367, lon:39.3497, cat:'beach' },
+  { id:'1509894400', title:'Serengeti Plains', city:'Serengeti', country:'Tanzania', lat:-2.3333, lon:34.8333, cat:'wildlife' },
+  { id:'1498657700', title:'Victoria Falls', city:'Livingstone', country:'Zambia', lat:-17.9243, lon:25.8572, cat:'nature' },
+  // ── Oceania & Pacific ────────────────────────────────────────────────
+  { id:'1503264600', title:'Great Barrier Reef', city:'Cairns', country:'Australia', lat:-18.2861, lon:147.7000, cat:'nature' },
+  { id:'1492468900', title:'Uluru (Ayers Rock)', city:'Uluru', country:'Australia', lat:-25.3444, lon:131.0369, cat:'nature' },
+  { id:'1509894500', title:'Auckland Sky Tower', city:'Auckland', country:'New Zealand', lat:-36.8485, lon:174.7633, cat:'landmark' },
+  { id:'1498403700', title:'Milford Sound', city:'Fiordland', country:'New Zealand', lat:-44.6415, lon:167.8974, cat:'nature' },
+  { id:'1503264700', title:'Bora Bora Lagoon', city:'Bora Bora', country:'French Polynesia', lat:-16.5004, lon:-151.7415, cat:'beach' },
+];
+
+app.get('/api/webcams', async (req, res) => {
+  const now = Date.now();
+  if (_wcCache.data && now - _wcCache.ts < WC_TTL) return res.json(_wcCache.data);
+
+  const key = process.env.WINDY_KEY;
+  if (key) {
+    try {
+      const r = await axios.get('https://api.windy.com/webcams/api/v3/webcams', {
+        params: {
+          limit: 500, offset: 0,
+          show: 'webcams:id,title,status,location,image,player',
+        },
+        headers: { 'x-windy-key': key, 'Accept': 'application/json' },
+        timeout: 12_000,
+      });
+      const raw = r.data?.webcams || r.data?.result?.webcams || [];
+      const webcams = raw
+        .filter(w => w.status === 'active')
+        .map(w => ({
+          id:      w.id,
+          title:   w.title,
+          city:    w.location?.city || '',
+          country: w.location?.country || '',
+          lat:     w.location?.latitude,
+          lon:     w.location?.longitude,
+          cat:     'webcam',
+          thumb:   w.image?.current?.preview || w.image?.daylight?.preview || '',
+          embed:   w.player?.day || '',
+          url:     `https://windy.com/webcams/${w.id}`,
+        }))
+        .filter(w => w.lat && w.lon);
+      const result = { source: 'windy_api', total: webcams.length, webcams, ts: now };
+      _wcCache.data = result; _wcCache.ts = now;
+      return res.json(result);
+    } catch (e) {
+      console.warn('[Webcams] Windy API error, using curated list:', e.message);
+    }
+  }
+
+  // Curated fallback — enrich with CDN thumb/embed/url
+  const webcams = _WC_CURATED.map(w => ({
+    ...w,
+    thumb: `https://images-webcams.windy.com/${w.id}/current/thumbnail/full/${w.id}.jpg`,
+    embed: `https://webcams.windy.com/webcams/public/embed/player/${w.id}`,
+    url:   `https://windy.com/webcams/${w.id}`,
+  }));
+  const result = { source: 'curated', total: webcams.length, webcams, ts: now };
+  _wcCache.data = result; _wcCache.ts = now;
+  res.json(result);
+});
+
 // ─── /api/geocode-capital — OSM Nominatim geocoding ──────────────────────────
 const _geoCache = {};
 app.get('/api/geocode-capital', async (req, res) => {

@@ -588,6 +588,7 @@
         <button class="rptab" data-rptab="twtracker"   style="color:#1da1f2;border-bottom-color:#1da1f2">𝕏 TWITTER</button>
         <button class="rptab" data-rptab="predico"     style="color:#ff4444;border-bottom-color:#ff4444;font-weight:700">🎲 PREDICO</button>
         <button class="rptab" data-rptab="drones"      style="color:#9b59ff;border-bottom-color:#9b59ff;font-weight:700">🛸 DRONES</button>
+        <button class="rptab" data-rptab="webcams"     style="color:#00d4ff;border-bottom-color:#00d4ff;font-weight:700">🎥 WEBCAMS</button>
       </div>
 
       <!-- TAB: Predico — Polymarket War Intelligence -->
@@ -595,6 +596,9 @@
 
       <!-- TAB: Drones — Global Drone Manufacturer Database -->
       <div class="rp-tab-body" id="rptab-drones" style="display:none;padding:0;overflow:hidden"></div>
+
+      <!-- TAB: Webcams — Live World Webcam Map -->
+      <div class="rp-tab-body" id="rptab-webcams" style="display:none;padding:0;overflow:hidden"></div>
 
       <!-- TAB: News (GDELT) -->
       <div class="rp-tab-body" id="rptab-news">
@@ -1539,6 +1543,7 @@
   <script src="js/twitter-tracker.js"></script>
   <script src="js/predico.js"></script>
   <script src="js/drones.js"></script>
+  <script src="js/webcams.js"></script>
   <script src="js/app.js"></script>
 
   <script>
@@ -1576,6 +1581,7 @@
         if (tab === 'twtracker'    && !btn._twtInited)        { btn._twtInited        = true; TWITTER_TRACKER.init(); }
         if (tab === 'predico'      && !btn._predicoInited)    { btn._predicoInited    = true; PREDICO.init(); }
         if (tab === 'drones'       && !btn._dronesInited)     { btn._dronesInited     = true; DRONES_MODULE.init(); }
+        if (tab === 'webcams'      && !btn._webcamsInited)    { btn._webcamsInited    = true; WEBCAMS.init(); }
       });
     });
 
