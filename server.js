@@ -3816,8 +3816,6 @@ app.get('/api/predico', async (req, res) => {
   }
 });
 
-});
-
 // ─── /api/webcams — Windy Webcams API proxy + curated fallback ───────────────
 const _wcCache = { data: null, ts: 0 };
 const WC_TTL   = 15 * 60_000;
