@@ -586,10 +586,14 @@
         <button class="rptab" data-rptab="tracker"     style="color:#00ff88;border-bottom-color:#00ff88">🎯 TRACKER</button>
         <button class="rptab" data-rptab="marine-live" style="color:#00d4ff;border-bottom-color:#00d4ff">🚢 AIS LIVE</button>
         <button class="rptab" data-rptab="twtracker"   style="color:#1da1f2;border-bottom-color:#1da1f2">𝕏 TWITTER</button>
+        <button class="rptab" data-rptab="drone-fpv"   style="color:#00ff88;border-bottom-color:#00ff88;font-weight:700">DRONE FPV</button>
         <button class="rptab" data-rptab="predico"     style="color:#ff4444;border-bottom-color:#ff4444;font-weight:700">PREDICO</button>
         <button class="rptab" data-rptab="drones"      style="color:#9b59ff;border-bottom-color:#9b59ff;font-weight:700">DRONES</button>
         <button class="rptab" data-rptab="webcams"     style="color:#00d4ff;border-bottom-color:#00d4ff;font-weight:700">WEBCAMS</button>
       </div>
+
+      <!-- TAB: Drone FPV — Live & Curated FPV Drone Feed -->
+      <div class="rp-tab-body" id="rptab-drone-fpv" style="display:none;padding:0;overflow:hidden"></div>
 
       <!-- TAB: Predico — Polymarket War Intelligence -->
       <div class="rp-tab-body" id="rptab-predico" style="display:none;padding:0;overflow:hidden"></div>
@@ -1541,6 +1545,7 @@
   <script src="js/tracker.js"></script>
   <script src="js/marine.js"></script>
   <script src="js/twitter-tracker.js"></script>
+  <script src="js/drone-fpv.js"></script>
   <script src="js/predico.js"></script>
   <script src="js/drones.js"></script>
   <script src="js/webcams.js"></script>
@@ -1579,6 +1584,7 @@
         if (tab === 'tracker'      && !btn._trackerInited)    { btn._trackerInited    = true; TRACKER.init(); }
         if (tab === 'marine-live'  && !btn._marineLiveInited) { btn._marineLiveInited = true; MARINE_LIVE.init(); }
         if (tab === 'twtracker'    && !btn._twtInited)        { btn._twtInited        = true; TWITTER_TRACKER.init(); }
+        if (tab === 'drone-fpv'    && !btn._droneFpvInited)   { btn._droneFpvInited   = true; DRONE_FPV.init(); }
         if (tab === 'predico'      && !btn._predicoInited)    { btn._predicoInited    = true; PREDICO.init(); }
         if (tab === 'drones'       && !btn._dronesInited)     { btn._dronesInited     = true; DRONES_MODULE.init(); }
         if (tab === 'webcams'      && !btn._webcamsInited)    { btn._webcamsInited    = true; WEBCAMS.init(); }
