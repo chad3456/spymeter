@@ -269,6 +269,10 @@ const APP = (() => {
       <button id="globe-god-eye" class="globe-ctrl-btn" title="God Eye — Lock on conflict hotspot">👁 GOD EYE</button>
       <button id="globe-rotate"  class="globe-ctrl-btn active" title="Toggle auto-rotate">⟳ ROTATE</button>
       <button id="globe-reset"   class="globe-ctrl-btn" title="Reset to global view">⊙ RESET</button>
+      <span style="width:1px;height:14px;background:#1a3040;display:inline-block;margin:0 4px"></span>
+      <button class="globe-ctrl-btn globe-tex-btn active" data-tex="night"     title="Night earth with city lights">🌙 NIGHT</button>
+      <button class="globe-ctrl-btn globe-tex-btn"        data-tex="satellite" title="NASA Blue Marble satellite">🛰 SATELLITE</button>
+      <button class="globe-ctrl-btn globe-tex-btn"        data-tex="day"       title="Day earth">🌍 DAY</button>
       <span   id="globe-ac-count" class="globe-ac-badge">— AC</span>
     `;
     container.appendChild(bar);
@@ -285,6 +289,31 @@ const APP = (() => {
       globe.controls().autoRotate = false;
       globe.pointOfView({ lat: 20, lng: 0, altitude: 2.5 }, 1500);
       setTimeout(() => { if (globe) globe.controls().autoRotate = true; }, 2000);
+    });
+
+    const _TEX = {
+      night:     'https://unpkg.com/three-globe/example/img/earth-night.jpg',
+      satellite: 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg',
+      day:       'https://unpkg.com/three-globe/example/img/earth-day.jpg',
+    };
+    const _BUMP = {
+      night:     'https://unpkg.com/three-globe/example/img/earth-topology.png',
+      satellite: 'https://unpkg.com/three-globe/example/img/earth-topology.png',
+      day:       'https://unpkg.com/three-globe/example/img/earth-topology.png',
+    };
+    const _ATMO = {
+      night:     'rgba(40,140,255,0.9)',
+      satellite: 'rgba(60,180,100,0.6)',
+      day:       'rgba(80,180,255,0.8)',
+    };
+    bar.querySelectorAll('.globe-tex-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!globe) return;
+        const tex = btn.dataset.tex;
+        globe.globeImageUrl(_TEX[tex]).bumpImageUrl(_BUMP[tex]).atmosphereColor(_ATMO[tex]);
+        bar.querySelectorAll('.globe-tex-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
     });
   }
 
