@@ -1936,21 +1936,195 @@ app.get('/api/cables', async (req, res) => {
 });
 
 // ─── /api/submarine-enhanced ─────────────────────────────────────────────────
-// Used by submarine.js for patrol zone news
+// Comprehensive open-source submarine database — FAS / SIPRI / IISS / GlobalSecurity
+// Positions: estimated from OSINT, homeports, and publicly known patrol areas.
+// Real patrol positions are classified. All positions marked ESTIMATED.
 app.get('/api/submarine-enhanced', async (req, res) => {
-  // Static OSINT-based submarine positions — real positions are classified
-  const submarines = [
-    { name:'USS Tennessee',   flag:'🇺🇸', country:'USA',  clazz:'Ohio SSBN',    lat:42.0,  lng:-65.0,  depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',   notes:'US Atlantic deterrent; exact position classified', source:'OSINT' },
-    { name:'USS Kentucky',    flag:'🇺🇸', country:'USA',  clazz:'Ohio SSBN',    lat:48.0,  lng:-148.0, depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',   notes:'US Pacific deterrent patrol', source:'OSINT' },
-    { name:'USS Connecticut', flag:'🇺🇸', country:'USA',  clazz:'Seawolf SSN',  lat:35.0,  lng:130.0,  depth:300, status:'intelligence patrol', warheads:'Mk 48 torpedoes',  notes:'Advanced SSN — Pacific ops', source:'OSINT' },
-    { name:'K-535 Yuri Dolgoruky', flag:'🇷🇺', country:'Russia', clazz:'Borei SSBN', lat:72.0, lng:35.0, depth:250, status:'deterrent patrol', warheads:'16× Bulava',  notes:'Northern Fleet SSBN bastion', source:'OSINT' },
-    { name:'K-329 Belgorod',  flag:'🇷🇺', country:'Russia', clazz:'Oscar II SSGN', lat:76.0, lng:40.0, depth:300, status:'special mission', warheads:'Poseidon UUV',     notes:'Special purpose submarine', source:'OSINT' },
-    { name:'Type 094 Jin',    flag:'🇨🇳', country:'China', clazz:'Type 094 SSBN', lat:20.0, lng:114.0, depth:200, status:'deterrent patrol', warheads:'12× JL-2 SLBM',   notes:'PLAN South China Sea patrol', source:'OSINT' },
-    { name:'HMS Vanguard',    flag:'🇬🇧', country:'UK',  clazz:'Vanguard SSBN',  lat:60.0, lng:-12.0, depth:200, status:'deterrent patrol', warheads:'16× Trident II D5', notes:'UK CASD patrol — always 1 at sea', source:'OSINT' },
-    { name:'Le Triomphant',   flag:'🇫🇷', country:'France', clazz:'Triomphant SSBN', lat:47.0, lng:-14.0, depth:200, status:'deterrent patrol', warheads:'16× M51 SLBM', notes:'French SNLE Atlantic zone', source:'OSINT' },
-    { name:'INS Arihant',     flag:'🇮🇳', country:'India', clazz:'Arihant SSBN', lat:14.0, lng:83.0, depth:150, status:'deterrent patrol', warheads:'4× K-15 SLBM', notes:'Bay of Bengal patrol', source:'OSINT' },
+
+  // ── Submarine bases / homeports ─────────────────────────────────────────────
+  const bases = [
+    // USA
+    { name:'Naval Base Kitsap-Bangor', flag:'🇺🇸', country:'USA', lat:47.739, lng:-122.707, subs:9,  type:'SSBN BASE', notes:'6 Ohio SSBNs + 2 Ohio SSGNs + SSNs. Pacific deterrent hub.' },
+    { name:'Naval Submarine Base Kings Bay', flag:'🇺🇸', country:'USA', lat:30.797, lng:-81.558, subs:8,  type:'SSBN BASE', notes:'8 Ohio SSBNs. Atlantic SSBN home base.' },
+    { name:'Naval Station Norfolk', flag:'🇺🇸', country:'USA', lat:36.944, lng:-76.309, subs:15, type:'SSN BASE', notes:'Multiple Los Angeles and Virginia-class SSNs.' },
+    { name:'Naval Submarine Base New London (Groton)', flag:'🇺🇸', country:'USA', lat:41.363, lng:-72.089, subs:12, type:'SSN BASE', notes:'Largest US sub base. Virginia-class homeport.' },
+    { name:'Pearl Harbor Naval Station', flag:'🇺🇸', country:'USA', lat:21.350, lng:-157.977, subs:8,  type:'SSN BASE', notes:'Pacific SSN forward operating hub.' },
+    // Russia
+    { name:'Gadzhiyevo (Sayda Bay)', flag:'🇷🇺', country:'Russia', lat:69.265, lng:33.378, subs:8,  type:'SSBN BASE', notes:'Delta IV SSBN homeport — Northern Fleet ballistic missile subs.' },
+    { name:'Vilyuchinsk (Rybachiy)', flag:'🇷🇺', country:'Russia', lat:52.920, lng:158.456, subs:7,  type:'SSBN BASE', notes:'Pacific Fleet SSBN base — Borei and Delta IV.' },
+    { name:'Severomorsk', flag:'🇷🇺', country:'Russia', lat:69.074, lng:33.418, subs:12, type:'SSN BASE', notes:'Northern Fleet SSN/SSGN headquarters.' },
+    { name:'Polyarny', flag:'🇷🇺', country:'Russia', lat:69.198, lng:33.465, subs:6,  type:'SSN BASE', notes:'Akula and Oscar II SSGN forward base.' },
+    { name:'Vladivostok Naval Base', flag:'🇷🇺', country:'Russia', lat:43.114, lng:131.891, subs:8,  type:'SSN BASE', notes:'Pacific Fleet SSN/SSK hub.' },
+    // China
+    { name:'Yalong Bay Submarine Base (Sanya)', flag:'🇨🇳', country:'China', lat:18.226, lng:109.573, subs:12, type:'SSBN BASE', notes:'PLAN primary SSBN base. Type 094 homeport. Underground tunnels.' },
+    { name:'Jianggezhuang (Qingdao)', flag:'🇨🇳', country:'China', lat:36.208, lng:120.635, subs:10, type:'SSN BASE', notes:'North Sea Fleet sub base — SSN and SSK.' },
+    { name:'Ningbo Submarine Base', flag:'🇨🇳', country:'China', lat:29.831, lng:121.544, subs:8,  type:'SSK BASE', notes:'East Sea Fleet — conventional submarine squadron.' },
+    // UK
+    { name:'HMNB Clyde (Faslane)', flag:'🇬🇧', country:'UK', lat:56.072, lng:-4.793, subs:7,  type:'SSBN BASE', notes:'Sole UK SSBN base. All 4 Vanguards homeported here. Astute SSNs.' },
+    // France
+    { name:'Île Longue (Brest)', flag:'🇫🇷', country:'France', lat:48.290, lng:-4.392, subs:5,  type:'SSBN BASE', notes:'All 4 Triomphant-class SSBNs. French SNLE nuclear deterrent base.' },
+    { name:'Toulon Naval Base', flag:'🇫🇷', country:'France', lat:43.108, lng:5.921, subs:8,  type:'SSN BASE', notes:'Rubis-class and Barracuda (Suffren) SSN homeport.' },
+    // India
+    { name:'INS Varsha (Rambilli)', flag:'🇮🇳', country:'India', lat:15.910, lng:80.423, subs:4,  type:'SSBN BASE', notes:'India\'s dedicated SSBN underground base near Visakhapatnam.' },
+    { name:'INS Virbahu (Visakhapatnam)', flag:'🇮🇳', country:'India', lat:17.699, lng:83.297, subs:8,  type:'SSK BASE', notes:'Eastern Naval Command submarine base — Kalvari-class SSK.' },
+    // North Korea
+    { name:'Sinpo South Shipyard', flag:'🇰🇵', country:'North Korea', lat:40.014, lng:128.202, subs:4,  type:'SSBN BASE', notes:'DPRK SSBN testing and deployment. Hero Kim Kun Ok homeport.' },
+    // Pakistan
+    { name:'PNS Iqbal (Karachi)', flag:'🇵🇰', country:'Pakistan', lat:24.815, lng:66.994, subs:5,  type:'SSK BASE', notes:'Pakistan\'s main submarine base — Agosta-class SSK.' },
+    // South Korea
+    { name:'Jinhae Naval Base', flag:'🇰🇷', country:'South Korea', lat:35.146, lng:128.660, subs:10, type:'SSK BASE', notes:'ROK Navy submarine command — KSS-III AIP/SSK fleet.' },
+    // Japan
+    { name:'Kure Naval Base', flag:'🇯🇵', country:'Japan', lat:34.240, lng:132.545, subs:12, type:'SSK BASE', notes:'JMSDF Soryu/Taigei-class submarine flotilla.' },
+    // Australia
+    { name:'HMAS Stirling (Perth)', flag:'🇦🇺', country:'Australia', lat:-32.171, lng:115.682, subs:6,  type:'SSK BASE', notes:'RAN Collins-class SSK base. Future AUKUS SSN homeport.' },
+    // Germany
+    { name:'Kiel Naval Base', flag:'🇩🇪', country:'Germany', lat:54.353, lng:10.143, subs:6,  type:'SSK BASE', notes:'German Navy Type 212A AIP submarine squadron.' },
+    // Israel
+    { name:'Haifa Naval Base', flag:'🇮🇱', country:'Israel', lat:32.824, lng:34.981, subs:5,  type:'SSK BASE', notes:'Israel\'s Dolphin-class SSK — alleged nuclear-capable cruise missiles.' },
+    // Iran
+    { name:'Bandar Abbas Naval Base', flag:'🇮🇷', country:'Iran', lat:27.190, lng:56.268, subs:8,  type:'SSK BASE', notes:'IRIN Kilo-class and Ghadir mini-sub base. Hormuz Strait.' },
+    // Brazil
+    { name:'Almirante Castro e Silva (Mocangue)', flag:'🇧🇷', country:'Brazil', lat:-22.914, lng:-43.170, subs:4,  type:'SSK BASE', notes:'Brazilian Navy IKL-209 class and Riachuelo (Scorpène) SSK.' },
   ];
-  res.json({ submarines, news: [], lastUpdate: new Date().toISOString() });
+
+  // ── Submarine fleet (OSINT positions — ESTIMATED) ───────────────────────────
+  const submarines = [
+    // ════ USA ════ (Source: FAS Nuclear Notebook, USNI News, DoD budget docs)
+    // SSBN — Ohio class (14 operational, 4 converted SSGN)
+    { name:'USS Henry M. Jackson', flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-730', type:'SSBN', lat:47.2, lng:-130.0, depth:200, status:'deterrent patrol', warheads:'20× Trident II D5 (up to 8 W76/W88 per missile)', missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Pacific deterrent patrol. Homeport: Bangor WA.', source:'FAS/USNI' },
+    { name:'USS Alabama',          flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-731', type:'SSBN', lat:48.5, lng:-145.0, depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Pacific deterrent. Homeport: Bangor WA.',          source:'FAS/USNI' },
+    { name:'USS Alaska',           flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-732', type:'SSBN', lat:35.0, lng:138.0,  depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Pacific forward patrol — Western Pacific.',         source:'FAS/USNI' },
+    { name:'USS Nevada',           flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-733', type:'SSBN', lat:50.0, lng:-160.0, depth:200, status:'near port',        warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Maintenance cycle. Homeport: Bangor WA.',          source:'USNI' },
+    { name:'USS Tennessee',        flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-734', type:'SSBN', lat:42.0, lng:-60.0,  depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Atlantic deterrent. Homeport: Kings Bay GA.',      source:'FAS/USNI' },
+    { name:'USS Pennsylvania',     flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-735', type:'SSBN', lat:48.0, lng:-148.0, depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Pacific deterrent. Homeport: Bangor WA.',           source:'FAS/USNI' },
+    { name:'USS West Virginia',    flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-736', type:'SSBN', lat:38.0, lng:-68.0,  depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Atlantic deterrent. Homeport: Kings Bay GA.',      source:'FAS/USNI' },
+    { name:'USS Kentucky',         flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-737', type:'SSBN', lat:46.0, lng:-155.0, depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Pacific deterrent. Homeport: Bangor WA.',           source:'FAS/USNI' },
+    { name:'USS Maryland',         flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-738', type:'SSBN', lat:44.0, lng:-40.0,  depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Atlantic deterrent. Homeport: Kings Bay GA.',      source:'FAS/USNI' },
+    { name:'USS Nebraska',         flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-739', type:'SSBN', lat:47.0, lng:-137.0, depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Pacific deterrent. Homeport: Bangor WA.',           source:'FAS/USNI' },
+    { name:'USS Rhode Island',     flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-740', type:'SSBN', lat:36.0, lng:-72.0,  depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Atlantic deterrent. Homeport: Kings Bay GA.',      source:'FAS/USNI' },
+    { name:'USS Maine',            flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-741', type:'SSBN', lat:46.0, lng:-168.0, depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Pacific deterrent. Homeport: Bangor WA.',           source:'FAS/USNI' },
+    { name:'USS Wyoming',          flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-742', type:'SSBN', lat:30.0, lng:-78.0,  depth:200, status:'near port',        warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Homeport: Kings Bay GA.',                           source:'USNI' },
+    { name:'USS Louisiana',        flag:'🇺🇸', country:'USA', clazz:'Ohio SSBN-743', type:'SSBN', lat:40.0, lng:-55.0,  depth:200, status:'deterrent patrol', warheads:'20× Trident II D5',                              missiles:'20 × Trident II D5 SLBM', totalWarheads:160, notes:'Atlantic deterrent. Homeport: Kings Bay GA.',      source:'FAS/USNI' },
+    // SSGN — converted Ohio class
+    { name:'USS Ohio (SSGN-726)',   flag:'🇺🇸', country:'USA', clazz:'Ohio SSGN',   type:'SSGN', lat:22.0, lng:121.0,  depth:250, status:'combat patrol',    warheads:'154× Tomahawk LACM + SEAL platoons',             missiles:'154 × BGM-109 Tomahawk', totalWarheads:0, notes:'Conventional SSGN. Pacific forward presence.', source:'USNI' },
+    { name:'USS Michigan (SSGN-727)',flag:'🇺🇸', country:'USA', clazz:'Ohio SSGN',   type:'SSGN', lat:35.0, lng:130.0,  depth:250, status:'combat patrol',    warheads:'154× Tomahawk LACM',                             missiles:'154 × BGM-109 Tomahawk', totalWarheads:0, notes:'Pacific strike platform. SOF capable.',       source:'USNI' },
+    { name:'USS Florida (SSGN-728)', flag:'🇺🇸', country:'USA', clazz:'Ohio SSGN',   type:'SSGN', lat:36.0, lng:28.0,   depth:250, status:'combat patrol',    warheads:'154× Tomahawk LACM',                             missiles:'154 × BGM-109 Tomahawk', totalWarheads:0, notes:'Mediterranean/Red Sea strike platform.',      source:'USNI' },
+    { name:'USS Georgia (SSGN-729)', flag:'🇺🇸', country:'USA', clazz:'Ohio SSGN',   type:'SSGN', lat:26.0, lng:56.0,   depth:250, status:'combat patrol',    warheads:'154× Tomahawk LACM',                             missiles:'154 × BGM-109 Tomahawk', totalWarheads:0, notes:'Fifth Fleet area — Persian Gulf/Indian Ocean.', source:'USNI' },
+    // SSN — Virginia class (sample, 22 boats operational)
+    { name:'USS Virginia (SSN-774)',  flag:'🇺🇸', country:'USA', clazz:'Virginia SSN', type:'SSN', lat:41.0, lng:-70.0,  depth:300, status:'patrol',  warheads:'Mk 48 ADCAP + Tomahawk LACM', missiles:'12 × VLS Tomahawk', totalWarheads:0, notes:'Multi-mission SSN. Groton CT.',  source:'USN' },
+    { name:'USS Columbia (SSN-771)',  flag:'🇺🇸', country:'USA', clazz:'Los Angeles SSN', type:'SSN', lat:32.0, lng:-135.0, depth:300, status:'patrol', warheads:'Mk 48 + Tomahawk',          missiles:'12 × VLS Tomahawk', totalWarheads:0, notes:'Pacific SSN patrol.',            source:'USN' },
+    { name:'USS Seawolf (SSN-21)',    flag:'🇺🇸', country:'USA', clazz:'Seawolf SSN',  type:'SSN', lat:50.0, lng:-30.0,  depth:350, status:'intelligence patrol', warheads:'Mk 48 + Tomahawk + Harpoon', missiles:'8 × Tomahawk', totalWarheads:0, notes:'Advanced SSN — Arctic/Atlantic ISR.',      source:'USNI' },
+    { name:'USS Connecticut (SSN-22)',flag:'🇺🇸', country:'USA', clazz:'Seawolf SSN',  type:'SSN', lat:35.0, lng:132.0,  depth:350, status:'intelligence patrol', warheads:'Mk 48 + Tomahawk',          missiles:'8 × Tomahawk', totalWarheads:0, notes:'Pacific/Arctic operations.',                 source:'USNI' },
+    // Boeing Orca XLUUV
+    { name:'ORCA XLUUV-1',  flag:'🇺🇸', country:'USA', clazz:'Boeing Orca XLUUV', type:'UUV', lat:48.0, lng:-124.0, depth:200, status:'trials', warheads:'Torpedoes / Mines / ISR payload', missiles:'Modular payload bay', totalWarheads:0, notes:'Extra-Large Unmanned Undersea Vehicle. 5 units contracted. Autonomous 6,500nm range.', source:'DARPA/DoD' },
+    { name:'Manta Ray UUV', flag:'🇺🇸', country:'USA', clazz:'DARPA Manta Ray',   type:'UUV', lat:32.0, lng:-120.0, depth:400, status:'development', warheads:'Classified payload', missiles:'N/A', totalWarheads:0, notes:'DARPA Manta Ray XLUUV — long-endurance underwater glider.', source:'DARPA 2024' },
+
+    // ════ RUSSIA ════ (Source: FAS Nuclear Notebook, IISS Military Balance, TASS)
+    // SSBN — Borei class (Project 955/955A)
+    { name:'K-535 Yuri Dolgoruky', flag:'🇷🇺', country:'Russia', clazz:'Borei 955 SSBN',  type:'SSBN', lat:72.0, lng:32.0,  depth:250, status:'deterrent patrol', warheads:'16× RSM-56 Bulava SLBM (6 MIRV each)', missiles:'16 × RSM-56 Bulava', totalWarheads:96,  notes:'Northern Fleet. SSBN bastion Barents Sea.', source:'FAS/IISS' },
+    { name:'K-550 Alexander Nevsky', flag:'🇷🇺', country:'Russia', clazz:'Borei 955 SSBN', type:'SSBN', lat:52.5, lng:160.0, depth:250, status:'deterrent patrol', warheads:'16× Bulava (6 MIRV)',                   missiles:'16 × RSM-56 Bulava', totalWarheads:96,  notes:'Pacific Fleet. Vilyuchinsk base. Kamchatka.',   source:'FAS/IISS' },
+    { name:'K-551 Vladimir Monomakh', flag:'🇷🇺', country:'Russia', clazz:'Borei 955 SSBN',type:'SSBN', lat:54.0, lng:158.0, depth:250, status:'deterrent patrol', warheads:'16× Bulava (6 MIRV)',                   missiles:'16 × RSM-56 Bulava', totalWarheads:96,  notes:'Pacific Fleet deterrent — Sea of Okhotsk.',     source:'FAS/IISS' },
+    { name:'K-552 Knyaz Vladimir',   flag:'🇷🇺', country:'Russia', clazz:'Borei-A 955A SSBN',type:'SSBN', lat:70.0, lng:38.0, depth:250, status:'deterrent patrol', warheads:'16× Bulava (6 MIRV)',                  missiles:'16 × RSM-56 Bulava', totalWarheads:96,  notes:'Northern Fleet. Upgraded Borei-A.',             source:'FAS 2024' },
+    { name:'K-553 Generalissimus Suvorov',flag:'🇷🇺',country:'Russia',clazz:'Borei-A 955A SSBN',type:'SSBN', lat:53.0, lng:158.0, depth:250, status:'near port', warheads:'16× Bulava',                              missiles:'16 × RSM-56 Bulava', totalWarheads:96,  notes:'Pacific Fleet. Vilyuchinsk.',                   source:'TASS 2022' },
+    { name:'Knyaz Oleg',             flag:'🇷🇺', country:'Russia', clazz:'Borei-A 955A SSBN',type:'SSBN', lat:72.0, lng:40.0, depth:250, status:'deterrent patrol', warheads:'16× Bulava (6 MIRV)',                   missiles:'16 × RSM-56 Bulava', totalWarheads:96,  notes:'Northern Fleet. 2021 commission.',              source:'TASS 2021' },
+    // Delta IV SSBN (Project 667BDRM) — 5 boats remaining
+    { name:'K-18 Karelia',    flag:'🇷🇺', country:'Russia', clazz:'Delta IV SSBN',  type:'SSBN', lat:69.5, lng:33.0,  depth:200, status:'deterrent patrol', warheads:'16× RSM-54 Sineva SLBM (4 MIRV)', missiles:'16 × R-29RMU Sineva', totalWarheads:64, notes:'Northern Fleet. Gadzhiyevo base.', source:'IISS 2023' },
+    { name:'K-84 Yekaterinburg', flag:'🇷🇺', country:'Russia', clazz:'Delta IV SSBN',type:'SSBN', lat:69.3, lng:33.5,  depth:200, status:'near port',        warheads:'16× Sineva (4 MIRV)',               missiles:'16 × R-29RMU Sineva', totalWarheads:64, notes:'Refit cycle — Gadzhiyevo.',         source:'IISS' },
+    { name:'K-407 Novomoskovsk', flag:'🇷🇺', country:'Russia', clazz:'Delta IV SSBN',type:'SSBN', lat:68.0, lng:35.0,  depth:200, status:'deterrent patrol', warheads:'16× Sineva SLBM',                   missiles:'16 × R-29RMU Sineva', totalWarheads:64, notes:'Atlantic / Norwegian Sea patrol.',   source:'IISS' },
+    // Poseidon / K-329 Belgorod (nuclear UUV carrier)
+    { name:'K-329 Belgorod', flag:'🇷🇺', country:'Russia', clazz:'Oscar II (Project 09852) SSGN', type:'SSGN', lat:76.0, lng:38.0, depth:300, status:'special mission', warheads:'6× Poseidon nuclear UUV (2MT each) + cruise missiles', missiles:'6 × Poseidon 2M39 UUV', totalWarheads:6, notes:'World\'s largest submarine. Carries Poseidon nuclear-armed drone torpedo. 100MT potential.', source:'TASS / US DoD' },
+    // Poseidon UUV separately
+    { name:'Poseidon UUV (Status-6)', flag:'🇷🇺', country:'Russia', clazz:'Poseidon 2M39 Nuclear UUV', type:'UUV', lat:74.0, lng:42.0, depth:800, status:'operational', warheads:'1× 2 megaton nuclear warhead (COBALT enhanced possible)', missiles:'Self-propelled — 100+ knots, 10,000km range', totalWarheads:1, notes:'Nuclear-armed autonomous underwater drone. Designed to strike coastal cities and naval bases. No known intercept capability.', source:'US DoD / TASS 2019' },
+    // Oscar II SSGN
+    { name:'K-456 Tver (Oscar II)', flag:'🇷🇺', country:'Russia', clazz:'Oscar II SSGN', type:'SSGN', lat:52.0, lng:155.0, depth:300, status:'patrol', warheads:'24× P-700 Granit ASM + torpedoes', missiles:'24 × P-700 Granit', totalWarheads:0, notes:'Pacific Fleet SSGN — carrier killer.', source:'IISS' },
+    // Yasen-M SSN
+    { name:'K-560 Severodvinsk (Yasen-M)', flag:'🇷🇺', country:'Russia', clazz:'Yasen-M SSN', type:'SSN', lat:72.0, lng:28.0, depth:300, status:'patrol', warheads:'32× Kalibr / Oniks + Zircon + torpedoes', missiles:'32 × Kalibr/Oniks/Zircon VLS', totalWarheads:0, notes:'Most advanced Russian SSN. Kalibr strike capable.', source:'TASS/IISS' },
+
+    // ════ CHINA (PLAN) ════ (Source: FAS 2024, IISS, USCC Annual Report)
+    // Type 094 Jin-class SSBN (6 boats)
+    { name:'Type 094 (Hull 1)',  flag:'🇨🇳', country:'China', clazz:'Type 094 Jin SSBN', type:'SSBN', lat:19.5, lng:114.0, depth:200, status:'deterrent patrol', warheads:'12× JL-2 SLBM (3 MIRV each)', missiles:'12 × JL-2', totalWarheads:36,  notes:'PLAN South China Sea deterrent. Sanya base.', source:'FAS 2024' },
+    { name:'Type 094 (Hull 2)',  flag:'🇨🇳', country:'China', clazz:'Type 094 Jin SSBN', type:'SSBN', lat:21.0, lng:120.0, depth:200, status:'deterrent patrol', warheads:'12× JL-2',                    missiles:'12 × JL-2', totalWarheads:36,  notes:'Pacific patrol route — first island chain.', source:'USCC 2023' },
+    { name:'Type 094A (Hull 3)', flag:'🇨🇳', country:'China', clazz:'Type 094A SSBN',   type:'SSBN', lat:18.5, lng:108.0, depth:200, status:'deterrent patrol', warheads:'12× JL-2/JL-3 (6 MIRV)',     missiles:'12 × JL-3',  totalWarheads:72,  notes:'Upgraded sail design. JL-3 SLBM capable.', source:'FAS 2024' },
+    { name:'Type 094A (Hull 4)', flag:'🇨🇳', country:'China', clazz:'Type 094A SSBN',   type:'SSBN', lat:20.0, lng:116.0, depth:200, status:'near port',         warheads:'12× JL-3 (6 MIRV)',           missiles:'12 × JL-3',  totalWarheads:72,  notes:'Sanya SSBN base rotation.',               source:'USCC' },
+    { name:'Type 094A (Hull 5)', flag:'🇨🇳', country:'China', clazz:'Type 094A SSBN',   type:'SSBN', lat:22.0, lng:112.0, depth:200, status:'deterrent patrol', warheads:'12× JL-3',                    missiles:'12 × JL-3',  totalWarheads:72,  notes:'PLAN first regular SSBN deterrent patrols.', source:'DoD China Report 2023' },
+    { name:'Type 094A (Hull 6)', flag:'🇨🇳', country:'China', clazz:'Type 094A SSBN',   type:'SSBN', lat:17.0, lng:110.0, depth:200, status:'deterrent patrol', warheads:'12× JL-3',                    missiles:'12 × JL-3',  totalWarheads:72,  notes:'Newest Jin-class. Full deterrent capacity.', source:'FAS 2024' },
+    // Type 093 Shang-class SSN
+    { name:'Type 093A Shang (1)', flag:'🇨🇳', country:'China', clazz:'Type 093A Shang SSN', type:'SSN', lat:22.0, lng:119.0, depth:250, status:'patrol', warheads:'YJ-18 ASCM + torpedoes', missiles:'6 × YJ-18', totalWarheads:0, notes:'Improved Shang — anti-ship missile capable.', source:'IISS' },
+    { name:'Type 093A Shang (2)', flag:'🇨🇳', country:'China', clazz:'Type 093A Shang SSN', type:'SSN', lat:36.0, lng:120.0, depth:250, status:'patrol', warheads:'YJ-18 ASCM + torpedoes', missiles:'6 × YJ-18', totalWarheads:0, notes:'North Sea Fleet SSN — Yellow Sea ops.',       source:'IISS' },
+    // HSU-001 UUV
+    { name:'HSU-001 UUV',  flag:'🇨🇳', country:'China', clazz:'HSU-001 XLUUV', type:'UUV', lat:20.0, lng:111.0, depth:200, status:'operational', warheads:'ASW / ISR / Mining payload', missiles:'Modular weapons bay', totalWarheads:0, notes:'PLAN extra-large UUV. ISR, mines, ASW. Revealed 2019 military parade. Operational in South China Sea.', source:'USCC 2022' },
+
+    // ════ UK ════ (Source: UK MoD, FAS Nuclear Notebook)
+    // Vanguard SSBN (4 boats — 1 always on CASD patrol)
+    { name:'HMS Vanguard',   flag:'🇬🇧', country:'UK', clazz:'Vanguard SSBN',  type:'SSBN', lat:60.5, lng:-10.0, depth:200, status:'deterrent patrol', warheads:'16× Trident II D5 (max 8 W76/W88 per missile)', missiles:'16 × Trident II D5', totalWarheads:40, notes:'UK CASD — 1 Vanguard always at sea. 40 operationally available warheads.', source:'UK MoD / FAS' },
+    { name:'HMS Victorious', flag:'🇬🇧', country:'UK', clazz:'Vanguard SSBN',  type:'SSBN', lat:56.0, lng:-4.8,  depth:0,   status:'refit',            warheads:'16× Trident II D5',                              missiles:'16 × Trident II D5', totalWarheads:40, notes:'HMNB Clyde — extended refit cycle.',              source:'UK MoD' },
+    { name:'HMS Vigilant',   flag:'🇬🇧', country:'UK', clazz:'Vanguard SSBN',  type:'SSBN', lat:56.1, lng:-4.7,  depth:0,   status:'near port',        warheads:'16× Trident II D5',                              missiles:'16 × Trident II D5', totalWarheads:40, notes:'Faslane. Crew training cycle.',                   source:'UK MoD' },
+    { name:'HMS Vengeance',  flag:'🇬🇧', country:'UK', clazz:'Vanguard SSBN',  type:'SSBN', lat:58.0, lng:-15.0, depth:200, status:'deterrent patrol', warheads:'16× Trident II D5',                              missiles:'16 × Trident II D5', totalWarheads:40, notes:'Atlantic CASD backup patrol.',                     source:'FAS' },
+    // Astute SSN (7 boats)
+    { name:'HMS Astute',     flag:'🇬🇧', country:'UK', clazz:'Astute SSN',     type:'SSN', lat:56.0, lng:-4.8,   depth:0,   status:'near port',  warheads:'Spearfish torpedoes + Tomahawk LACM', missiles:'6 × Tomahawk', totalWarheads:0, notes:'Faslane. State-of-the-art SSN.', source:'RN' },
+    { name:'HMS Ambush',     flag:'🇬🇧', country:'UK', clazz:'Astute SSN',     type:'SSN', lat:36.0, lng:5.0,    depth:300, status:'patrol',     warheads:'Spearfish + Tomahawk',                missiles:'6 × Tomahawk', totalWarheads:0, notes:'Mediterranean patrol.',          source:'RN' },
+
+    // ════ FRANCE ════ (Source: FAS, DGA, IISS)
+    { name:'Le Triomphant',  flag:'🇫🇷', country:'France', clazz:'Triomphant SSBN', type:'SSBN', lat:47.5, lng:-12.0, depth:200, status:'deterrent patrol', warheads:'16× M51.3 SLBM (6 TN75 MIRV)', missiles:'16 × M51.3', totalWarheads:96, notes:'French SNLE permanent deterrent. Atlantic zone.',   source:'FAS/DGA' },
+    { name:'Le Téméraire',   flag:'🇫🇷', country:'France', clazz:'Triomphant SSBN', type:'SSBN', lat:45.0, lng:-14.0, depth:200, status:'deterrent patrol', warheads:'16× M51.3 SLBM (6 MIRV)',      missiles:'16 × M51.3', totalWarheads:96, notes:'French Atlantic deterrent rotation.',              source:'FAS' },
+    { name:'Le Vigilant',    flag:'🇫🇷', country:'France', clazz:'Triomphant SSBN', type:'SSBN', lat:48.3, lng:-4.4,  depth:0,   status:'near port',        warheads:'16× M51.3',                     missiles:'16 × M51.3', totalWarheads:96, notes:'Île Longue base — maintenance cycle.',             source:'DGA' },
+    { name:'Le Terrible',    flag:'🇫🇷', country:'France', clazz:'Triomphant SSBN', type:'SSBN', lat:49.0, lng:-10.0, depth:200, status:'deterrent patrol', warheads:'16× M51.3 SLBM',               missiles:'16 × M51.3', totalWarheads:96, notes:'Newest Triomphant — M51.3 SLBM equipped.',         source:'FAS 2024' },
+    // Barracuda SSN
+    { name:'Suffren (Barracuda)', flag:'🇫🇷', country:'France', clazz:'Suffren Barracuda SSN', type:'SSN', lat:43.1, lng:5.9, depth:0, status:'near port', warheads:'MdCN naval cruise missiles + torpedoes', missiles:'MdCN Naval CM', totalWarheads:0, notes:'Lead Barracuda-class SSN. Toulon. 2022 commission.', source:'DGA 2022' },
+
+    // ════ INDIA ════ (Source: SIPRI, FAS, PIB India)
+    { name:'INS Arihant (S2)',   flag:'🇮🇳', country:'India', clazz:'Arihant SSBN',  type:'SSBN', lat:14.5, lng:83.0, depth:150, status:'deterrent patrol', warheads:'4× K-15 Sagarika SLBM (1 nuclear) OR 12× K-4 SLBM', missiles:'K-15 / K-4 SLBM', totalWarheads:4,  notes:'India\'s first indigenous SSBN. Bay of Bengal deterrent patrol. K-4 missile 3,500km range.', source:'FAS/PIB 2023' },
+    { name:'INS Arighat (S3)',   flag:'🇮🇳', country:'India', clazz:'Arihant SSBN',  type:'SSBN', lat:17.7, lng:83.3, depth:0,   status:'commissioned',    warheads:'4× K-15 / 8× K-4 SLBM capability',                 missiles:'K-15 / K-4',     totalWarheads:4,  notes:'Commissioned 2024. Larger than Arihant. INS Varsha base.', source:'PIB India 2024' },
+    { name:'INS Chakra-II',      flag:'🇮🇳', country:'India', clazz:'Akula II SSN',  type:'SSN',  lat:17.7, lng:83.2, depth:0,   status:'near port',       warheads:'Torpedoes, Klub ASCM',                               missiles:'ASCM',           totalWarheads:0,  notes:'Leased from Russia 2012–2021. Returned.', source:'MoD India' },
+    // Kalvari SSK
+    { name:'INS Kalvari',        flag:'🇮🇳', country:'India', clazz:'Kalvari Scorpène SSK', type:'SSK', lat:15.0, lng:74.0, depth:300, status:'patrol', warheads:'SM-39 Exocet + Black Shark torpedoes', missiles:'SM-39 Exocet', totalWarheads:0, notes:'French Scorpène licence-build. Arabian Sea patrol.', source:'IN' },
+    { name:'INS Khanderi',       flag:'🇮🇳', country:'India', clazz:'Kalvari Scorpène SSK', type:'SSK', lat:10.0, lng:72.0, depth:300, status:'patrol', warheads:'SM-39 + torpedoes',                    missiles:'SM-39',        totalWarheads:0, notes:'Arabian Sea anti-submarine ops.',                   source:'IN' },
+
+    // ════ NORTH KOREA ════ (Source: 38 North, CSIS, FAS)
+    { name:'Hero Kim Kun Ok (Sinpo-C)', flag:'🇰🇵', country:'North Korea', clazz:'Sinpo SSBN', type:'SSBN', lat:40.2, lng:128.5, depth:100, status:'deterrent patrol', warheads:'1× KN-26 Pukkuksong-3/4 SLBM (nuclear)', missiles:'1–4 × Pukkuksong SLBM', totalWarheads:1, notes:'DPRK first ballistic missile submarine. Sinpo-C class. Launched 2023. Limited but real nuclear threat.', source:'38 North / FAS 2023' },
+    { name:'DPRK Golf-class', flag:'🇰🇵', country:'North Korea', clazz:'Golf SSB (modified)', type:'SSB', lat:40.5, lng:128.0, depth:80, status:'near port', warheads:'R-27 modified SLBM test variant', missiles:'1 × SLBM tube', totalWarheads:0, notes:'Vintage Soviet-era modified for SLBM testing. Limited capability.', source:'38 North' },
+
+    // ════ ISRAEL ════ (Alleged nuclear-capable — FAS, Jaffee Center)
+    { name:'INS Dolphin',   flag:'🇮🇱', country:'Israel', clazz:'Dolphin-class SSK', type:'SSK', lat:32.5, lng:32.0, depth:300, status:'patrol',    warheads:'Alleged nuclear-tipped cruise missiles (Popeye Turbo)', missiles:'Popeye Turbo SLCM (alleged)', totalWarheads:0, notes:'Alleged second-strike nuclear capability. 650km cruise missile range. Not officially confirmed.', source:'FAS/Jaffee Center' },
+    { name:'INS Livyatan',  flag:'🇮🇱', country:'Israel', clazz:'Dolphin II SSK',    type:'SSK', lat:32.8, lng:34.9, depth:300, status:'near port', warheads:'Alleged nuclear cruise missiles',               missiles:'Popeye Turbo (alleged)',      totalWarheads:0, notes:'Dolphin II — improved air-independent propulsion. Haifa.', source:'IISS' },
+
+    // ════ PAKISTAN ════ (Source: FAS, SIPRI)
+    { name:'PNS Hamza',   flag:'🇵🇰', country:'Pakistan', clazz:'Agosta-90B SSK', type:'SSK', lat:24.5, lng:62.0, depth:300, status:'patrol', warheads:'SM-39 Exocet + MESMA AIP', missiles:'SM-39', totalWarheads:0, notes:'Pakistan\'s best submarine. Alleged nuclear cruise missile capability under study.', source:'IISS' },
+    { name:'PNS Saad',    flag:'🇵🇰', country:'Pakistan', clazz:'Agosta-90B SSK', type:'SSK', lat:24.8, lng:66.9, depth:300, status:'near port', warheads:'SM-39 + torpedoes',       missiles:'SM-39', totalWarheads:0, notes:'Karachi base. Arabian Sea patrol.',                                          source:'IISS' },
+    { name:'Hangor (S)',  flag:'🇵🇰', country:'Pakistan', clazz:'Type 039B Hangor SSK (PLAN)', type:'SSK', lat:25.0, lng:64.0, depth:300, status:'patrol', warheads:'YJ-18 ASCM + torpedoes', missiles:'YJ-18 ASCM', totalWarheads:0, notes:'Pakistani Navy Type 039B ordered from China — 8 boats total. AIP-equipped. First delivered 2023.', source:'SIPRI 2023' },
+
+    // ════ SOUTH KOREA ════ (Source: DAPA, IISS)
+    { name:'ROKS Dosan Ahn Chang-ho', flag:'🇰🇷', country:'South Korea', clazz:'KSS-III Batch-I SSB', type:'SSB', lat:35.0, lng:129.0, depth:300, status:'patrol', warheads:'6× Hyunmoo-4-4 SLBM (conventional)', missiles:'6 × Hyunmoo-4-4', totalWarheads:0, notes:'South Korea\'s first SLBM-capable submarine. KSS-III class. Tested 2021.', source:'DAPA 2021' },
+
+    // ════ AUSTRALIA ════ (Source: DoD, AUKUS agreement)
+    { name:'HMAS Rankin',  flag:'🇦🇺', country:'Australia', clazz:'Collins SSK', type:'SSK', lat:-30.0, lng:110.0, depth:300, status:'patrol', warheads:'UGM-84 Harpoon + Mk 48 torpedoes', missiles:'Harpoon', totalWarheads:0, notes:'Collins-class SSK. To be replaced by AUKUS SSN (Virginia-class or SSN-AUKUS).', source:'RAN' },
+
+    // ════ GERMANY ════ (Source: Deutsche Marine, IISS)
+    { name:'U-36', flag:'🇩🇪', country:'Germany', clazz:'Type 212A SSK', type:'SSK', lat:54.0, lng:10.0, depth:250, status:'patrol', warheads:'DM2A4 Seehecht torpedoes + IDAS missiles', missiles:'IDAS', totalWarheads:0, notes:'Fuel-cell AIP — world\'s most advanced diesel-electric sub. Ultra-quiet.', source:'Deutsche Marine' },
+
+    // ════ JAPAN ════ (Source: JMSDF)
+    { name:'JS Taigei (SS-513)', flag:'🇯🇵', country:'Japan', clazz:'Taigei SSK', type:'SSK', lat:34.0, lng:133.0, depth:300, status:'patrol', warheads:'Type 89 torpedoes + UUM-125 ASROCs', missiles:'ASROC', totalWarheads:0, notes:'Newest JMSDF submarine class. Lithium-ion battery. West Pacific ASW role.', source:'JMSDF' },
+
+    // ════ IRAN ════ (Source: IISS, USNI)
+    { name:'IRIS Fateh',  flag:'🇮🇷', country:'Iran', clazz:'Fateh SSK', type:'SSK', lat:27.5, lng:56.5, depth:200, status:'patrol', warheads:'Jask-2 anti-ship cruise missiles + torpedoes', missiles:'Jask-2 ASCM', totalWarheads:0, notes:'Iran\'s most advanced indigenous sub. Launched 2019. Hormuz Strait operations.',   source:'IISS' },
+    { name:'IRIS Yunes',  flag:'🇮🇷', country:'Iran', clazz:'Kilo SSK',  type:'SSK', lat:26.0, lng:58.0, depth:200, status:'patrol', warheads:'TEST-71 torpedoes',                            missiles:'Torpedoes',   totalWarheads:0, notes:'Russian Kilo-class. Iran\'s largest submarine.',                               source:'IISS' },
+    { name:'Ghadir mini', flag:'🇮🇷', country:'Iran', clazz:'Ghadir mini-SSK', type:'SSK', lat:27.2, lng:56.2, depth:100, status:'patrol', warheads:'2× torpedoes / mines',                    missiles:'Torpedoes',   totalWarheads:0, notes:'Iran\'s indigenous mini-submarine fleet — ~25 Ghadirs. Littoral ops.',           source:'IISS 2023' },
+  ];
+
+  // ── Warhead country summary (FAS 2024 Nuclear Notebook) ─────────────────────
+  const warheadSummary = {
+    'USA':        { total:5550, deployed:1670, reserve:2000, retired:1880, ssbnWarheads:1150, ssbns:14, ssns:46  },
+    'Russia':     { total:6257, deployed:1674, reserve:2815, retired:1500, ssbnWarheads:800,  ssbns:11, ssns:25  },
+    'China':      { total:500,  deployed:350,  reserve:150,  retired:0,    ssbnWarheads:216,  ssbns:6,  ssns:6   },
+    'UK':         { total:225,  deployed:120,  reserve:105,  retired:0,    ssbnWarheads:120,  ssbns:4,  ssns:7   },
+    'France':     { total:290,  deployed:240,  reserve:50,   retired:0,    ssbnWarheads:240,  ssbns:4,  ssns:6   },
+    'India':      { total:172,  deployed:0,    reserve:172,  retired:0,    ssbnWarheads:8,    ssbns:2,  ssns:0   },
+    'North Korea':{ total:50,   deployed:0,    reserve:50,   retired:0,    ssbnWarheads:1,    ssbns:1,  ssns:0   },
+    'Pakistan':   { total:170,  deployed:0,    reserve:170,  retired:0,    ssbnWarheads:0,    ssbns:0,  ssns:0   },
+    'Israel':     { total:90,   deployed:0,    reserve:90,   retired:0,    ssbnWarheads:0,    ssbns:0,  ssns:0   },
+  };
+
+  res.json({ submarines, bases, warheadSummary, news: [], lastUpdate: new Date().toISOString() });
 });
 
 // ─── /api/datacenters ─────────────────────────────────────────────────────────
