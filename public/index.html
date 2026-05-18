@@ -336,6 +336,7 @@
         <button class="lbtn"        data-layer="outage"     title="Internet Outage / Disruption Worldwide">⚡ OUTAGE</button>
         <button class="lbtn"        data-layer="leaders"    title="World Leaders — Last Known Location">👤 LEADERS</button>
         <button class="lbtn"        data-layer="cfradar"    title="Cloudflare Radar — DDoS Attacks &amp; Internet Anomalies">☁️ CF RADAR</button>
+        <button class="lbtn"        data-layer="anduril"   title="Anduril Industries — Facilities, Border Deployments, Contracts">⚡ ANDURIL</button>
       </div>
     </div>
 
@@ -482,6 +483,18 @@
         <div id="sub-news-list" class="scroll-list" style="max-height:150px">
           <div class="news-loading">⟳ Fetching naval intelligence…</div>
         </div>
+      </div>
+
+      <!-- ── Anduril Industries ── -->
+      <div class="panel-card" id="and-stats-card" style="display:none">
+        <div class="card-hdr">⚡ ANDURIL INDUSTRIES <span class="badge-static">OSINT</span></div>
+        <div id="and-panel-body" class="scroll-list" style="max-height:220px"></div>
+        <style>
+          .and-stat-row{display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0d1e2e}
+          .and-stat-info{flex:1}
+          .and-stat-name{font-size:7.5px;font-weight:700;margin-bottom:1px}
+          .and-stat-count{font-size:6.5px;color:#3d5a78}
+        </style>
       </div>
 
       <!-- ── Weapons filter ── -->
@@ -1544,6 +1557,7 @@
   <script src="js/leaders.js"></script>
   <script src="js/simulation.js"></script>
   <script src="js/submarine.js"></script>
+  <script src="js/anduril.js"></script>
   <script src="js/defence.js"></script>
   <script src="js/india.js"></script>
   <script src="js/hormuz.js"></script>

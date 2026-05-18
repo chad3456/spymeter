@@ -142,6 +142,12 @@ const APP = (() => {
               CF_RADAR_LAYER.setEnabled(on);
               SIDEBAR.addFeedItem('satellite', on ? '☁️ CF Radar ON — DDoS attacks + internet anomalies' : 'Cloudflare Radar layer OFF');
               break;
+            case 'anduril':
+              ANDURIL.setEnabled(on);
+              const andCard = document.getElementById('and-stats-card');
+              if (andCard) andCard.style.display = on ? 'block' : 'none';
+              SIDEBAR.addFeedItem('military', on ? `⚡ Anduril ON — ${ANDURIL.getSites().length} sites mapped (facilities, border, test, overseas)` : 'Anduril layer OFF');
+              break;
           }
         }, 120);
       });
@@ -620,6 +626,7 @@ const APP = (() => {
     CYBER_LAYER.init(map);
     DC_LAYER.init(map);
     SUBMARINE.init(map);
+    ANDURIL.init(map);
     CF_RADAR_LAYER.init(map);
     // Register overlays with the MAP CTRL panel toggles
     OVERLAYS.registerOverlay('leaders', LEADERS);
