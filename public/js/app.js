@@ -628,6 +628,7 @@ const APP = (() => {
     SUBMARINE.init(map);
     ANDURIL.init(map);
     CF_RADAR_LAYER.init(map);
+    GEO_TRACKER.init();
     // Register overlays with the MAP CTRL panel toggles
     OVERLAYS.registerOverlay('leaders', LEADERS);
     OVERLAYS.registerOverlay('cables',  CABLES);

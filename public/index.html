@@ -351,6 +351,7 @@
       <div id="utc-clock">--:--:-- UTC</div>
       <button id="twt-launch-btn" onclick="openTwitterTracker()" title="India Defence Twitter Tracker — 95 live accounts">𝕏 TWITTER INTEL</button>
       <button id="news-overlay-btn" class="ctrl-btn" onclick="NEWS_OVERLAY.open()" title="Live War News Monitor — NewsAPI real-time feeds" style="color:#ff5533;border-color:rgba(255,85,51,.35);background:rgba(255,85,51,.07)">📡 LIVE NEWS</button>
+      <button id="geo-open-btn"   class="ctrl-btn" title="Geopolitical Intel Tracker — Defence · Trade · Summits · Leader Tours" style="color:#00cc88;border-color:rgba(0,204,136,.3);background:rgba(0,204,136,.06)">◈ GEO INTEL</button>
       <button id="api-status-btn" class="ctrl-btn" title="API Status — show all data sources">⬡ API</button>
       <button id="crt-btn"   class="ctrl-btn" title="CRT Scanline Effect">CRT</button>
       <button id="nv-btn"    class="ctrl-btn" title="Night Vision">👁 NV</button>
@@ -1524,6 +1525,64 @@
 
   </div><!-- /conflict-panel -->
 
+  <!-- ══════════════════════════════════════════════════════
+       GEOPOLITICAL INTEL TRACKER — Full-width bottom panel
+       Defence deals · Trade deals · World summits · Leader tours · Diplomatic
+       Sources: Reuters · BBC · Al Jazeera · Guardian · DW · France 24 (global)
+                The Hindu · Dawn · Daily Sabah · ABC Aus · Korea Herald ·
+                Japan Today · CNA Singapore · Punch Nigeria (local/regional)
+       ══════════════════════════════════════════════════════ -->
+  <div id="geo-panel">
+    <!-- Header bar -->
+    <div id="geo-hdr">
+      <div id="geo-hdr-left">
+        <span id="geo-title">◈ GEOPOLITICAL INTEL TRACKER</span>
+        <span class="geo-live-dot"></span>
+        <span id="geo-src-info">14 sources · defence · trade · summits · leader tours</span>
+      </div>
+
+      <div id="geo-tabs">
+        <button class="geo-tab active" data-gcat="ALL">ALL <span class="geo-ct" id="gct-ALL"></span></button>
+        <button class="geo-tab" data-gcat="DEFENCE">⚔ DEFENCE <span class="geo-ct" id="gct-DEFENCE"></span></button>
+        <button class="geo-tab" data-gcat="TRADE">💹 TRADE <span class="geo-ct" id="gct-TRADE"></span></button>
+        <button class="geo-tab" data-gcat="SUMMIT">🌐 SUMMITS <span class="geo-ct" id="gct-SUMMIT"></span></button>
+        <button class="geo-tab" data-gcat="LEADER_TOUR">👤 LEADER TOURS <span class="geo-ct" id="gct-LEADER_TOUR"></span></button>
+        <button class="geo-tab" data-gcat="DIPLOMATIC">◈ DIPLOMATIC <span class="geo-ct" id="gct-DIPLOMATIC"></span></button>
+      </div>
+
+      <div id="geo-hdr-right">
+        <span id="geo-ts"></span>
+        <button id="geo-refresh-btn" class="geo-ctrl">↻ REFRESH</button>
+        <button id="geo-close-btn"   class="geo-ctrl">✕ CLOSE</button>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div id="geo-body">
+
+      <!-- Left column: Upcoming summits -->
+      <div id="geo-summits-panel">
+        <div class="geo-sub-hdr">🌐 UPCOMING WORLD SUMMITS &amp; EVENTS (2025–2026)</div>
+        <div id="geo-summits-list">
+          <div class="geo-loading">⟳ Loading summits…</div>
+        </div>
+      </div>
+
+      <!-- Right: live geopolitical news feed -->
+      <div id="geo-feed-panel">
+        <div class="geo-sub-hdr" id="geo-feed-hdr">
+          📡 LIVE GEOPOLITICAL FEED — 14 SOURCES (global + regional)
+          &nbsp;&nbsp;scroll →
+        </div>
+        <div id="geo-source-strip"></div>
+        <div id="geo-feed-list">
+          <div class="geo-loading">⟳ Loading…</div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /geo-panel -->
+
   <!-- ── Mobile Bottom Nav ───────────────────────────────── -->
   <nav id="mobile-nav">
     <button class="mnav-btn" onclick="APP.showMobilePanel('left')">🗺 MAP</button>
@@ -1558,6 +1617,7 @@
   <script src="js/simulation.js"></script>
   <script src="js/submarine.js"></script>
   <script src="js/anduril.js"></script>
+  <script src="js/geopolitical.js"></script>
   <script src="js/defence.js"></script>
   <script src="js/india.js"></script>
   <script src="js/hormuz.js"></script>

@@ -4151,7 +4151,8 @@ app.get('/api/status', (req, res) => {
       { name:'Nominatim OSM',   url:'nominatim.openstreetmap.org',     type:'free', key:false, status:'ok',      note:'Capital city geocoding' },
       { name:'Groq LLM',        url:'api.groq.com/openai',             type:'free', key:!!process.env.GROQ_API_KEY, status:process.env.GROQ_API_KEY ? 'ok' : 'no-key', note:'AI intelligence brief' },
       { name:'Marine (AIS)',    url:'/api/marine',                     type:'free', key:false, status:'ok',      note:'Vessels near strategic chokepoints' },
-      { name:'Submarine OSINT', url:'/api/submarine-enhanced',         type:'osint',key:false, status:'ok',      note:'SSBN/SSN patrol zones OSINT' },
+      { name:'Submarine OSINT',   url:'/api/submarine-enhanced',       type:'osint',key:false, status:'ok', note:'SSBN/SSN patrol zones OSINT' },
+      { name:'Geo Intel Tracker', url:'/api/geopolitical-tracker',     type:'osint',key:false, status:'ok', note:'Defence/Trade/Summit/Leader RSS — 14 sources' },
     ],
     env: { GROQ_API_KEY: !!process.env.GROQ_API_KEY, ADSB_API_KEY: !!process.env.ADSB_API_KEY, NODE_ENV: process.env.NODE_ENV || 'development' }
   });
@@ -4355,6 +4356,172 @@ app.get('/api/telegram-feed', async (req, res) => {
   messages.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
   const result = { messages: messages.slice(0, 40), ts: now, channels: TG_OSINT_CHANNELS.length, source: 'Telegram via RSSHub' };
   tgFeedCache.data = result; tgFeedCache.ts = now;
+  res.json(result);
+});
+
+// ─── /api/geopolitical-tracker — Defence/Trade/Summit/Leader RSS aggregator ──────
+
+const GEO_FEEDS = [
+  // Global sources (6)
+  { name:'Reuters',       url:'https://feeds.reuters.com/reuters/worldNews',                        region:'Global',    type:'global' },
+  { name:'BBC World',     url:'https://feeds.bbci.co.uk/news/world/rss.xml',                        region:'Global',    type:'global' },
+  { name:'Al Jazeera',    url:'https://www.aljazeera.com/xml/rss/all.xml',                          region:'MENA',      type:'global' },
+  { name:'The Guardian',  url:'https://www.theguardian.com/world/rss',                              region:'UK/Global', type:'global' },
+  { name:'DW World',      url:'https://rss.dw.com/xml/rss-en-world',                               region:'Europe',    type:'global' },
+  { name:'France 24',     url:'https://www.france24.com/en/rss',                                    region:'France',    type:'global' },
+  // Local / regional sources (8)
+  { name:'The Hindu',     url:'https://www.thehindu.com/news/international/feeder/default.rss',     region:'India',     type:'local'  },
+  { name:'Dawn',          url:'https://www.dawn.com/feeds/home',                                    region:'Pakistan',  type:'local'  },
+  { name:'Daily Sabah',   url:'https://www.dailysabah.com/rss',                                     region:'Turkey',    type:'local'  },
+  { name:'ABC Australia', url:'https://www.abc.net.au/news/feed/51120/rss.xml',                     region:'Australia', type:'local'  },
+  { name:'Korea Herald',  url:'https://www.koreaherald.com/rss/020000000000.xml',                   region:'S.Korea',   type:'local'  },
+  { name:'Japan Today',   url:'https://japantoday.com/feed',                                        region:'Japan',     type:'local'  },
+  { name:'CNA',           url:'https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml',region:'Singapore', type:'local'  },
+  { name:'Punch Nigeria', url:'https://punchng.com/feed/',                                          region:'Nigeria',   type:'local'  },
+];
+
+const GEO_KEYWORDS = {
+  DEFENCE: [
+    'defence deal','defense deal','arms deal','military agreement','defence contract',
+    'defense contract','military cooperation','fighter jet','missile deal','weapons sale',
+    'military aid','defense pact','security pact','security agreement','military exercise',
+    'joint exercise','arms sale','naval deal','weapons system','munitions deal',
+    'artillery deal','tank deal','submarine deal','drone deal','military supply',
+    'weapons transfer','military package','air defense system','missile defense',
+    'defence procurement','defense procurement','military contract','AUKUS','NATO',
+    'defence ministry','defense ministry','pentagon','military budget','defence budget',
+  ],
+  TRADE: [
+    'trade deal','trade agreement','free trade','FTA','bilateral trade','tariff',
+    'trade war','trade talks','trade sanctions','economic sanctions','import ban',
+    'trade deficit','trade surplus','economic partnership','WTO','customs union',
+    'trade relations','supply chain','semiconductor export','chip ban','tech export',
+    'trade restriction','export control','import duty','trade bloc','economic deal',
+    'commerce deal','trade pact','market access','trade liberalisation','sanctions',
+    'counter sanctions','investment deal','economic cooperation','trade corridor',
+  ],
+  SUMMIT: [
+    'G7 summit','G20 summit','NATO summit','UN summit','ASEAN summit','SCO summit',
+    'BRICS summit','COP30','WHO assembly','world summit','leaders summit',
+    'climate summit','peace summit','bilateral summit','security summit',
+    'international summit','UN General Assembly','UNGA','APEC summit','WEF Davos',
+    'commonwealth summit','Arab League summit','African Union summit','QUAD summit',
+    'Shanghai Cooperation','G7','G20','COP29','COP30','world leaders meeting',
+  ],
+  LEADER_TOUR: [
+    'state visit','official visit','presidential visit','prime minister visit',
+    'foreign trip','diplomatic tour','head of state visit','ministerial visit',
+    'foreign minister visit','secretary of state visit','pays visit','visits president',
+    'visits prime minister','bilateral meeting','diplomatic talks','foreign affairs visit',
+    'meets with president','meets with prime minister','president arrives','pm arrives',
+    'leader arrives','world leader','diplomatic mission','envoy visit',
+  ],
+  DIPLOMATIC: [
+    'diplomatic','bilateral','memorandum of understanding','MoU','peace treaty',
+    'alliance agreement','strategic partnership','cooperation agreement',
+    'foreign policy','diplomatic relations','recall ambassador','ambassador appointed',
+    'UN resolution','ceasefire agreement','peace deal','normalization','sanctions lifted',
+    'diplomatic crisis','embassy','consulate','foreign minister','secretary of state',
+    'diplomatic ties','normalize relations','peace process','multilateral',
+  ],
+};
+
+const GEO_STATIC_SUMMITS = [
+  { title:'NATO Summit 2025',           date:'Jun 2025',  location:'The Hague, Netherlands',  cat:'SUMMIT',
+    note:'Annual NATO leaders summit. Ukraine support, Article 5, 5% GDP defence target on agenda.' },
+  { title:'G7 Summit 2025',             date:'Jun 2025',  location:'Kananaskis, Canada',       cat:'SUMMIT',
+    note:'Canada G7 presidency. AI regulation, Ukraine reconstruction, China trade tensions expected.' },
+  { title:'UN General Assembly 2025',   date:'Sep 2025',  location:'New York, USA',            cat:'SUMMIT',
+    note:'80th session of UNGA. High-level General Debate — ~190 world leaders attending.' },
+  { title:'COP30 Climate Summit',       date:'Nov 2025',  location:'Belém, Brazil',            cat:'SUMMIT',
+    note:'UNFCCC COP30. Amazon protection, NDC updates 2025, climate finance $100B+ pledges.' },
+  { title:'G20 Summit 2025',            date:'Nov 2025',  location:'Johannesburg, South Africa',cat:'SUMMIT',
+    note:'South Africa G20 Presidency. Development finance, global debt restructuring, AI governance.' },
+  { title:'BRICS+ Summit 2025',         date:'Oct 2025',  location:'Kazan, Russia (TBC)',      cat:'SUMMIT',
+    note:'BRICS+ expansion, de-dollarisation, new payment system, new member integration.' },
+  { title:'ASEAN Summit 2025',          date:'Oct 2025',  location:'Kuala Lumpur, Malaysia',   cat:'SUMMIT',
+    note:'Malaysia ASEAN Chairmanship. South China Sea tensions, ASEAN-China FTA update.' },
+  { title:'SCO Summit 2025',            date:'Jul 2025',  location:'China (TBC)',              cat:'SUMMIT',
+    note:'Shanghai Cooperation Organisation. China presidency. Central Asia security + Pakistan-India.' },
+  { title:'APEC 2025',                  date:'Nov 2025',  location:'Gyeongju, South Korea',    cat:'SUMMIT',
+    note:'Asia-Pacific Economic Cooperation. Trade liberalisation, digital economy, AI governance.' },
+  { title:'QUAD Leaders Summit 2025',   date:'2025 TBD',  location:'TBD',                      cat:'SUMMIT',
+    note:'USA·India·Japan·Australia. Indo-Pacific security, China deterrence, tech sharing.' },
+  { title:'WEF Davos 2026',             date:'Jan 2026',  location:'Davos, Switzerland',       cat:'SUMMIT',
+    note:'World Economic Forum Annual Meeting. Global economic outlook, AI, geopolitical fragmentation.' },
+  { title:'IAEA General Conference',    date:'Sep 2025',  location:'Vienna, Austria',          cat:'SUMMIT',
+    note:'Nuclear safeguards review. Iran JCPOA status, AUKUS submarine programme scrutiny.' },
+];
+
+const GEO_REGION_FLAGS = {
+  'Global':'🌐','UK/Global':'🌐','MENA':'🌍','Europe':'🇪🇺','France':'🇫🇷',
+  'India':'🇮🇳','Pakistan':'🇵🇰','Turkey':'🇹🇷','Australia':'🇦🇺',
+  'S.Korea':'🇰🇷','Japan':'🇯🇵','Singapore':'🇸🇬','Nigeria':'🇳🇬','China':'🇨🇳',
+};
+
+function _geoCategorise(title, desc) {
+  const text = `${title} ${desc}`.toLowerCase();
+  for (const [cat, kws] of Object.entries(GEO_KEYWORDS)) {
+    if (kws.some(kw => text.includes(kw.toLowerCase()))) return cat;
+  }
+  return null;
+}
+
+const geoTrackerCache = { data: null, ts: 0 };
+
+app.get('/api/geopolitical-tracker', async (req, res) => {
+  const now = Date.now();
+  if (geoTrackerCache.data && now - geoTrackerCache.ts < 900_000) return res.json(geoTrackerCache.data);
+
+  const allItems = [];
+  const sourceResults = [];
+
+  await Promise.allSettled(GEO_FEEDS.map(async feed => {
+    try {
+      const r = await axios.get(feed.url, {
+        timeout: 10_000,
+        headers: { 'User-Agent':'SpymeterGeoIntel/1.0', Accept:'application/rss+xml,text/xml,*/*' },
+        responseType:'text',
+      });
+      const items = parseRSS(r.data, feed.name);
+      let matched = 0;
+      items.slice(0, 20).forEach(it => {
+        const cat = _geoCategorise(it.title, it.description || '');
+        if (!cat) return;
+        matched++;
+        allItems.push({
+          title:      it.title,
+          description:it.description ? it.description.slice(0, 200) : '',
+          link:       it.link,
+          pubDate:    it.pubDate ? it.pubDate.toISOString() : null,
+          source:     feed.name,
+          region:     feed.region,
+          sourceType: feed.type,
+          flag:       GEO_REGION_FLAGS[feed.region] || '📡',
+          category:   cat,
+        });
+      });
+      sourceResults.push({ name:feed.name, region:feed.region, type:feed.type, flag:GEO_REGION_FLAGS[feed.region]||'📡', status:'ok', matched });
+    } catch(e) {
+      sourceResults.push({ name:feed.name, region:feed.region, type:feed.type, flag:GEO_REGION_FLAGS[feed.region]||'📡', status:'error', matched:0 });
+    }
+  }));
+
+  allItems.sort((a, b) => (b.pubDate || '').localeCompare(a.pubDate || ''));
+
+  const counts = { DEFENCE:0, TRADE:0, SUMMIT:0, LEADER_TOUR:0, DIPLOMATIC:0 };
+  allItems.forEach(i => { if (counts[i.category] !== undefined) counts[i.category]++; });
+
+  const result = {
+    items:   allItems.slice(0, 100),
+    summits: GEO_STATIC_SUMMITS,
+    sources: sourceResults,
+    counts,
+    ts:      now,
+    total:   allItems.length,
+  };
+  geoTrackerCache.data = result;
+  geoTrackerCache.ts   = now;
   res.json(result);
 });
 
