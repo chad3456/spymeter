@@ -148,6 +148,10 @@ const APP = (() => {
               if (andCard) andCard.style.display = on ? 'block' : 'none';
               SIDEBAR.addFeedItem('military', on ? `⚡ Anduril ON — ${ANDURIL.getSites().length} sites mapped (facilities, border, test, overseas)` : 'Anduril layer OFF');
               break;
+            case 'ai-infra':
+              AI_INFRA.setEnabled(on);
+              SIDEBAR.addFeedItem('satellite', on ? `⚡ AI Infra ON — ${AI_INFRA.getData().length} facilities mapped (Meta·AWS·GCP·Azure·Apple·NVDA·CoreWeave + India/UK)` : 'AI Infrastructure layer OFF');
+              break;
           }
         }, 120);
       });
@@ -627,6 +631,7 @@ const APP = (() => {
     DC_LAYER.init(map);
     SUBMARINE.init(map);
     ANDURIL.init(map);
+    AI_INFRA.init(map);
     CF_RADAR_LAYER.init(map);
     GEO_TRACKER.init();
     // Register overlays with the MAP CTRL panel toggles
