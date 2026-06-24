@@ -28,6 +28,10 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Explicit root route — belt-and-suspenders fallback for any reverse proxy that
+// doesn't resolve index.html via static middleware (e.g. Render, Fly.io cold starts)
+app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
 // ─── Global unhandled rejection guard ────────────────────────────────────────
 process.on('unhandledRejection', (reason) => {
   console.error('[UnhandledRejection]', reason?.message || reason);
