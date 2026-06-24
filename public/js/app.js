@@ -152,6 +152,12 @@ const APP = (() => {
               AI_INFRA.setEnabled(on);
               SIDEBAR.addFeedItem('satellite', on ? `⚡ AI Infra ON — ${AI_INFRA.getData().length} facilities mapped (Meta·AWS·GCP·Azure·Apple·NVDA·CoreWeave + India/UK)` : 'AI Infrastructure layer OFF');
               break;
+            case 'def-tech':
+              DEFENCE_STARTUPS.setEnabled(on);
+              const dstCard = document.getElementById('dst-panel-card');
+              if (dstCard) dstCard.style.display = on ? 'block' : 'none';
+              SIDEBAR.addFeedItem('military', on ? `🛡 Defence Tech ON — ${DEFENCE_STARTUPS.getData().length} companies mapped (USA·EU·IL·AUS·IND)` : 'Defence Tech layer OFF');
+              break;
           }
         }, 120);
       });
@@ -632,6 +638,7 @@ const APP = (() => {
     SUBMARINE.init(map);
     ANDURIL.init(map);
     AI_INFRA.init(map);
+    DEFENCE_STARTUPS.init(map);
     CF_RADAR_LAYER.init(map);
     GEO_TRACKER.init();
     // Register overlays with the MAP CTRL panel toggles
