@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: spymeter
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/status
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEWSAPI_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CF_API_TOKEN
+        sync: false
+      - key: ADSB_API_KEY
+        sync: false
+      - key: EIA_API_KEY
+        sync: false
+      - key: WINDY_KEY
+        sync: false
