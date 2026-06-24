@@ -339,6 +339,10 @@
         <button class="lbtn"        data-layer="anduril"   title="Anduril Industries — Facilities, Border Deployments, Contracts">⚡ ANDURIL</button>
         <button class="lbtn"        data-layer="ai-infra"  title="AI Infrastructure — Meta · AWS · GCP · Azure · Apple · NVIDIA · CoreWeave · Oracle · IBM · Equinix · Jio · Tata · NTT (US/CA/IN/UK)">⚡ AI INFRA</button>
         <button class="lbtn"        data-layer="def-tech"  title="Defence Tech Startups — Palantir · Anduril · Shield AI · Helsing · Baykar · Elbit + 56 more">🛡 DEF-TECH</button>
+        <button class="lbtn"        data-layer="nuclear"   title="Nuclear Intel — ICBM Silos · SSBN Bases · Labs · Tactical Deployments · Test Sites (SIPRI 2024)">☢ NUCLEAR</button>
+        <button class="lbtn"        data-layer="gas-pipes" title="Gas &amp; Oil Pipelines — Nord Stream · TurkStream · TAP · TANAP · Druzhba · TAPI · LNG Terminals">⛽ PIPELINES</button>
+        <button class="lbtn"        data-layer="spy-sats"  title="Military/Spy Satellites — KH-11 · Yaogan · Kosmos · CSO · AEHF · GPS III — live positions">🛰 SPY-SATS</button>
+        <button class="lbtn"        data-layer="mil-air"   title="Military Air Traffic — REACH tankers · SAM VIP · ISR aircraft · NATO callsigns (OpenSky filtered)">✈ MIL-AIR</button>
       </div>
     </div>
 
@@ -353,6 +357,7 @@
       <div id="utc-clock">--:--:-- UTC</div>
       <button id="twt-launch-btn" onclick="openTwitterTracker()" title="India Defence Twitter Tracker — 95 live accounts">𝕏 TWITTER INTEL</button>
       <button id="news-overlay-btn" class="ctrl-btn" onclick="NEWS_OVERLAY.open()" title="Live War News Monitor — NewsAPI real-time feeds" style="color:#ff5533;border-color:rgba(255,85,51,.35);background:rgba(255,85,51,.07)">📡 LIVE NEWS</button>
+      <button id="thrill-dash-btn" class="ctrl-btn" title="Thrill Dashboard — Force Posture · Infrastructure · Escalation · Economic Warfare · Disaster" style="color:#ff4444;border-color:rgba(255,68,68,.3);background:rgba(255,68,68,.06)">◈ SITUATION</button>
       <button id="geo-open-btn"   class="ctrl-btn" title="Geopolitical Intel Tracker — Defence · Trade · Summits · Leader Tours" style="color:#00cc88;border-color:rgba(0,204,136,.3);background:rgba(0,204,136,.06)">◈ GEO INTEL</button>
       <button id="api-status-btn" class="ctrl-btn" title="API Status — show all data sources">⬡ API</button>
       <button id="crt-btn"   class="ctrl-btn" title="CRT Scanline Effect">CRT</button>
@@ -492,6 +497,30 @@
         <div id="sub-news-list" class="scroll-list" style="max-height:150px">
           <div class="news-loading">⟳ Fetching naval intelligence…</div>
         </div>
+      </div>
+
+      <!-- ── Nuclear Intel ── -->
+      <div class="panel-card" id="nuc-stats-card" style="display:none">
+        <div class="card-hdr">☢ NUCLEAR INTEL <span class="badge-static">SIPRI 2024 · OSINT</span></div>
+        <div id="nuc-panel-body" class="scroll-list" style="max-height:360px"></div>
+      </div>
+
+      <!-- ── Gas &amp; Oil Pipelines ── -->
+      <div class="panel-card" id="pipe-stats-card" style="display:none">
+        <div class="card-hdr">⛽ PIPELINES <span class="badge-static">GIE · IEA · OSINT</span></div>
+        <div id="pipe-panel-body" class="scroll-list" style="max-height:300px"></div>
+      </div>
+
+      <!-- ── Spy Satellites ── -->
+      <div class="panel-card" id="ssat-stats-card" style="display:none">
+        <div class="card-hdr">🛰 SPY-SATS <span class="badge-static">CelesTrak MIL · LIVE</span></div>
+        <div id="ssat-panel-body" class="scroll-list" style="max-height:300px"></div>
+      </div>
+
+      <!-- ── Military Air Traffic ── -->
+      <div class="panel-card" id="milair-stats-card" style="display:none">
+        <div class="card-hdr">✈ MILITARY AIR <span class="badge-static">OpenSky · LIVE</span></div>
+        <div id="milair-panel-body" class="scroll-list" style="max-height:260px"></div>
       </div>
 
       <!-- ── Defence Tech Startups ── -->
@@ -1597,6 +1626,62 @@
     </div>
   </div><!-- /geo-panel -->
 
+  <!-- ── Thrill Dashboard — Situational Awareness Bottom Panel ── -->
+  <div id="thrill-dash">
+    <div id="td-header">
+      <span id="td-header-title">◈ GLOBAL SITUATION DASHBOARD</span>
+      <span id="td-total">0 signals</span>
+      <span id="td-status"></span>
+      <button id="td-refresh-btn" title="Refresh feed">⟳ REFRESH</button>
+      <button id="td-close-btn" title="Close">✕</button>
+    </div>
+    <!-- Upcoming summits strip -->
+    <div id="td-summits-strip"></div>
+    <!-- Five panel columns -->
+    <div id="td-columns">
+      <div class="td-col">
+        <div class="td-col-hdr">
+          <span class="td-col-icon" style="color:#ff4444">⬡</span>
+          <span class="td-col-label">FORCE POSTURE</span>
+          <span class="td-col-badge" id="td-badge-force" style="color:#ff4444">0</span>
+        </div>
+        <div class="td-col-body" id="td-panel-force"></div>
+      </div>
+      <div class="td-col">
+        <div class="td-col-hdr">
+          <span class="td-col-icon" style="color:#ffcc00">⚡</span>
+          <span class="td-col-label">INFRASTRUCTURE</span>
+          <span class="td-col-badge" id="td-badge-infra" style="color:#ffcc00">0</span>
+        </div>
+        <div class="td-col-body" id="td-panel-infra"></div>
+      </div>
+      <div class="td-col">
+        <div class="td-col-hdr">
+          <span class="td-col-icon" style="color:#ff8800">🔺</span>
+          <span class="td-col-label">ESCALATION</span>
+          <span class="td-col-badge" id="td-badge-escal" style="color:#ff8800">0</span>
+        </div>
+        <div class="td-col-body" id="td-panel-escal"></div>
+      </div>
+      <div class="td-col">
+        <div class="td-col-hdr">
+          <span class="td-col-icon" style="color:#00cc88">💰</span>
+          <span class="td-col-label">ECONOMIC WARFARE</span>
+          <span class="td-col-badge" id="td-badge-econ" style="color:#00cc88">0</span>
+        </div>
+        <div class="td-col-body" id="td-panel-econ"></div>
+      </div>
+      <div class="td-col">
+        <div class="td-col-hdr">
+          <span class="td-col-icon" style="color:#4488ff">🌊</span>
+          <span class="td-col-label">DISASTER CASCADE</span>
+          <span class="td-col-badge" id="td-badge-disaster" style="color:#4488ff">0</span>
+        </div>
+        <div class="td-col-body" id="td-panel-disaster"></div>
+      </div>
+    </div>
+  </div><!-- /thrill-dash -->
+
   <!-- ── Mobile Bottom Nav ───────────────────────────────── -->
   <nav id="mobile-nav">
     <button class="mnav-btn" onclick="APP.showMobilePanel('left')">🗺 MAP</button>
@@ -1645,6 +1730,11 @@
   <script src="js/drones.js"></script>
   <script src="js/webcams.js"></script>
   <script src="js/defence-startups.js"></script>
+  <script src="js/nuclear-intel.js"></script>
+  <script src="js/gas-pipelines.js"></script>
+  <script src="js/spy-sats.js"></script>
+  <script src="js/mil-air.js"></script>
+  <script src="js/thrill-dashboard.js"></script>
   <script src="js/app.js"></script>
 
   <script>

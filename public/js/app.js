@@ -154,9 +154,28 @@ const APP = (() => {
               break;
             case 'def-tech':
               DEFENCE_STARTUPS.setEnabled(on);
-              const dstCard = document.getElementById('dst-panel-card');
-              if (dstCard) dstCard.style.display = on ? 'block' : 'none';
+              { const c = document.getElementById('dst-panel-card'); if (c) c.style.display = on ? 'block' : 'none'; }
               SIDEBAR.addFeedItem('military', on ? `🛡 Defence Tech ON — ${DEFENCE_STARTUPS.getData().length} companies mapped (USA·EU·IL·AUS·IND)` : 'Defence Tech layer OFF');
+              break;
+            case 'nuclear':
+              NUCLEAR_INTEL.setEnabled(on);
+              { const c = document.getElementById('nuc-stats-card'); if (c) c.style.display = on ? 'block' : 'none'; }
+              SIDEBAR.addFeedItem('military', on ? `☢ Nuclear Intel ON — ${NUCLEAR_INTEL.getData().length} sites (silos·SSBN·labs·deployed·test)` : 'Nuclear Intel layer OFF');
+              break;
+            case 'gas-pipes':
+              GAS_PIPELINES.setEnabled(on);
+              { const c = document.getElementById('pipe-stats-card'); if (c) c.style.display = on ? 'block' : 'none'; }
+              SIDEBAR.addFeedItem('military', on ? `⛽ Pipelines ON — ${GAS_PIPELINES.getData().length} pipelines mapped (Nord Stream·TurkStream·TAP·Druzhba)` : 'Gas Pipelines layer OFF');
+              break;
+            case 'spy-sats':
+              SPY_SATS.setEnabled(on);
+              { const c = document.getElementById('ssat-stats-card'); if (c) c.style.display = on ? 'block' : 'none'; }
+              SIDEBAR.addFeedItem('satellite', on ? '🛰 Spy-Sats ON — Military satellites live positions (CelesTrak MIL TLE)' : 'Spy Satellites layer OFF');
+              break;
+            case 'mil-air':
+              MIL_AIR.setEnabled(on);
+              { const c = document.getElementById('milair-stats-card'); if (c) c.style.display = on ? 'block' : 'none'; }
+              SIDEBAR.addFeedItem('aircraft', on ? `✈ Mil-Air ON — Military aircraft filtered from live ADS-B (REACH·SAM·ISR·NATO)` : 'Military Air layer OFF');
               break;
           }
         }, 120);
@@ -639,8 +658,13 @@ const APP = (() => {
     ANDURIL.init(map);
     AI_INFRA.init(map);
     DEFENCE_STARTUPS.init(map);
+    NUCLEAR_INTEL.init(map);
+    GAS_PIPELINES.init(map);
+    SPY_SATS.init(map);
+    MIL_AIR.init(map);
     CF_RADAR_LAYER.init(map);
     GEO_TRACKER.init();
+    THRILL_DASH.init();
     // Register overlays with the MAP CTRL panel toggles
     OVERLAYS.registerOverlay('leaders', LEADERS);
     OVERLAYS.registerOverlay('cables',  CABLES);
